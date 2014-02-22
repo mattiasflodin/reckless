@@ -56,31 +56,65 @@ namespace dlog {
             dlog_output(rest...);
         }
 
-        template <typename T>
-        T&& pop_arg(char* pinput)
+        template <class ArgumentInfo>
+        typename ArgumentInfo::type&& pop_arg(char* pinput)
         {
-            return static_cast<T&&>(*reinterpret_cast<T*>(pinput));
+            using T = typename ArgumentInfo::type;
+            return static_cast<T&&>(*reinterpret_cast<T*>(pinput + ArgumentInfo::offset));
         }
 
-        template <std::size_t CurrentOffset, class Offsets, typename RemainingArgs...>
-        struct arg_offsets_helper {
+        template <typename... Args>
+        struct typelist {
+        };
 
+        template <std::size_t Offset, typename Type>
+        struct ArgumentInfo {
+            static std::size_t const offset = Offset;
+            using type = Type;
         };
-        template <typename Args...>
-        struct typelist
+
+        template <std::size_t CurrentOffset,
+                 class ArgumentInfoList,
+                 typename... Args>
+        struct arg_offsets;
+
+        template <std::size_t CurrentOffset,
+                 class ArgumentInfoList>
+        struct arg_offsets<CurrentOffset, ArgumentInfoList>
         {
+            using type = ArgumentInfoList;
         };
-        template <typename Args...>
-        struct arg_offsets {
-            using type = arg_offsets_helper<0u, typelist<>, Args...>;
+
+        template <std::size_t CurrentOffset,
+                 class... ArgumentInfoList,
+                 typename T, typename... RemainingArgs>
+        struct arg_offsets<CurrentOffset, typelist<ArgumentInfoList...>,
+            T, RemainingArgs...>
+        
+        {
+            static std::size_t const my_offset = (CurrentOffset + alignof(T)-1)/alignof(T)*alignof(T);
+            using type = typename arg_offsets<my_offset + sizeof(T),
+                  typelist<ArgumentInfoList..., ArgumentInfo<my_offset, T>>,
+                  RemainingArgs...>::type;
+        };
+
+        template <class ArgumentInfoList>
+        struct DispatchHelper;
+        template <class... ArgumentInfoList>
+        struct DispatchHelper<typelist<ArgumentInfoList...>> {
+            static void foo(char* pinput)
+            {
+                dlog_output(pop_arg<ArgumentInfoList>(pinput)...);
+            }
         };
 
         template <typename... Args>
         void dispatch(char* pinput)
         {
-            using Offsets = typename arg_offsets<0u, Args...>::type;
-            dlog_output(pop_arg<Offsets>(pinput)...);
+            using ArgumentInfoList = typename arg_offsets<0u, typelist<>, Args...>::type;
+            DispatchHelper<ArgumentInfoList>::foo(pinput);
         }
+
 
         template <std::size_t Offset, typename... Args>
         class compute_frame_size;
