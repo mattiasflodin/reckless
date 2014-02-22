@@ -33,6 +33,7 @@ namespace dlog {
         template <std::size_t Offset>
         void push_args(char* pbuffer)
         {
+
         }
 
         template <std::size_t Offset, typename T, typename... Args>
@@ -61,10 +62,24 @@ namespace dlog {
             return static_cast<T&&>(*reinterpret_cast<T*>(pinput));
         }
 
+        template <std::size_t CurrentOffset, class Offsets, typename RemainingArgs...>
+        struct arg_offsets_helper {
+
+        };
+        template <typename Args...>
+        struct typelist
+        {
+        };
+        template <typename Args...>
+        struct arg_offsets {
+            using type = arg_offsets_helper<0u, typelist<>, Args...>;
+        };
+
         template <typename... Args>
         void dispatch(char* pinput)
         {
-            dlog_output(pop_arg<Args>(pinput)...);
+            using Offsets = typename arg_offsets<0u, Args...>::type;
+            dlog_output(pop_arg<Offsets>(pinput)...);
         }
 
         template <std::size_t Offset, typename... Args>
