@@ -169,7 +169,7 @@ namespace dlog {
         push_args<0u, decltype(pdispatch), typename make_pointer_from_array_ref<Args>::type...>(
                 pwrite_start, pdispatch, std::forward<Args>(args)...);
         g_buffer.pwritten_end = pwrite_start + frame_size;
-        (*pdispatch)(pwrite_start);
+        (*pdispatch)(pwrite_start + sizeof(pdispatch));
     }
 
     template <typename... Args>
