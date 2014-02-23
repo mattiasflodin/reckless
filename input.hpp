@@ -142,6 +142,59 @@ namespace dlog {
             return reinterpret_cast<T>(v);
         }
 
+        int doit(char* pbuffer);
+        template <class... Args>
+        void dummy(Args...)
+        {
+        }
+
+        template <class Args, class BoundArgs>
+        struct frame;
+        
+        template <class... Args, class... BoundArgs>
+        struct frame<typelist<Args...>, typelist<BoundArgs...>> {
+            static void store_args(char* pbuffer, Args... args)
+            {
+                dummy(new (pbuffer + BoundArgs::offset) int...);
+            }
+            static void dispatch(char* pbuffer);
+        };
+
+        template <std::size_t Offset, typename Type>
+        struct bound_argument {
+            using type = Type;
+            static std::size_t const offset = Offset;
+        };
+
+        template <class Accumulator, std::size_t Offset, class... Args>
+        struct bind_args_helper;
+        template <class Accumulator, std::size_t Offset>
+        struct bind_args_helper<Accumulator, Offset> {
+            using type = Accumulator;
+            static std::size_t const frame_size = Offset;
+        };
+        template <class... Accumulator, std::size_t Offset, class Arg, class... RemainingArgs>
+        struct bind_args_helper<typelist<Accumulator...>, Offset, Arg, RemainingArgs...> {
+            using Value = typename std::remove_reference<Arg>::type;
+            static std::size_t const my_offset = (Offset + alignof(Value)-1)/alignof(Value)*alignof(Value);
+            using next = bind_args_helper<
+                typelist<Accumulator..., bound_argument<my_offset, Value>>,
+                my_offset + sizeof(Value),
+                RemainingArgs...>;
+            using type = typename next::type;
+            static std::size_t const frame_size = next::frame_size;
+        };
+
+        template <class Args>
+        class bind_args;
+        template <class... Args>
+        class bind_args<typelist<Args...>> {
+        private:
+            using helper = bind_args_helper<typelist<>, 0u, Args...>;
+        public:
+            using type = typename helper::type;
+            static std::size_t const frame_size = helper::frame_size;
+        };
     }
 
     void initialize()
@@ -160,16 +213,19 @@ namespace dlog {
     {
         using namespace dlog::detail;
         //std::unique_lock<std::mutex> hold(buffer_mutex);
-        auto const& pdispatch = &dispatch<typename std::remove_reference<typename make_pointer_from_array_ref<Args>::type>::type...>;
-        std::size_t const frame_size = compute_frame_size<0u, decltype(pdispatch),
-            typename make_pointer_from_array_ref<Args>::type...>::value;
+        using formal_args = typelist<typename make_pointer_from_array_ref<Args>::type...>;
+        using argument_binder = bind_args<formal_args>;
+        using bound_args = typename argument_binder::type;
+        std::size_t const frame_size = argument_binder::frame_size;
+        using frame = detail::frame<formal_args, bound_args>;
+
         char* pwrite_start = align(g_buffer.pwritten_end, MAX_ALIGN);
         //while(pwrite_start + frame_size > plast)
         //    commit_finish_condition.wait();
-        push_args<0u, decltype(pdispatch), typename make_pointer_from_array_ref<Args>::type...>(
-                pwrite_start, pdispatch, std::forward<Args>(args)...);
+        //store_arg(bound_args(), 
+        frame::store_args(pwrite_start, args...);
         g_buffer.pwritten_end = pwrite_start + frame_size;
-        (*pdispatch)(pwrite_start + sizeof(pdispatch));
+        //(*pdispatch)(pwrite_start + sizeof(pdispatch));
     }
 
     template <typename... Args>
