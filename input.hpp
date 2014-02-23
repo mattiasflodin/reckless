@@ -33,16 +33,6 @@ namespace dlog {
             using type = T*;
         };
 
-        void dlog_output()
-        {
-        }
-        template <typename T, typename... Args>
-        void dlog_output(T&& first, Args&&... rest)
-        {
-            std::cout << first << std::endl;
-            dlog_output(rest...);
-        }
-
         template <typename T>
         T align(T p, std::size_t alignment)
         {
@@ -52,7 +42,7 @@ namespace dlog {
         }
 
         template <class... Args>
-        void dummy(Args&&...)
+        void evaluate(Args&&...)
         {
         }
 
@@ -69,25 +59,28 @@ namespace dlog {
             static std::size_t const offset = Offset;
         };
 
-        template <class BoundArgs>
+        typedef std::size_t dispatch_function_t(char*, char*);
+        template <class Formatter, std::size_t FrameSize, class BoundArgs>
         struct frame;
-        template <class... BoundArgs>
-        struct frame<typelist<BoundArgs...>> {
+        template <class Formatter, std::size_t FrameSize, class... BoundArgs>
+        struct frame<Formatter, FrameSize, typelist<BoundArgs...>> {
             template<typename... Args>
             static void store_args(char* pbuffer, Args&&... args)
             {
-                *reinterpret_cast<void (**)(char*)>(pbuffer) = &frame::dispatch;
+                *reinterpret_cast<dispatch_function_t**>(pbuffer) = &frame::dispatch;
                 // TODO we should do this recursively probably, because g++
                 // seems to push arguments backwards and i'm not sure that's
                 // good for the cache.
-                dummy(new (pbuffer + BoundArgs::offset) typename BoundArgs::type(args)...);
+                evaluate(new (pbuffer + BoundArgs::offset) typename BoundArgs::type(args)...);
             }
-            static void dispatch(char* pbuffer)
+            static std::size_t dispatch(char* poutput, char* pinput)
             {
-                dlog_output(static_cast<typename BoundArgs::type&&>(
-                        *reinterpret_cast<typename BoundArgs::type*>(pbuffer + BoundArgs::offset)
+                Formatter::format(poutput,
+                    std::forward<typename BoundArgs::type>(
+                        *reinterpret_cast<typename BoundArgs::type*>(pinput + BoundArgs::offset)
                     )...);
-                dummy(destroy(reinterpret_cast<typename BoundArgs::type*>(pbuffer + BoundArgs::offset))...);
+                evaluate(destroy(reinterpret_cast<typename BoundArgs::type*>(pinput + BoundArgs::offset))...);
+                return FrameSize;
             }
         };
 
@@ -100,7 +93,7 @@ namespace dlog {
         };
         template <class... Accumulator, std::size_t Offset, class Arg, class... RemainingArgs>
         struct bind_args_helper<typelist<Accumulator...>, Offset, Arg, RemainingArgs...> {
-            using Value = typename std::remove_reference<Arg>::type;
+            using Value = typename std::remove_reference<typename make_pointer_from_array<Arg>::type>::type;
             static std::size_t const my_offset = (Offset + alignof(Value)-1)/alignof(Value)*alignof(Value);
             using next = bind_args_helper<
                 typelist<Accumulator..., bound_argument<my_offset, Value>>,
@@ -110,16 +103,14 @@ namespace dlog {
             static std::size_t const frame_size = next::frame_size;
         };
 
-        template <class Args>
-        class bind_args;
         template <class... Args>
-        class bind_args<typelist<Args...>> {
+        class bind_args {
         private:
-            // Note that we start not at offset 0 but at sizeof(void (*)(char*)).
+            // Note that we start not at offset 0 but at sizeof(dispatch_function_t*).
             // This is to make room for the pointer to frame::dispatch, which
             // takes care of picking up all the values from the buffer before
             // calling the proper output function.
-            using helper = bind_args_helper<typelist<>, sizeof(void (*)(char*)), Args...>;
+            using helper = bind_args_helper<typelist<>, sizeof(dispatch_function_t*), Args...>;
         public:
             using type = typename helper::type;
             static std::size_t const frame_size = helper::frame_size;
@@ -137,26 +128,31 @@ namespace dlog {
         g_buffer.pwritten_end = g_buffer.pfirst;
     }
 
-    template <typename... Args>
-    void write(Args&&... args)
-    {
-        using namespace dlog::detail;
-        //std::unique_lock<std::mutex> hold(buffer_mutex);
-        using formal_args = typelist<typename make_pointer_from_array<Args>::type...>;
-        using argument_binder = bind_args<formal_args>;
-        //using bound_args = typename argument_binder::type;    // fails in gcc 4.7.3
-        using bound_args = typename bind_args<formal_args>::type;
-        std::size_t const frame_size = argument_binder::frame_size;
-        using frame = detail::frame<bound_args>;
+    template <class Formatter>
+    class logger {
+    public:
+        template <typename... Args>
+        static void write(Args&&... args)
+        {
+            using namespace dlog::detail;
+            //std::unique_lock<std::mutex> hold(buffer_mutex);
+            using argument_binder = bind_args<Args...>;
+            //using bound_args = typename argument_binder::type;    // fails in gcc 4.7.3
+            using bound_args = typename bind_args<Args...>::type;
+            std::size_t const frame_size = argument_binder::frame_size;
+            using frame = detail::frame<Formatter, frame_size, bound_args>;
 
-        char* pwrite_start = align(g_buffer.pwritten_end, FRAME_ALIGNMENT);
-        //while(pwrite_start + frame_size > plast)
-        //    commit_finish_condition.wait();
-        //store_arg(bound_args(), 
-        frame::store_args(pwrite_start, args...);
-        g_buffer.pwritten_end = pwrite_start + frame_size;
-        frame::dispatch(pwrite_start);
-    }
+            char* pwrite_start = align(g_buffer.pwritten_end, FRAME_ALIGNMENT);
+            //while(pwrite_start + frame_size > plast)
+            //    commit_finish_condition.wait();
+            //store_arg(bound_args(), 
+            frame::store_args(pwrite_start, std::forward<Args>(args)...);
+            g_buffer.pwritten_end = pwrite_start + frame_size;
+            char buf[2048];
+            frame::dispatch(buf, pwrite_start);
+            std::puts(buf);
+        }
+    };
 
     template <typename... Args>
     void line(Args... args)
