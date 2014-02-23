@@ -6,7 +6,7 @@
 namespace dlog {
     namespace detail {
         // max_align_t is not available in clang?
-        std::size_t const MAX_ALIGN = 16u;
+        std::size_t const FRAME_ALIGNMENT = 16u;
         struct buffer_descriptor {
             char* pfirst;
             char* plast;
@@ -17,122 +17,31 @@ namespace dlog {
         buffer_descriptor g_buffer; 
         //std::mutex buffer_mutex;
 
+        template <typename... Args>
+        struct typelist {
+        };
+
         template <typename T>
-        struct make_pointer_from_array_ref
+        struct make_pointer_from_array
         {
             using type = T;
         };
 
         template <typename T, std::size_t Size>
-        struct make_pointer_from_array_ref<T (&) [Size]>
+        struct make_pointer_from_array<T (&) [Size]>
         {
             using type = T*;
         };
-
-
-        template <std::size_t Offset>
-        void push_args(char* pbuffer)
-        {
-
-        }
-
-        template <std::size_t Offset, typename T, typename... Args>
-        void push_args(char* pbuffer, T&& first, Args&&... rest)
-        {
-            using U = typename std::remove_reference<T>::type;
-            std::size_t const write_offset =
-                ((Offset + alignof(U) - 1)/alignof(U)) * alignof(U);
-            new (pbuffer+write_offset) U(std::forward<T>(first));
-            push_args<write_offset + sizeof(U), Args...>(pbuffer, std::forward<Args>(rest)...);
-        }
 
         void dlog_output()
         {
         }
         template <typename T, typename... Args>
-        void dlog_output(T&& first, Args... rest)
+        void dlog_output(T&& first, Args&&... rest)
         {
             std::cout << first << std::endl;
             dlog_output(rest...);
         }
-
-        template <class ArgumentInfo>
-        typename ArgumentInfo::type&& pop_arg(char* pinput)
-        {
-            using T = typename ArgumentInfo::type;
-            return static_cast<T&&>(*reinterpret_cast<T*>(pinput + ArgumentInfo::offset));
-        }
-
-        template <typename... Args>
-        struct typelist {
-        };
-
-        template <std::size_t Offset, typename Type>
-        struct ArgumentInfo {
-            static std::size_t const offset = Offset;
-            using type = Type;
-        };
-
-        template <std::size_t CurrentOffset,
-                 class ArgumentInfoList,
-                 typename... Args>
-        struct arg_offsets;
-
-        template <std::size_t CurrentOffset,
-                 class ArgumentInfoList>
-        struct arg_offsets<CurrentOffset, ArgumentInfoList>
-        {
-            using type = ArgumentInfoList;
-        };
-
-        template <std::size_t CurrentOffset,
-                 class... ArgumentInfoList,
-                 typename T, typename... RemainingArgs>
-        struct arg_offsets<CurrentOffset, typelist<ArgumentInfoList...>,
-            T, RemainingArgs...>
-        
-        {
-            static std::size_t const my_offset = (CurrentOffset + alignof(T)-1)/alignof(T)*alignof(T);
-            using type = typename arg_offsets<my_offset + sizeof(T),
-                  typelist<ArgumentInfoList..., ArgumentInfo<my_offset, T>>,
-                  RemainingArgs...>::type;
-        };
-
-        template <class ArgumentInfoList>
-        struct DispatchHelper;
-        template <class... ArgumentInfoList>
-        struct DispatchHelper<typelist<ArgumentInfoList...>> {
-            static void foo(char* pinput)
-            {
-                dlog_output(pop_arg<ArgumentInfoList>(pinput)...);
-            }
-        };
-
-        template <typename... Args>
-        void dispatch(char* pinput)
-        {
-            using ArgumentInfoList = typename arg_offsets<0u, typelist<>, Args...>::type;
-            DispatchHelper<ArgumentInfoList>::foo(pinput);
-        }
-
-
-        template <std::size_t Offset, typename... Args>
-        class compute_frame_size;
-        
-        template <std::size_t Offset, typename T, typename... Args>
-        class compute_frame_size<Offset, T, Args...>
-        {
-        public:
-            static std::size_t const value = compute_frame_size<
-                ((Offset+alignof(T)-1)/alignof(T))*alignof(T) + sizeof(T),
-                Args...>::value;
-        };
-
-        template <std::size_t Offset>
-        class compute_frame_size<Offset> {
-        public:
-            static std::size_t const value = Offset;
-        };
 
         template <typename T>
         T align(T p, std::size_t alignment)
@@ -142,31 +51,44 @@ namespace dlog {
             return reinterpret_cast<T>(v);
         }
 
-        int doit(char* pbuffer);
         template <class... Args>
-        void dummy(Args...)
+        void dummy(Args&&...)
         {
         }
 
-        template <class Args, class BoundArgs>
-        struct frame;
-        
-        template <class... Args, class... BoundArgs>
-        struct frame<typelist<Args...>, typelist<BoundArgs...>> {
-            static void store_args(char* pbuffer, Args... args)
-            {
-                // TODO we should do this recursively probably, because g++
-                // seems to push arguments backwards and i'm not sure that's
-                // good for the cache.
-                dummy(new (pbuffer + BoundArgs::offset) typename BoundArgs::type(args)...);
-            }
-            static void dispatch(char* pbuffer);
-        };
+        template <typename T>
+        int destroy(T* p)
+        {
+            p->~T();
+            return 0;
+        }
 
         template <std::size_t Offset, typename Type>
         struct bound_argument {
             using type = Type;
             static std::size_t const offset = Offset;
+        };
+
+        template <class BoundArgs>
+        struct frame;
+        template <class... BoundArgs>
+        struct frame<typelist<BoundArgs...>> {
+            template<typename... Args>
+            static void store_args(char* pbuffer, Args&&... args)
+            {
+                *reinterpret_cast<void (**)(char*)>(pbuffer) = &frame::dispatch;
+                // TODO we should do this recursively probably, because g++
+                // seems to push arguments backwards and i'm not sure that's
+                // good for the cache.
+                dummy(new (pbuffer + BoundArgs::offset) typename BoundArgs::type(args)...);
+            }
+            static void dispatch(char* pbuffer)
+            {
+                dlog_output(static_cast<typename BoundArgs::type&&>(
+                        *reinterpret_cast<typename BoundArgs::type*>(pbuffer + BoundArgs::offset)
+                    )...);
+                dummy(destroy(reinterpret_cast<typename BoundArgs::type*>(pbuffer + BoundArgs::offset))...);
+            }
         };
 
         template <class Accumulator, std::size_t Offset, class... Args>
@@ -193,7 +115,11 @@ namespace dlog {
         template <class... Args>
         class bind_args<typelist<Args...>> {
         private:
-            using helper = bind_args_helper<typelist<>, 0u, Args...>;
+            // Note that we start not at offset 0 but at sizeof(void (*)(char*)).
+            // This is to make room for the pointer to frame::dispatch, which
+            // takes care of picking up all the values from the buffer before
+            // calling the proper output function.
+            using helper = bind_args_helper<typelist<>, sizeof(void (*)(char*)), Args...>;
         public:
             using type = typename helper::type;
             static std::size_t const frame_size = helper::frame_size;
@@ -216,19 +142,20 @@ namespace dlog {
     {
         using namespace dlog::detail;
         //std::unique_lock<std::mutex> hold(buffer_mutex);
-        using formal_args = typelist<typename make_pointer_from_array_ref<Args>::type...>;
+        using formal_args = typelist<typename make_pointer_from_array<Args>::type...>;
         using argument_binder = bind_args<formal_args>;
-        using bound_args = typename argument_binder::type;
+        //using bound_args = typename argument_binder::type;    // fails in gcc 4.7.3
+        using bound_args = typename bind_args<formal_args>::type;
         std::size_t const frame_size = argument_binder::frame_size;
-        using frame = detail::frame<formal_args, bound_args>;
+        using frame = detail::frame<bound_args>;
 
-        char* pwrite_start = align(g_buffer.pwritten_end, MAX_ALIGN);
+        char* pwrite_start = align(g_buffer.pwritten_end, FRAME_ALIGNMENT);
         //while(pwrite_start + frame_size > plast)
         //    commit_finish_condition.wait();
         //store_arg(bound_args(), 
         frame::store_args(pwrite_start, args...);
         g_buffer.pwritten_end = pwrite_start + frame_size;
-        //(*pdispatch)(pwrite_start + sizeof(pdispatch));
+        frame::dispatch(pwrite_start);
     }
 
     template <typename... Args>
