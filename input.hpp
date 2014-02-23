@@ -155,7 +155,10 @@ namespace dlog {
         struct frame<typelist<Args...>, typelist<BoundArgs...>> {
             static void store_args(char* pbuffer, Args... args)
             {
-                dummy(new (pbuffer + BoundArgs::offset) int...);
+                // TODO we should do this recursively probably, because g++
+                // seems to push arguments backwards and i'm not sure that's
+                // good for the cache.
+                dummy(new (pbuffer + BoundArgs::offset) typename BoundArgs::type(args)...);
             }
             static void dispatch(char* pbuffer);
         };
