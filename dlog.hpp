@@ -1,9 +1,16 @@
 #include <mutex>
 #include <condition_variable>
 #include <utility>
-#include <iostream>
+#include <cstring>
 
 namespace dlog {
+    class output_buffer
+    {
+    public:
+        char* reserve(std::size_t size);
+        char* commit(std::size_t size);
+    };
+
     namespace detail {
         // max_align_t is not available in clang?
         std::size_t const FRAME_ALIGNMENT = 16u;
@@ -59,7 +66,7 @@ namespace dlog {
             static std::size_t const offset = Offset;
         };
 
-        typedef std::size_t dispatch_function_t(char*, char*);
+        typedef std::size_t dispatch_function_t(output_buffer*, char*);
         template <class Formatter, std::size_t FrameSize, class BoundArgs>
         struct frame;
         template <class Formatter, std::size_t FrameSize, class... BoundArgs>
@@ -70,10 +77,11 @@ namespace dlog {
                 *reinterpret_cast<dispatch_function_t**>(pbuffer) = &frame::dispatch;
                 // TODO we should do this recursively probably, because g++
                 // seems to push arguments backwards and i'm not sure that's
-                // good for the cache.
+                // good for the cache. See wikipedia page on varadic templates,
+                // it has info on how to get deterministic evaluation order.
                 evaluate(new (pbuffer + BoundArgs::offset) typename BoundArgs::type(args)...);
             }
-            static std::size_t dispatch(char* poutput, char* pinput)
+            static std::size_t dispatch(output_buffer* poutput, char* pinput)
             {
                 Formatter::format(poutput,
                     std::forward<typename BoundArgs::type>(
@@ -148,9 +156,8 @@ namespace dlog {
             //store_arg(bound_args(), 
             frame::store_args(pwrite_start, std::forward<Args>(args)...);
             g_buffer.pwritten_end = pwrite_start + frame_size;
-            char buf[2048];
-            frame::dispatch(buf, pwrite_start);
-            std::puts(buf);
+            output_buffer buf;
+            frame::dispatch(&buf, pwrite_start);
         }
     };
 
@@ -162,4 +169,59 @@ namespace dlog {
     inline void flush()
     {
     }
+
+    bool format(output_buffer* pbuffer, char const*& pformat, char const* v);
+    bool format(output_buffer* pbuffer, char const*& pformat, std::string const& v);
+    bool format(output_buffer* pbuffer, char const*& pformat, std::int8_t v);
+    bool format(output_buffer* pbuffer, char const*& pformat, std::int16_t v);
+    bool format(output_buffer* pbuffer, char const*& pformat, std::int32_t v);
+    bool format(output_buffer* pbuffer, char const*& pformat, std::int64_t v);
+    bool format(output_buffer* pbuffer, char const*& pformat, std::uint8_t v);
+    bool format(output_buffer* pbuffer, char const*& pformat, std::uint16_t v);
+    bool format(output_buffer* pbuffer, char const*& pformat, std::uint32_t v);
+    bool format(output_buffer* pbuffer, char const*& pformat, std::uint64_t v);
+
+    template <typename T>
+    bool invoke_custom_format(output_buffer* pbuffer, char const*& pformat, T&& v)
+    {
+        return format(pbuffer, pformat, std::forward<T>(v));
+    }
+
+    class formatter {
+    public:
+        static void format(output_buffer* pbuffer, char const* pformat)
+        {
+            auto len = std::strlen(pformat);
+            char* p = pbuffer->reserve(len);
+            std::memcpy(p, pformat, len);
+            pbuffer->commit(len);
+        }
+
+        template <typename T, typename... Args>
+        static void format(output_buffer* pbuffer, char const* pformat, T&& value, Args&&... args)
+        {
+            while(true) {
+                char const* pspecifier = std::strchr(pformat, '%');
+                if(pspecifier == nullptr)
+                    return format(pbuffer, pformat);
+
+                auto len = pspecifier - pformat;
+                char* p = pbuffer->reserve(len);
+                std::memcpy(p, pformat, len);
+                pbuffer->commit(len);
+
+                pformat = pspecifier + 1;
+
+                if(*pformat == '%') {
+                    p = pbuffer->reserve(1u);
+                    *p = '%';
+                    pbuffer->commit(1u);
+                    ++pformat;
+                } else {
+                    if(invoke_custom_format(pbuffer, pformat, std::forward<T>(value)))
+                        return formatter::format(pbuffer, pformat, std::forward<Args>(args)...);
+                }
+            }
+        }
+    };
 }

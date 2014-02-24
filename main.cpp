@@ -1,4 +1,4 @@
-#include "input.hpp"
+#include "dlog.hpp"
 #include <iostream>
 #include <sstream>
 #include <cstring>
@@ -26,36 +26,19 @@ private:
     int x;
 };
 
-std::ostream& operator<<(std::ostream& os, Object const& obj)
-{
-    return (os << obj.get());
-}
+
+bool format(dlog::output_buffer* pbuffer, char const*& pformat, Object const& v);
+//{
+//    if(*pformat != 's')
+//        return false;
+//    ++pformat;
+//    char const* fmt = "d";
+//    return format(pbuffer, fmt, v.get());
+//}
 
 Object obj(3);
 
-struct formatter
-{
-    template <typename... Args>
-    static void internal_format(std::ostringstream& ostr)
-    {
-    }
-    template <typename T, typename... Args>
-    static void internal_format(std::ostringstream& ostr, T&& first, Args&&... rest)
-    {
-        ostr << std::forward<T>(first) << ' ';
-        internal_format(ostr, std::forward<Args>(rest)...);
-    }
-
-    template <typename... Args>
-    static void format(char* pbuffer, Args&&... rest)
-    {
-        std::ostringstream ostr;
-        internal_format(ostr, std::forward<Args>(rest)...);
-        std::strcpy(pbuffer, ostr.str().c_str());
-    }
-};
-
-typedef dlog::logger<formatter> logger;
+typedef dlog::logger<dlog::formatter> logger;
 
 int main()
 {
