@@ -21,7 +21,7 @@ namespace dlog {
             char* pflush_end;
             char* pwritten_end;
         };
-        buffer_descriptor g_buffer; 
+        buffer_descriptor g_input_buffer; 
         //std::mutex buffer_mutex;
 
         template <typename... Args>
@@ -129,11 +129,11 @@ namespace dlog {
     {
         using namespace detail;
         std::size_t const BUFFER_SIZE = 2048u;
-        g_buffer.pfirst = new char[BUFFER_SIZE];
-        g_buffer.plast = g_buffer.pfirst + BUFFER_SIZE;
-        g_buffer.pflush_start = g_buffer.pfirst;
-        g_buffer.pflush_end = g_buffer.pfirst;
-        g_buffer.pwritten_end = g_buffer.pfirst;
+        g_input_buffer.pfirst = new char[BUFFER_SIZE];
+        g_input_buffer.plast = g_input_buffer.pfirst + BUFFER_SIZE;
+        g_input_buffer.pflush_start = g_input_buffer.pfirst;
+        g_input_buffer.pflush_end = g_input_buffer.pfirst;
+        g_input_buffer.pwritten_end = g_input_buffer.pfirst;
     }
 
     template <class Formatter>
@@ -150,12 +150,12 @@ namespace dlog {
             std::size_t const frame_size = argument_binder::frame_size;
             using frame = detail::frame<Formatter, frame_size, bound_args>;
 
-            char* pwrite_start = align(g_buffer.pwritten_end, FRAME_ALIGNMENT);
+            char* pwrite_start = align(g_input_buffer.pwritten_end, FRAME_ALIGNMENT);
             //while(pwrite_start + frame_size > plast)
             //    commit_finish_condition.wait();
             //store_arg(bound_args(), 
             frame::store_args(pwrite_start, std::forward<Args>(args)...);
-            g_buffer.pwritten_end = pwrite_start + frame_size;
+            g_input_buffer.pwritten_end = pwrite_start + frame_size;
             output_buffer buf;
             frame::dispatch(&buf, pwrite_start);
         }
