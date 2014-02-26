@@ -4,24 +4,63 @@
 #include <cstring>
 
 namespace dlog {
-    class output_buffer
-    {
+    class writer {
     public:
+        enum Result
+        {
+            SUCCESS,
+            ERROR_TRY_LATER,
+            ERROR_GIVE_UP
+        };
+        virtual ~writer() = 0;
+        virtual Result write(void const* pbuffer, std::size_t count) = 0;
+    };
+
+    class file_writer : public writer {
+    public:
+        file_writer(char const* path);
+        ~file_writer();
+        Result write(void const* pbuffer, std::size_t count);
+    private:
+        int fd_;
+    };
+
+    class output_buffer {
+    public:
+        output_buffer(writer* pwriter, std::size_t max_capacity);
+        ~output_buffer();
         char* reserve(std::size_t size);
         char* commit(std::size_t size);
+        void flush();
+
+    private:
+
+        writer* pwriter_;
+        char* pbuffer_;
+        char* pcommit_end_;
+        char* pbuffer_end_;
+    };
+
+    void initialize(writer* pwriter);
+    void cleanup();
+
+    class initializer {
+    public:
+        initializer(writer* pwriter) { initialize(pwriter); }
+        ~initializer() { cleanup(); }
     };
 
     namespace detail {
         // max_align_t is not available in clang?
         std::size_t const FRAME_ALIGNMENT = 16u;
-        struct buffer_descriptor {
+        struct input_buffer {
             char* pfirst;
             char* plast;
             char* pflush_start;
             char* pflush_end;
             char* pwritten_end;
         };
-        buffer_descriptor g_input_buffer; 
+        extern input_buffer g_input_buffer; 
         //std::mutex buffer_mutex;
 
         template <typename... Args>
@@ -123,17 +162,6 @@ namespace dlog {
             using type = typename helper::type;
             static std::size_t const frame_size = helper::frame_size;
         };
-    }
-
-    void initialize()
-    {
-        using namespace detail;
-        std::size_t const BUFFER_SIZE = 2048u;
-        g_input_buffer.pfirst = new char[BUFFER_SIZE];
-        g_input_buffer.plast = g_input_buffer.pfirst + BUFFER_SIZE;
-        g_input_buffer.pflush_start = g_input_buffer.pfirst;
-        g_input_buffer.pflush_end = g_input_buffer.pfirst;
-        g_input_buffer.pwritten_end = g_input_buffer.pfirst;
     }
 
     template <class Formatter>
