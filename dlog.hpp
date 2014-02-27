@@ -30,7 +30,7 @@ namespace dlog {
         output_buffer(writer* pwriter, std::size_t max_capacity);
         ~output_buffer();
         char* reserve(std::size_t size);
-        char* commit(std::size_t size);
+        void commit(std::size_t size);
         void flush();
 
     private:
@@ -42,12 +42,23 @@ namespace dlog {
     };
 
     void initialize(writer* pwriter);
+    void initialize(writer* pwriter, std::size_t max_capacity);
     void cleanup();
 
     class initializer {
     public:
-        initializer(writer* pwriter) { initialize(pwriter); }
-        ~initializer() { cleanup(); }
+        initializer(writer* pwriter)
+        {
+            initialize(pwriter);
+        }
+        initializer(writer* pwriter, std::size_t max_capacity)
+        {
+            initialize(pwriter, max_capacity);
+        }
+        ~initializer()
+        {
+            cleanup();
+        }
     };
 
     namespace detail {
@@ -184,8 +195,7 @@ namespace dlog {
             //store_arg(bound_args(), 
             frame::store_args(pwrite_start, std::forward<Args>(args)...);
             g_input_buffer.pwritten_end = pwrite_start + frame_size;
-            output_buffer buf;
-            frame::dispatch(&buf, pwrite_start);
+            //frame::dispatch(&buf, pwrite_start);
         }
     };
 

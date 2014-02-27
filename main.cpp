@@ -42,7 +42,8 @@ typedef dlog::logger<dlog::formatter> logger;
 
 int main()
 {
-    dlog::initialize();
+    dlog::file_writer writer("dlog.txt");
+    dlog::initialize(&writer);
     logger::write("three numbers: %s %s %s", 'A', 66, 67L, obj);
     return 0;
 }
