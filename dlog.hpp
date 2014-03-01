@@ -208,16 +208,28 @@ namespace dlog {
     {
     }
 
+    bool format(output_buffer* pbuffer, char const*& pformat, char v);
+    bool format(output_buffer* pbuffer, char const*& pformat, signed char v);
+    bool format(output_buffer* pbuffer, char const*& pformat, unsigned char v);
+    bool format(output_buffer* pbuffer, char const*& pformat, wchar_t v);
+    bool format(output_buffer* pbuffer, char const*& pformat, char16_t v);
+    bool format(output_buffer* pbuffer, char const*& pformat, char32_t v);
+
+    bool format(output_buffer* pbuffer, char const*& pformat, short v);
+    bool format(output_buffer* pbuffer, char const*& pformat, unsigned short v);
+    bool format(output_buffer* pbuffer, char const*& pformat, int v);
+    bool format(output_buffer* pbuffer, char const*& pformat, unsigned int v);
+    bool format(output_buffer* pbuffer, char const*& pformat, long v);
+    bool format(output_buffer* pbuffer, char const*& pformat, unsigned long v);
+    bool format(output_buffer* pbuffer, char const*& pformat, long long v);
+    bool format(output_buffer* pbuffer, char const*& pformat, unsigned long long v);
+
+    bool format(output_buffer* pbuffer, char const*& pformat, float v);
+    bool format(output_buffer* pbuffer, char const*& pformat, double v);
+    bool format(output_buffer* pbuffer, char const*& pformat, long double v);
+
     bool format(output_buffer* pbuffer, char const*& pformat, char const* v);
     bool format(output_buffer* pbuffer, char const*& pformat, std::string const& v);
-    bool format(output_buffer* pbuffer, char const*& pformat, std::int8_t v);
-    bool format(output_buffer* pbuffer, char const*& pformat, std::int16_t v);
-    bool format(output_buffer* pbuffer, char const*& pformat, std::int32_t v);
-    bool format(output_buffer* pbuffer, char const*& pformat, std::int64_t v);
-    bool format(output_buffer* pbuffer, char const*& pformat, std::uint8_t v);
-    bool format(output_buffer* pbuffer, char const*& pformat, std::uint16_t v);
-    bool format(output_buffer* pbuffer, char const*& pformat, std::uint32_t v);
-    bool format(output_buffer* pbuffer, char const*& pformat, std::uint64_t v);
 
     template <typename T>
     bool invoke_custom_format(output_buffer* pbuffer, char const*& pformat, T&& v)

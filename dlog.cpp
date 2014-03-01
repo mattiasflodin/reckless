@@ -53,6 +53,10 @@ void dlog::cleanup()
     g_input_buffer.pwritten_end = nullptr;
 }
 
+dlog::writer::~writer()
+{
+}
+
 dlog::file_writer::file_writer(char const* path) :
     fd_(-1)
 {
@@ -148,6 +152,134 @@ void dlog::output_buffer::flush()
     pwriter_->write(pbuffer_, pcommit_end_ - pbuffer_);
     pcommit_end_ = pbuffer_;
 }
+                
+namespace {
+    template <typename T>
+    bool generic_format_int(output_buffer* pbuffer, char const*& pformat, T v)
+    {
+        char f = *pformat;
+        if(f == 'd') {
+            std::ostringstream ostr;
+            ostr << int(f);
+            std::string const& s = ostr.str();
+            char* p = pbuffer->reserve(s.size());
+            std::memcpy(p, s.data(), s.size());
+            pbuffer->commit(s.size());
+            pformat += 1;
+            return true;
+        } else if(f == 'x') {
+            // FIXME
+            return false;
+        } else if(f == 'b') {
+            // FIXME
+            return false;
+        } else {
+            return false;
+        }
+    }
+
+    template <typename T>
+    bool generic_format_float(output_buffer* pbuffer, char const*& pformat, T v)
+    {
+        char f = *pformat)
+        if(f != '
+        std::ostringstream ostr;
+        ostr << v;
+        std::string const& s = ostr.str();
+        char* p = pbuffer->reserve(s.size());
+        std::memcpy(p, s.data(), s.size());
+        pbuffer->commit(s.size());
+        return true;
+    }
+
+    template <typename T>
+    bool generic_format_char(output_buffer* pbuffer, char const*& pformat, T v)
+    {
+        char f = *pformat;
+        if(f == 's') {
+            char* p = pbuffer->reserve(1);
+            *p = static_cast<char>(v);
+            pbuffer->commit(1);
+            pformat += 1;
+        } else {
+            return generic_format_int(pbuffer, pformat, v);
+        }
+    }
+}
+
+bool dlog::format(output_buffer* pbuffer, char const*& pformat, char v)
+{
+    return generic_format_char(pbuffer, pformat, v);
+}
+
+bool dlog::format(output_buffer* pbuffer, char const*& pformat, signed char v)
+{
+    return generic_format_char(pbuffer, pformat, v);
+}
+
+bool dlog::format(output_buffer* pbuffer, char const*& pformat, unsigned char v)
+{
+    return generic_format_char(pbuffer, pformat, v);
+}
+
+//bool dlog::format(output_buffer* pbuffer, char const*& pformat, wchar_t v);
+//bool dlog::format(output_buffer* pbuffer, char const*& pformat, char16_t v);
+//bool dlog::format(output_buffer* pbuffer, char const*& pformat, char32_t v);
+
+bool dlog::format(output_buffer* pbuffer, char const*& pformat, short v)
+{
+    return generic_format_int(pbuffer, pformat, v);
+}
+
+bool dlog::format(output_buffer* pbuffer, char const*& pformat, unsigned short v)
+{
+    return generic_format_int(pbuffer, pformat, v);
+}
+
+bool dlog::format(output_buffer* pbuffer, char const*& pformat, int v)
+{
+    return generic_format_int(pbuffer, pformat, v);
+}
+
+bool dlog::format(output_buffer* pbuffer, char const*& pformat, unsigned int v)
+{
+    return generic_format_int(pbuffer, pformat, v);
+}
+
+bool dlog::format(output_buffer* pbuffer, char const*& pformat, long v)
+{
+    return generic_format_int(pbuffer, pformat, v);
+}
+
+bool dlog::format(output_buffer* pbuffer, char const*& pformat, unsigned long v)
+{
+    return generic_format_int(pbuffer, pformat, v);
+}
+
+bool dlog::format(output_buffer* pbuffer, char const*& pformat, long long v)
+{
+    return generic_format_int(pbuffer, pformat, v);
+}
+
+bool dlog::format(output_buffer* pbuffer, char const*& pformat, unsigned long long v)
+{
+    return generic_format_int(pbuffer, pformat, v);
+}
+
+bool dlog::format(output_buffer* pbuffer, char const*& pformat, float v)
+{
+    return generic_format_float(pbuffer, pformat, v);
+}
+
+bool dlog::format(output_buffer* pbuffer, char const*& pformat, double v)
+{
+    return generic_format_float(pbuffer, pformat, v);
+}
+
+bool dlog::format(output_buffer* pbuffer, char const*& pformat, long double v)
+{
+    return generic_format_float(pbuffer, pformat, v);
+}
 
 bool dlog::format(output_buffer* pbuffer, char const*& pformat, char const* v)
 {
@@ -173,7 +305,3 @@ bool dlog::format(output_buffer* pbuffer, char const*& pformat, std::string cons
     return true;
 }
 
-//bool dlog::format(output_buffer* pbuffer, char const*& pformat, std::uint8_t v);
-//bool dlog::format(output_buffer* pbuffer, char const*& pformat, std::uint16_t v);
-//bool dlog::format(output_buffer* pbuffer, char const*& pformat, std::uint32_t v);
-//bool dlog::format(output_buffer* pbuffer, char const*& pformat, std::uint64_t v);
