@@ -5,6 +5,8 @@
 #include <algorithm>
 #include <new>
 
+#include <sstream> // TODO probably won't need this when all is said and done
+
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/stat.h>
@@ -152,7 +154,8 @@ void dlog::output_buffer::flush()
     pwriter_->write(pbuffer_, pcommit_end_ - pbuffer_);
     pcommit_end_ = pbuffer_;
 }
-                
+
+namespace dlog {
 namespace {
     template <typename T>
     bool generic_format_int(output_buffer* pbuffer, char const*& pformat, T v)
@@ -160,7 +163,7 @@ namespace {
         char f = *pformat;
         if(f == 'd') {
             std::ostringstream ostr;
-            ostr << int(f);
+            ostr << v;
             std::string const& s = ostr.str();
             char* p = pbuffer->reserve(s.size());
             std::memcpy(p, s.data(), s.size());
@@ -181,14 +184,17 @@ namespace {
     template <typename T>
     bool generic_format_float(output_buffer* pbuffer, char const*& pformat, T v)
     {
-        char f = *pformat)
-        if(f != '
+        char f = *pformat;
+        if(f != 'f')
+            return false;
+
         std::ostringstream ostr;
         ostr << v;
         std::string const& s = ostr.str();
         char* p = pbuffer->reserve(s.size());
         std::memcpy(p, s.data(), s.size());
         pbuffer->commit(s.size());
+        pformat += 1;
         return true;
     }
 
@@ -202,10 +208,11 @@ namespace {
             pbuffer->commit(1);
             pformat += 1;
         } else {
-            return generic_format_int(pbuffer, pformat, v);
+            return generic_format_int(pbuffer, pformat, static_cast<int>(v));
         }
     }
-}
+}   // anonymous namespace
+}   // namespace dlog
 
 bool dlog::format(output_buffer* pbuffer, char const*& pformat, char v)
 {

@@ -27,14 +27,14 @@ private:
 };
 
 
-bool format(dlog::output_buffer* pbuffer, char const*& pformat, Object const& v);
-//{
-//    if(*pformat != 's')
-//        return false;
-//    ++pformat;
-//    char const* fmt = "d";
-//    return format(pbuffer, fmt, v.get());
-//}
+bool format(dlog::output_buffer* pbuffer, char const*& pformat, Object const& v)
+{
+    if(*pformat != 's')
+        return false;
+    ++pformat;
+    char const* fmt = "d";
+    return format(pbuffer, fmt, v.get());
+}
 
 Object obj(3);
 
