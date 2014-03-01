@@ -174,33 +174,6 @@ namespace dlog {
         };
     }
 
-    template <class Formatter>
-    class logger {
-    public:
-        template <typename... Args>
-        static void write(Args&&... args)
-        {
-            using namespace dlog::detail;
-            //std::unique_lock<std::mutex> hold(buffer_mutex);
-            using argument_binder = bind_args<Args...>;
-            //using bound_args = typename argument_binder::type;    // fails in gcc 4.7.3
-            using bound_args = typename bind_args<Args...>::type;
-            std::size_t const frame_size = argument_binder::frame_size;
-            using frame = detail::frame<Formatter, frame_size, bound_args>;
-
-            char* pwrite_start = align(g_input_buffer.pwritten_end, FRAME_ALIGNMENT);
-            {
-                std::unique_lock<std::mutex> lock(g_input_buffer_mutex);
-                if(g_input_buffer.pflush_start > 
-                        (pflush_start < plast - pwrite_start > frame_size or pflush_start - 
-            while(pwrite_start + frame_size > plast)
-            //    commit_finish_condition.wait();
-            //store_arg(bound_args(), 
-            frame::store_args(pwrite_start, std::forward<Args>(args)...);
-            g_input_buffer.pwritten_end = pwrite_start + frame_size;
-        }
-    };
-
     template <typename... Args>
     void line(Args... args)
     {
@@ -277,3 +250,37 @@ namespace dlog {
         }
     };
 }
+template <class Formatter>
+class dlog::logger {
+public:
+    template <typename... Args>
+    static void write(Args&&... args)
+    {
+        using namespace dlog::detail;
+        //std::unique_lock<std::mutex> hold(buffer_mutex);
+        using argument_binder = bind_args<Args...>;
+        //using bound_args = typename argument_binder::type;    // fails in gcc 4.7.3
+        using bound_args = typename bind_args<Args...>::type;
+        std::size_t const frame_size = argument_binder::frame_size;
+
+        char* pwrite_start = align(g_input_buffer.pwritten_end,
+                FRAME_ALIGNMENT);
+        {
+            std::unique_lock<std::mutex> lock(g_input_buffer_mutex);
+            auto& ib = g_input_buffer;
+            if(pwrite_start >= ib.pflush_end) {
+                    //
+                if(ib.pend - pwrite_start < frame_size) {
+                }
+            } else {
+                if(ib.pflush_s
+            }
+        }
+        //    commit_finish_condition.wait();
+        //store_arg(bound_args(), 
+        using frame = detail::frame<Formatter, frame_size, bound_args>;
+        frame::store_args(pwrite_start, std::forward<Args>(args)...);
+        g_input_buffer.pwritten_end = pwrite_start + frame_size;
+    }
+};
+
