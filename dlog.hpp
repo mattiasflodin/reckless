@@ -34,7 +34,6 @@ namespace dlog {
         void flush();
 
     private:
-
         writer* pwriter_;
         char* pbuffer_;
         char* pcommit_end_;
@@ -65,8 +64,8 @@ namespace dlog {
         // max_align_t is not available in clang?
         std::size_t const FRAME_ALIGNMENT = 16u;
         struct input_buffer {
-            char* pfirst;
-            char* plast;
+            char* pbegin;
+            char* pend;
             char* pflush_start;
             char* pflush_end;
             char* pwritten_end;
@@ -190,12 +189,15 @@ namespace dlog {
             using frame = detail::frame<Formatter, frame_size, bound_args>;
 
             char* pwrite_start = align(g_input_buffer.pwritten_end, FRAME_ALIGNMENT);
-            //while(pwrite_start + frame_size > plast)
+            {
+                std::unique_lock<std::mutex> lock(g_input_buffer_mutex);
+                if(g_input_buffer.pflush_start > 
+                        (pflush_start < plast - pwrite_start > frame_size or pflush_start - 
+            while(pwrite_start + frame_size > plast)
             //    commit_finish_condition.wait();
             //store_arg(bound_args(), 
             frame::store_args(pwrite_start, std::forward<Args>(args)...);
             g_input_buffer.pwritten_end = pwrite_start + frame_size;
-            //frame::dispatch(&buf, pwrite_start);
         }
     };
 

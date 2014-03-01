@@ -4,6 +4,7 @@
 #include <memory>
 #include <algorithm>
 #include <new>
+#include <thread>
 
 #include <sstream> // TODO probably won't need this when all is said and done
 
@@ -15,11 +16,16 @@
 namespace dlog {
     namespace detail {
         input_buffer g_input_buffer; 
+        std::mutex g_input_buffer_mutex;
+        std::condition_variable g_input_available_condition;
     }
     namespace {
         std::unique_ptr<output_buffer> g_poutput_buffer;
+        std::thread g_output_thread;
 
         int const g_page_size = static_cast<int>(sysconf(_SC_PAGESIZE));
+
+        void output_worker();
     }
 }
 
@@ -41,11 +47,14 @@ void dlog::initialize(writer* pwriter, std::size_t max_capacity)
     g_input_buffer.pwritten_end = g_input_buffer.pfirst;
 
     g_poutput_buffer.reset(new output_buffer(pwriter, max_capacity));
+
+    g_output_thread = move(std::thread(&output_worker));
 }
 
 void dlog::cleanup()
 {
     using namespace detail;
+    g_output_thread.join();
     delete [] g_input_buffer.pfirst;
     g_poutput_buffer.reset();
     g_input_buffer.pfirst = nullptr;
@@ -312,3 +321,31 @@ bool dlog::format(output_buffer* pbuffer, char const*& pformat, std::string cons
     return true;
 }
 
+namespace dlog {
+namespace detail {
+namespace {
+    void output_worker()
+    {
+        while(true) {
+            char const* pflush_start;
+            char const* pflush_end;
+            {
+                std::unique_lock<std::mutex> lock(g_input_buffer_mutex);
+                g_input_available_condition.wait(lock, []() {
+                    return g_input_buffer.pflush_start == g_input_buffer.pflush_end;
+                });
+                pflush_start = g_input_buffer.pflush_start;
+                pflush_end = g_input_buffer.pflush_end;
+            }
+            while(pflush_start != pflush_end) {
+                auto pdispatch = *reinterpret_cast<dispatch_function_t**>(pflush_start);
+                pflush_start = (*pdispatch)(g_poutput_buffer.get(), pflush_start);
+                pflush_start = align(pflush_start, FRAME_ALIGNMENT);
+                if( pflush_start >= g_input_buffer.pend )
+                    pflush_start -= (g_input_buffer.pend - g_input_buffer.pbegin);
+            }
+        }
+    }
+}
+}
+}
