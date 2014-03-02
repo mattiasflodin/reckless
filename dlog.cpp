@@ -18,6 +18,7 @@ namespace dlog {
         input_buffer g_input_buffer; 
         std::mutex g_input_buffer_mutex;
         std::condition_variable g_input_available_condition;
+        std::condition_variable g_input_consumed_condition;
     }
     namespace {
         std::unique_ptr<output_buffer> g_poutput_buffer;
@@ -40,12 +41,13 @@ void dlog::initialize(writer* pwriter, std::size_t max_capacity)
 
     std::size_t const BUFFER_SIZE = g_page_size;
     // FIXME exception safety for this pointer
-    g_
-    g_input_buffer.pfirst = new char[BUFFER_SIZE];
-    g_input_buffer.plast = g_input_buffer.pfirst + BUFFER_SIZE;
-    g_input_buffer.pflush_start = g_input_buffer.pfirst;
-    g_input_buffer.pflush_end = g_input_buffer.pfirst;
-    g_input_buffer.pwritten_end = g_input_buffer.pfirst;
+    g_input_buffer.pbuffer = new char[BUFFER_SIZE];
+    g_input_buffer.pbegin = align_up(g_input_buffer.pbuffer, FRAME_ALIGNMENT);
+    auto pend = align_down(g_input_buffer.pbuffer + BUFFER_SIZE);
+    g_input_buffer.size = pend - g_input_buffer.pbegin;
+    g_input_buffer.pflush_start = g_input_buffer.pbegin;
+    g_input_buffer.pflush_end = g_input_buffer.pbegin;
+    g_input_buffer.pwritten_end = g_input_buffer.pbegin;
 
     g_poutput_buffer.reset(new output_buffer(pwriter, max_capacity));
 
@@ -324,11 +326,12 @@ bool dlog::format(output_buffer* pbuffer, char const*& pformat, std::string cons
 
 void dlog:::detail::output_worker()
 {
+    char const* pflush_start = g_input_buffer.pflush_start;
     while(true) {
-        char const* pflush_start;
         char const* pflush_end;
         {
             std::unique_lock<std::mutex> lock(g_input_buffer_mutex);
+            g_input_buffer.pflush_start = pflush_start;
             g_input_available_condition.wait(lock, []() {
                 return g_input_buffer.pflush_start == g_input_buffer.pflush_end;
             });
@@ -337,11 +340,18 @@ void dlog:::detail::output_worker()
         }
         while(pflush_start != pflush_end) {
             auto pdispatch = *reinterpret_cast<dispatch_function_t**>(pflush_start);
-            pflush_start = (*pdispatch)(g_poutput_buffer.get(), pflush_start);
+            if(pdispatch == WRAPAROUND_MARKER) {
+                pflush_start = g_input_buffer.pbegin;
+                pdispatch = *reinterpret_cast<dispatch_function_t**>(pflush_start);
+            }
+            auto frame_size = (*pdispatch)(g_poutput_buffer.get(), pflush_start);
+            pflush_start = advance_frame_pointer(frame_size);
             pflush_start = align(pflush_start, FRAME_ALIGNMENT);
-            if( pflush_start >= g_input_buffer.pend )
-                pflush_start -= (g_input_buffer.pend - g_input_buffer.pbegin);
+            if(pflush_start >= g_input_buffer.pend)
+                pflush_start -= g_input_buffer.size;
         }
+        g_input_consumed_condition.notify();
+        g_poutput_buffer.flush();
     }
 }
 
@@ -358,10 +368,10 @@ void dlog:::detail::output_worker()
 inline char* advance_frame_pointer(char* p, std::size_t distance)
 {
     p = align(p + distance, FRAME_ALIGNMENT);
-    auto remaining = p - (g_input_buffer.pbuffer + g_input_buffer.size);
+    auto remaining = p - (g_input_buffer.pbegin + g_input_buffer.size);
     assert(remaining >= 0);
     if(remaining == 0)
-        p = g_input_buffer.pbuffer;
+        p = g_input_buffer.pbegin;
     return p;
 }
 
@@ -381,13 +391,12 @@ char* dlog::detail::allocate_input_frame(std::size_t size)
     //   contiguous (it still starts at pfree_start and ends at pflush_start).
     //   
     // (This is much, much easier to understand by drawing it on a paper than
-    // by reading comments).
-
+    // by reading comment text).
     std::unique_lock<std::mutex> lock(g_input_buffer_mutex);
     while(true) {
         auto pfree_start = g_input_buffer.pfree_start;
         auto pflush_start = g_input_buffer.pflush_start;
-        assert(pfree_start - g_input_buffer.pbuffer != g_input_buffer.size);
+        assert(pfree_start - g_input_buffer.pbegin != g_input_buffer.size);
         assert(is_aligned(pfree_start, FRAME_ALIGNMENT));
 
         auto free = pflush_start - pfree_start;
@@ -398,7 +407,9 @@ char* dlog::detail::allocate_input_frame(std::size_t size)
                     size);
                 return pfree_start;
             } else {
-                g_input_available_condition.wait(lock);
+                // Not enough room. Wait for the output thread to consume some
+                // input.
+                g_input_consumed_condition.wait(lock);
             }
         } else {
             // Free space is non-contiguous.
@@ -409,10 +420,27 @@ char* dlog::detail::allocate_input_frame(std::size_t size)
                         size);
                 return pfree_start;
             } else {
-                std::size_t free2 = pflush_start - g_input_buffer.pbuffer;
+                std::size_t free2 = pflush_start - g_input_buffer.pbegin;
                 if(size <= free2) {
-                    // There's enough room in the second segment.
-                    pfree_start = align(g_input_buffer.pbuffer;
+                    // We don't have enough room for a continuous input frame
+                    // in the first segment (at the end of the circular
+                    // buffer), but there is enough room in the second segment
+                    // (at the beginning of the buffer). To instruct the output
+                    // thread to skip ahead to the second segment, we need to
+                    // put a marker value at the current position. We're
+                    // supposed to be guaranteed enough room for the wraparound
+                    // marker because FRAME_ALIGNMENT is at least the size of
+                    // the marker.
+                    *reinterpret_cast<dispatch_function_t**>(pfree_start) =
+                        WRAPAROUND_MARKER;
+                    pfree_start = g_input_buffer.pbegin;
+                    g_input_buffer.pfree_start = advance_frame_pointer(
+                            pfree_start, size);
+                    return pfree_start;
+                } else {
+                    // Not enough room. Wait for the output thread to consume
+                    // some input.
+                    g_input_consumed_condition.wait(lock);
                 }
             }
         }

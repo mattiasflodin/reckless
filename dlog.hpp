@@ -64,12 +64,12 @@ namespace dlog {
         // max_align_t is not available in clang?
         std::size_t const FRAME_ALIGNMENT = 16u;
         struct input_buffer {
-            char* pbuffer;
-            char* pbegin_aligned;
-            std::size_t size;
-            char* pflush_start;
-            char* pflush_end;
-            char* pfree_start;
+            char* pbuffer;      // static
+            char* pbegin;       // static
+            std::size_t size;   // static
+            char* pflush_start; // updated by output thread
+            char* pflush_end;   // updated by flush()
+            char* pfree_start;  // updated by logger::write
         };
         extern input_buffer g_input_buffer; 
         //std::mutex buffer_mutex;
@@ -91,10 +91,17 @@ namespace dlog {
         };
 
         template <typename T>
-        T align(T p, std::size_t alignment)
+        T align_up(T p, std::size_t alignment)
         {
             std::uintptr_t v = reinterpret_cast<std::uintptr_t>(p);
             v = ((v + alignment-1)/alignment)*alignment;
+            return reinterpret_cast<T>(v);
+        }
+        template <typename T>
+        T align_down(T p, std::size_t alignment)
+        {
+            std::uintptr_t v = reinterpret_cast<std::uintptr_t>(p);
+            v = (v/alignment)*alignment;
             return reinterpret_cast<T>(v);
         }
         template <typename T>
@@ -268,7 +275,7 @@ namespace dlog {
     };
 
     namespace detail {
-        allocate_frame(std::size_t frame_size);
+        allocate_input_frame(std::size_t frame_size);
     }   // namespace detail
 }
 template <class Formatter>
@@ -284,21 +291,7 @@ public:
         using bound_args = typename bind_args<Args...>::type;
         std::size_t const frame_size = argument_binder::frame_size;
 
-        char* pwrite_start = allocate_frame(frame_size);
-        align(g_input_buffer.pwritten_end,
-                FRAME_ALIGNMENT);
-        {
-            auto& ib = g_input_buffer;
-            if(pwrite_start >= ib.pflush_end) {
-                    //
-                if(ib.pend - pwrite_start < frame_size) {
-                }
-            } else {
-                if(ib.pflush_s
-            }
-        }
-        //    commit_finish_condition.wait();
-        //store_arg(bound_args(), 
+        char* pwrite_start = allocate_input_frame(frame_size);
         using frame = detail::frame<Formatter, frame_size, bound_args>;
         frame::store_args(pwrite_start, std::forward<Args>(args)...);
         g_input_buffer.pwritten_end = pwrite_start + frame_size;
