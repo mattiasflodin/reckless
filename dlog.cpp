@@ -40,6 +40,7 @@ void dlog::initialize(writer* pwriter, std::size_t max_capacity)
 
     std::size_t const BUFFER_SIZE = g_page_size;
     // FIXME exception safety for this pointer
+    g_
     g_input_buffer.pfirst = new char[BUFFER_SIZE];
     g_input_buffer.plast = g_input_buffer.pfirst + BUFFER_SIZE;
     g_input_buffer.pflush_start = g_input_buffer.pfirst;
@@ -321,31 +322,99 @@ bool dlog::format(output_buffer* pbuffer, char const*& pformat, std::string cons
     return true;
 }
 
-namespace dlog {
-namespace detail {
-namespace {
-    void output_worker()
-    {
-        while(true) {
-            char const* pflush_start;
-            char const* pflush_end;
-            {
-                std::unique_lock<std::mutex> lock(g_input_buffer_mutex);
-                g_input_available_condition.wait(lock, []() {
-                    return g_input_buffer.pflush_start == g_input_buffer.pflush_end;
-                });
-                pflush_start = g_input_buffer.pflush_start;
-                pflush_end = g_input_buffer.pflush_end;
-            }
-            while(pflush_start != pflush_end) {
-                auto pdispatch = *reinterpret_cast<dispatch_function_t**>(pflush_start);
-                pflush_start = (*pdispatch)(g_poutput_buffer.get(), pflush_start);
-                pflush_start = align(pflush_start, FRAME_ALIGNMENT);
-                if( pflush_start >= g_input_buffer.pend )
-                    pflush_start -= (g_input_buffer.pend - g_input_buffer.pbegin);
-            }
+void dlog:::detail::output_worker()
+{
+    while(true) {
+        char const* pflush_start;
+        char const* pflush_end;
+        {
+            std::unique_lock<std::mutex> lock(g_input_buffer_mutex);
+            g_input_available_condition.wait(lock, []() {
+                return g_input_buffer.pflush_start == g_input_buffer.pflush_end;
+            });
+            pflush_start = g_input_buffer.pflush_start;
+            pflush_end = g_input_buffer.pflush_end;
+        }
+        while(pflush_start != pflush_end) {
+            auto pdispatch = *reinterpret_cast<dispatch_function_t**>(pflush_start);
+            pflush_start = (*pdispatch)(g_poutput_buffer.get(), pflush_start);
+            pflush_start = align(pflush_start, FRAME_ALIGNMENT);
+            if( pflush_start >= g_input_buffer.pend )
+                pflush_start -= (g_input_buffer.pend - g_input_buffer.pbegin);
         }
     }
 }
+
+// Moves an input-buffer pointer forward by the given distance while
+// maintaining the invariant that:
+//
+// * p is aligned by FRAME_ALIGNMENT
+// * p never points at the end of the buffer; it always wraps around to the
+//   beginning of the circular buffer.
+//
+// The distance must never be so great that the pointer moves *past* the end of
+// the buffer. To do so would be an error in our context, since no input frame
+// is allowed to be discontinuous.
+inline char* advance_frame_pointer(char* p, std::size_t distance)
+{
+    p = align(p + distance, FRAME_ALIGNMENT);
+    auto remaining = p - (g_input_buffer.pbuffer + g_input_buffer.size);
+    assert(remaining >= 0);
+    if(remaining == 0)
+        p = g_input_buffer.pbuffer;
+    return p;
 }
+
+char* dlog::detail::allocate_input_frame(std::size_t size)
+{
+    // Conceptually, we have the invariant that
+    //   pflush_start <= pflush_end <= pfree_start,
+    // and the memory area after pfree_start is free for us to use for
+    // allocating a frame. However, the fact that it's a circular buffer means
+    // that:
+    // 
+    // * The area after pfree_start is actually non-contiguous, wraps around
+    //   at the end of the buffer and ends at pflush_start.
+    //   
+    // * Except, when pfree_start itself has fallen over the right edge and we
+    //   have the case pfree_start <= pflush_start. Then the free memory is
+    //   contiguous (it still starts at pfree_start and ends at pflush_start).
+    //   
+    // (This is much, much easier to understand by drawing it on a paper than
+    // by reading comments).
+
+    std::unique_lock<std::mutex> lock(g_input_buffer_mutex);
+    while(true) {
+        auto pfree_start = g_input_buffer.pfree_start;
+        auto pflush_start = g_input_buffer.pflush_start;
+        assert(pfree_start - g_input_buffer.pbuffer != g_input_buffer.size);
+        assert(is_aligned(pfree_start, FRAME_ALIGNMENT));
+
+        auto free = pflush_start - pfree_start;
+        if(free >= 0) {
+            // Free space is contiguous.
+            if(size <= free) {
+                g_input_buffer.pfree_start = advance_frame_pointer(pfree_start,
+                    size);
+                return pfree_start;
+            } else {
+                g_input_available_condition.wait(lock);
+            }
+        } else {
+            // Free space is non-contiguous.
+            free += g_input_buffer.size;
+            if(size <= free) {
+                // There's enough room in the first segment.
+                g_input_buffer.pfree_start = advance_frame_pointer(pfree_start,
+                        size);
+                return pfree_start;
+            } else {
+                std::size_t free2 = pflush_start - g_input_buffer.pbuffer;
+                if(size <= free2) {
+                    // There's enough room in the second segment.
+                    pfree_start = align(g_input_buffer.pbuffer;
+                }
+            }
+        }
+    }
 }

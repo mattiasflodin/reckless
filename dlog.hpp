@@ -64,11 +64,12 @@ namespace dlog {
         // max_align_t is not available in clang?
         std::size_t const FRAME_ALIGNMENT = 16u;
         struct input_buffer {
-            char* pbegin;
-            char* pend;
+            char* pbuffer;
+            char* pbegin_aligned;
+            std::size_t size;
             char* pflush_start;
             char* pflush_end;
-            char* pwritten_end;
+            char* pfree_start;
         };
         extern input_buffer g_input_buffer; 
         //std::mutex buffer_mutex;
@@ -96,6 +97,12 @@ namespace dlog {
             v = ((v + alignment-1)/alignment)*alignment;
             return reinterpret_cast<T>(v);
         }
+        template <typename T>
+        bool is_aligned(T p, std::size_t alignment)
+        {
+            std::uintptr_t v = reinterpret_cast<std::uintptr_t>(p);
+            return v%alignment == 0;
+        }
 
         template <class... Args>
         void evaluate(Args&&...)
@@ -116,6 +123,16 @@ namespace dlog {
         };
 
         typedef std::size_t dispatch_function_t(output_buffer*, char*);
+        static_assert(alignof(dispatch_function_t*) <= FRAME_ALIGNMENT,
+                "FRAME_ALIGNMENT must at least match that of a function pointer");
+        // We need the requirement below to ensure that, after alignment, there
+        // will either be 0 free bytes available in the circular buffer, or
+        // enough to fit a disptch pointer. This simplifies the code a bit.
+        static_assert(sizeof(dispatch_function_t*) <= FRAME_ALIGNMENT,
+                "FRAME_ALIGNMENT must at least match the size of a function pointer");
+        dispatch_function_t* const WRAPAROUND_MARKER = reinterpret_cast<dispatch_function_t*>(0);
+        dispatch_function_t* const CLEANUP_MARKER = reinterpret_cast<dispatch_function_t*>(1);
+
         template <class Formatter, std::size_t FrameSize, class BoundArgs>
         struct frame;
         template <class Formatter, std::size_t FrameSize, class... BoundArgs>
@@ -249,6 +266,10 @@ namespace dlog {
             }
         }
     };
+
+    namespace detail {
+        allocate_frame(std::size_t frame_size);
+    }   // namespace detail
 }
 template <class Formatter>
 class dlog::logger {
@@ -263,10 +284,10 @@ public:
         using bound_args = typename bind_args<Args...>::type;
         std::size_t const frame_size = argument_binder::frame_size;
 
-        char* pwrite_start = align(g_input_buffer.pwritten_end,
+        char* pwrite_start = allocate_frame(frame_size);
+        align(g_input_buffer.pwritten_end,
                 FRAME_ALIGNMENT);
         {
-            std::unique_lock<std::mutex> lock(g_input_buffer_mutex);
             auto& ib = g_input_buffer;
             if(pwrite_start >= ib.pflush_end) {
                     //
