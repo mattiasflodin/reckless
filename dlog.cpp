@@ -343,19 +343,26 @@ void dlog:::detail::output_worker()
             pflush_end = g_input_buffer.pflush_end;
         }
         while(pflush_start != pflush_end) {
-            auto pdispatch = *reinterpret_cast<dispatch_function_t**>(pflush_start);
+            auto pdispatch = *reinterpret_cast<dispatch_function_t**>(
+                    pflush_start);
+
             if(pdispatch == WRAPAROUND_MARKER) {
                 pflush_start = g_input_buffer.pbegin;
-                pdispatch = *reinterpret_cast<dispatch_function_t**>(pflush_start);
+                pdispatch = *reinterpret_cast<dispatch_function_t**>(
+                        pflush_start);
+            } else if(pdispatch == CLEANUP_MARKER) {
+                g_poutput_buffer->flush();
+                return;
             }
-            auto frame_size = (*pdispatch)(g_poutput_buffer.get(), pflush_start);
+
+            auto frame_size = (*pdispatch)(g_poutput_buffer.get(),
+                    pflush_start);
             pflush_start = advance_frame_pointer(frame_size);
-            pflush_start = align(pflush_start, FRAME_ALIGNMENT);
             if(pflush_start >= g_input_buffer.pend)
                 pflush_start -= g_input_buffer.size;
         }
         g_input_consumed_condition.notify();
-        g_poutput_buffer.flush();
+        g_poutput_buffer->flush();
     }
 }
 

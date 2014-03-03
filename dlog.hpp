@@ -71,7 +71,7 @@ namespace dlog {
             char* pflush_end;   // updated by flush()
             char* pfree_start;  // updated by logger::write
         };
-        extern input_buffer g_input_buffer; 
+        extern threadlocal input_buffer tls_input_buffer; 
         //std::mutex buffer_mutex;
 
         template <typename... Args>
@@ -108,7 +108,7 @@ namespace dlog {
         bool is_aligned(T p, std::size_t alignment)
         {
             std::uintptr_t v = reinterpret_cast<std::uintptr_t>(p);
-            return v%alignment == 0;
+            return v % alignment == 0;
         }
 
         template <class... Args>
@@ -137,8 +137,10 @@ namespace dlog {
         // enough to fit a disptch pointer. This simplifies the code a bit.
         static_assert(sizeof(dispatch_function_t*) <= FRAME_ALIGNMENT,
                 "FRAME_ALIGNMENT must at least match the size of a function pointer");
-        dispatch_function_t* const WRAPAROUND_MARKER = reinterpret_cast<dispatch_function_t*>(0);
-        dispatch_function_t* const CLEANUP_MARKER = reinterpret_cast<dispatch_function_t*>(1);
+        dispatch_function_t* const WRAPAROUND_MARKER = reinterpret_cast<
+            dispatch_function_t*>(0);
+        dispatch_function_t* const CLEANUP_MARKER = reinterpret_cast<
+            dispatch_function_t*>(1);
 
         template <class Formatter, std::size_t FrameSize, class BoundArgs>
         struct frame;
@@ -205,7 +207,8 @@ namespace dlog {
 
     inline void flush()
     {
-        g_input_buffer.pflush_end = 
+        //std::unique_lock<std::mutex> lock(g_input_buffer_mutex);
+        //g_input_buffer.pflush_end = g_input_buffer.pb
     }
 
     bool format(output_buffer* pbuffer, char const*& pformat, char v);
@@ -237,44 +240,6 @@ namespace dlog {
         return format(pbuffer, pformat, std::forward<T>(v));
     }
 
-    class formatter {
-    public:
-        static void format(output_buffer* pbuffer, char const* pformat)
-        {
-            auto len = std::strlen(pformat);
-            char* p = pbuffer->reserve(len);
-            std::memcpy(p, pformat, len);
-            pbuffer->commit(len);
-        }
-
-        template <typename T, typename... Args>
-        static void format(output_buffer* pbuffer, char const* pformat, T&& value, Args&&... args)
-        {
-            while(true) {
-                char const* pspecifier = std::strchr(pformat, '%');
-                if(pspecifier == nullptr)
-                    return format(pbuffer, pformat);
-
-                auto len = pspecifier - pformat;
-                char* p = pbuffer->reserve(len);
-                std::memcpy(p, pformat, len);
-                pbuffer->commit(len);
-
-                pformat = pspecifier + 1;
-
-                if(*pformat == '%') {
-                    p = pbuffer->reserve(1u);
-                    *p = '%';
-                    pbuffer->commit(1u);
-                    ++pformat;
-                } else {
-                    if(invoke_custom_format(pbuffer, pformat, std::forward<T>(value)))
-                        return formatter::format(pbuffer, pformat, std::forward<Args>(args)...);
-                }
-            }
-        }
-    };
-
     namespace detail {
         allocate_input_frame(std::unique_lock<std::mutex>& lock,
                 std::size_t frame_size);
@@ -289,7 +254,8 @@ public:
         using namespace dlog::detail;
         //std::unique_lock<std::mutex> hold(buffer_mutex);
         using argument_binder = bind_args<Args...>;
-        //using bound_args = typename argument_binder::type;    // fails in gcc 4.7.3
+        // fails in gcc 4.7.3
+        //using bound_args = typename argument_binder::type;
         using bound_args = typename bind_args<Args...>::type;
         std::size_t const frame_size = argument_binder::frame_size;
         using frame = detail::frame<Formatter, frame_size, bound_args>;
@@ -300,4 +266,48 @@ public:
         g_input_buffer.pwritten_end = pwrite_start + frame_size;
     }
 };
+
+class dlog::formatter {
+public:
+    static void format(output_buffer* pbuffer, char const* pformat)
+    {
+        auto len = std::strlen(pformat);
+        char* p = pbuffer->reserve(len);
+        std::memcpy(p, pformat, len);
+        pbuffer->commit(len);
+    }
+
+    template <typename T, typename... Args>
+    static void format(output_buffer* pbuffer, char const* pformat,
+            T&& value, Args&&... args)
+    {
+        while(true) {
+            char const* pspecifier = std::strchr(pformat, '%');
+            if(pspecifier == nullptr)
+                return format(pbuffer, pformat);
+
+            auto len = pspecifier - pformat;
+            char* p = pbuffer->reserve(len);
+            std::memcpy(p, pformat, len);
+            pbuffer->commit(len);
+
+            pformat = pspecifier + 1;
+
+            if(*pformat == '%') {
+                p = pbuffer->reserve(1u);
+                *p = '%';
+                pbuffer->commit(1u);
+                ++pformat;
+            } else {
+                if(invoke_custom_format(pbuffer, pformat,
+                            std::forward<T>(value)))
+                {
+                    return formatter::format(pbuffer, pformat,
+                            std::forward<Args>(args)...);
+                }
+            }
+        }
+    }
+};
+
 
