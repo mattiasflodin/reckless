@@ -41,35 +41,41 @@ namespace dlog {
     };
 
     void initialize(writer* pwriter);
-    void initialize(writer* pwriter, std::size_t max_capacity);
+    void initialize(writer* pwriter, std::size_t input_buffer_size, std::size_t output_buffer_capacity);
     void cleanup();
 
-    class initializer {
-    public:
-        initializer(writer* pwriter)
-        {
-            initialize(pwriter);
-        }
-        initializer(writer* pwriter, std::size_t max_capacity)
-        {
-            initialize(pwriter, max_capacity);
-        }
-        ~initializer()
-        {
-            cleanup();
-        }
-    };
+    //class initializer {
+    //public:
+    //    initializer(writer* pwriter)
+    //    {
+    //        initialize(pwriter);
+    //    }
+    //    initializer(writer* pwriter, std::size_t max_capacity)
+    //    {
+    //        initialize(pwriter, max_capacity);
+    //    }
+    //    ~initializer()
+    //    {
+    //        cleanup();
+    //    }
+    //};
 
     namespace detail {
-        // max_align_t is not available in clang?
-        std::size_t const FRAME_ALIGNMENT = 16u;
+        // 64 bytes is the common cache line on modern x86 CPUs, which avoids
+        // false sharing between the main thread and the output thread.
+        std::size_t const FRAME_ALIGNMENT = 64u;
         struct input_buffer {
-            char* pbuffer;      // static
-            char* pbegin;       // static
-            std::size_t size;   // static
-            char* pflush_start; // updated by output thread
-            char* pflush_end;   // updated by flush()
-            char* pfree_start;  // updated by logger::write
+            input_buffer();
+
+            char* allocate_input_frame(std::size_t size);
+
+            std::mutex mutex;
+            std::condition_variable input_consumed_condition;
+
+            char const* pbegin; // fixed value
+            char* pflush_start; // moved forward by output thread
+            char* pflush_end;   // moved forward by flush()
+            char* pfree_start;  // moved forward by logger::write
         };
         extern thread_local input_buffer tls_input_buffer; 
         //std::mutex buffer_mutex;
@@ -90,8 +96,9 @@ namespace dlog {
             using type = T*;
         };
 
+        // TODO are both of these still in use?
         template <typename T>
-        T align_up(T p, std::size_t alignment)
+        T align(T p, std::size_t alignment)
         {
             std::uintptr_t v = reinterpret_cast<std::uintptr_t>(p);
             v = ((v + alignment-1)/alignment)*alignment;
@@ -260,10 +267,8 @@ public:
         std::size_t const frame_size = argument_binder::frame_size;
         using frame = detail::frame<Formatter, frame_size, bound_args>;
 
-        std::unique_lock<std::mutex> lock(g_input_buffer_mutex);
-        char* pwrite_start = allocate_input_frame(lock, frame_size);
+        char* pwrite_start = tls_input_buffer.allocate_input_frame(frame_size);
         frame::store_args(pwrite_start, std::forward<Args>(args)...);
-        g_input_buffer.pwritten_end = pwrite_start + frame_size;
     }
 };
 
