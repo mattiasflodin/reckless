@@ -205,6 +205,7 @@ namespace dlog {
 
     inline void flush()
     {
+        g_input_buffer.pflush_end = 
     }
 
     bool format(output_buffer* pbuffer, char const*& pformat, char v);
@@ -275,7 +276,8 @@ namespace dlog {
     };
 
     namespace detail {
-        allocate_input_frame(std::size_t frame_size);
+        allocate_input_frame(std::unique_lock<std::mutex>& lock,
+                std::size_t frame_size);
     }   // namespace detail
 }
 template <class Formatter>
@@ -290,9 +292,10 @@ public:
         //using bound_args = typename argument_binder::type;    // fails in gcc 4.7.3
         using bound_args = typename bind_args<Args...>::type;
         std::size_t const frame_size = argument_binder::frame_size;
-
-        char* pwrite_start = allocate_input_frame(frame_size);
         using frame = detail::frame<Formatter, frame_size, bound_args>;
+
+        std::unique_lock<std::mutex> lock(g_input_buffer_mutex);
+        char* pwrite_start = allocate_input_frame(lock, frame_size);
         frame::store_args(pwrite_start, std::forward<Args>(args)...);
         g_input_buffer.pwritten_end = pwrite_start + frame_size;
     }

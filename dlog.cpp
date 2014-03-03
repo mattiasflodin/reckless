@@ -57,6 +57,9 @@ void dlog::initialize(writer* pwriter, std::size_t max_capacity)
 void dlog::cleanup()
 {
     using namespace detail;
+    char* frame = allocate_input_frame(sizeof(CLEANUP_MARKER));
+    *reinterpret_cast<dispatch_function_t**>(frame) = CLEANUP_MARKER;
+    flush();
     g_output_thread.join();
     delete [] g_input_buffer.pfirst;
     g_poutput_buffer.reset();
@@ -115,6 +118,7 @@ auto dlog::file_writer::write(void const* pbuffer, std::size_t count) -> Result
     case EACCES:
     case ENETDOWN:
     case ENETUNREACH:
+        // TODO handle this error by not writing to the buffer any more.
         return ERROR_GIVE_UP;
     case ENOSPC:
         return ERROR_TRY_LATER;
@@ -375,7 +379,8 @@ inline char* advance_frame_pointer(char* p, std::size_t distance)
     return p;
 }
 
-char* dlog::detail::allocate_input_frame(std::size_t size)
+char* dlog::detail::allocate_input_frame(std::unique_lock<std::mutex>& lock,
+        std::size_t size)
 {
     // Conceptually, we have the invariant that
     //   pflush_start <= pflush_end <= pfree_start,
@@ -392,7 +397,6 @@ char* dlog::detail::allocate_input_frame(std::size_t size)
     //   
     // (This is much, much easier to understand by drawing it on a paper than
     // by reading comment text).
-    std::unique_lock<std::mutex> lock(g_input_buffer_mutex);
     while(true) {
         auto pfree_start = g_input_buffer.pfree_start;
         auto pflush_start = g_input_buffer.pflush_start;
