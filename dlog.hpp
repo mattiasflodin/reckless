@@ -71,7 +71,7 @@ namespace dlog {
             char* pflush_end;   // updated by flush()
             char* pfree_start;  // updated by logger::write
         };
-        extern threadlocal input_buffer tls_input_buffer; 
+        extern thread_local input_buffer tls_input_buffer; 
         //std::mutex buffer_mutex;
 
         template <typename... Args>
