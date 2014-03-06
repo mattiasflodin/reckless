@@ -1,9 +1,13 @@
 #include <mutex>
-#include <condition_variable>
+//#include <condition_variable>
+#include <atomic>
 #include <utility>
 #include <cstring>
 
 namespace dlog {
+    template <class Formatter>
+    class logger;
+    class formatter;
     class writer {
     public:
         enum Result
@@ -41,7 +45,7 @@ namespace dlog {
     };
 
     void initialize(writer* pwriter);
-    void initialize(writer* pwriter, std::size_t input_buffer_size, std::size_t output_buffer_capacity);
+    void initialize(writer* pwriter, std::size_t input_buffer_size, std::size_t max_output_buffer_size);
     void cleanup();
 
     //class initializer {
@@ -61,21 +65,26 @@ namespace dlog {
     //};
 
     namespace detail {
-        // 64 bytes is the common cache line on modern x86 CPUs, which avoids
-        // false sharing between the main thread and the output thread.
+        // 64 bytes is the common cache-line size on modern x86 CPUs, which
+        // avoids false sharing between the main thread and the output thread.
+        // TODO we could perhaps detect the cache-line size instead (?).
         std::size_t const FRAME_ALIGNMENT = 64u;
-        struct input_buffer {
+        class input_buffer {
+        public:
             input_buffer();
-
+            ~input_buffer();
             char* allocate_input_frame(std::size_t size);
 
-            std::mutex mutex;
-            std::condition_variable input_consumed_condition;
+        private:
+            char* advance_frame_pointer(char* p, std::size_t distance);
+            static char* allocate_buffer();
 
-            char const* pbegin; // fixed value
-            char* pflush_start; // moved forward by output thread
-            char* pflush_end;   // moved forward by flush()
-            char* pfree_start;  // moved forward by logger::write
+            //std::mutex mutex_;
+
+            char* const pbegin_; // fixed value
+            std::atomic<char*> pflush_start_; // moved forward by output thread, read by logger::write (to determine free space left)
+            std::atomic<char*> pflush_end_;   // moved forward by flush(), read by output thread
+            char* pfree_start_;               // moved forward by logger::write, never read by anyone else
         };
         extern thread_local input_buffer tls_input_buffer; 
         //std::mutex buffer_mutex;
@@ -146,8 +155,6 @@ namespace dlog {
                 "FRAME_ALIGNMENT must at least match the size of a function pointer");
         dispatch_function_t* const WRAPAROUND_MARKER = reinterpret_cast<
             dispatch_function_t*>(0);
-        dispatch_function_t* const CLEANUP_MARKER = reinterpret_cast<
-            dispatch_function_t*>(1);
 
         template <class Formatter, std::size_t FrameSize, class BoundArgs>
         struct frame;
@@ -246,11 +253,6 @@ namespace dlog {
     {
         return format(pbuffer, pformat, std::forward<T>(v));
     }
-
-    namespace detail {
-        allocate_input_frame(std::unique_lock<std::mutex>& lock,
-                std::size_t frame_size);
-    }   // namespace detail
 }
 template <class Formatter>
 class dlog::logger {
@@ -267,8 +269,8 @@ public:
         std::size_t const frame_size = argument_binder::frame_size;
         using frame = detail::frame<Formatter, frame_size, bound_args>;
 
-        char* pwrite_start = tls_input_buffer.allocate_input_frame(frame_size);
-        frame::store_args(pwrite_start, std::forward<Args>(args)...);
+        char* pframe = tls_input_buffer.allocate_input_frame(frame_size);
+        frame::store_args(pframe, std::forward<Args>(args)...);
     }
 };
 

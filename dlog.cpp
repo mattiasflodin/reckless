@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <new>
 #include <thread>
+#include <deque>
 
 #include <sstream> // TODO probably won't need this when all is said and done
 
@@ -16,35 +17,43 @@
 
 namespace dlog {
     namespace detail {
-        thread_local input_buffer tls_input_buffer; 
-        std::condition_variable g_input_available_condition;
-        std::size_t input_buffer_size;   // static
-    }
-    namespace {
-        std::unique_ptr<output_buffer> g_poutput_buffer;
-        std::thread g_output_thread;
+        void output_worker();
 
         int const g_page_size = static_cast<int>(sysconf(_SC_PAGESIZE));
 
-        void output_worker();
+        thread_local input_buffer tls_input_buffer; 
+        std::size_t g_input_buffer_size;   // static
+
+        struct flush_extent {
+            input_buffer* pinput_buffer;
+            std::size_t flush_size;
+        };
+        std::mutex g_input_queue_mutex;
+        std::deque<flush_extent> g_input_queue;
+        std::condition_variable g_input_available_condition;
+
+        std::unique_ptr<output_buffer> g_poutput_buffer;
+        std::thread g_output_thread;
     }
 }
 
 void dlog::initialize(writer* pwriter)
 {
-    initialize(pwriter, 1024*1024);
+    initialize(pwriter, 0, 0);
 }
 
 void dlog::initialize(writer* pwriter, std::size_t input_buffer_size,
-        std::size_t output_buffer_capacity)
+        std::size_t max_output_buffer_size)
 {
     using namespace detail;
 
-    if(input_buffer_capacity == 0)
-        input_buffer_capacity = g_page_size;
-    g_input_buffer_size = input_buffer_capacity;
+    if(input_buffer_size == 0)
+        input_buffer_size = g_page_size;
+    if(max_output_buffer_size == 0)
+        max_output_buffer_size = 1024*1024;
+    g_input_buffer_size = input_buffer_size;
 
-    g_poutput_buffer.reset(new output_buffer(pwriter, max_capacity));
+    g_poutput_buffer.reset(new output_buffer(pwriter, max_output_buffer_size));
 
     g_output_thread = move(std::thread(&output_worker));
 }
@@ -52,17 +61,13 @@ void dlog::initialize(writer* pwriter, std::size_t input_buffer_size,
 void dlog::cleanup()
 {
     using namespace detail;
-    char* frame = allocate_input_frame(sizeof(CLEANUP_MARKER));
-    *reinterpret_cast<dispatch_function_t**>(frame) = CLEANUP_MARKER;
-    flush();
+    {
+        std::unique_lock<std::mutex> lock(g_input_queue_mutex);
+        g_input_queue.emplace_back(nullptr, 0);
+    }
+    g_input_available_condition.notify_one();
     g_output_thread.join();
-    delete [] g_input_buffer.pfirst;
     g_poutput_buffer.reset();
-    g_input_buffer.pfirst = nullptr;
-    g_input_buffer.plast = nullptr;
-    g_input_buffer.pflush_start = nullptr;
-    g_input_buffer.pflush_end = nullptr;
-    g_input_buffer.pwritten_end = nullptr;
 }
 
 dlog::writer::~writer()
@@ -129,6 +134,7 @@ dlog::output_buffer::output_buffer(writer* pwriter, std::size_t max_capacity) :
     pcommit_end_(nullptr),
     pbuffer_end_(nullptr)
 {
+    using namespace detail;
     pbuffer_ = static_cast<char*>(malloc(max_capacity));
     pcommit_end_ = pbuffer_;
     pbuffer_end_ = pbuffer_ + max_capacity;
@@ -323,18 +329,72 @@ bool dlog::format(output_buffer* pbuffer, char const*& pformat, std::string cons
     return true;
 }
 
-dlog::detail::input_buffer::input_buffer()
+dlog::detail::input_buffer::input_buffer() :
+    pbegin_(allocate_buffer())
+{
+    pflush_start_ = pbegin_;
+    pflush_end_ = pbegin_;
+    pfree_start_ = pbegin_;
+}
+
+dlog::detail::input_buffer::~input_buffer()
+{
+    std::unique_lock<std::mutex> lock(mutex_);
+    input_consumed_condition_.wait(lock, [this]() {
+        return pflush_start_ == pflush_end_;
+    });
+
+    free(pbegin_);
+}
+
+char* dlog::detail::input_buffer::allocate_buffer()
 {
     void* pbuffer = nullptr;
     posix_memalign(&pbuffer, FRAME_ALIGNMENT, g_input_buffer_size);
-    const_cast<char*&>(pbegin) = static_cast<char*>(pbuffer);
-    pflush_start = pbegin;
-    pflush_end = pbegin;
-    pwritten_end = pbegin;
+    return static_cast<char*>(pbuffer);
 }
 
-void dlog:::detail::output_worker()
+void dlog::detail::output_worker()
 {
+    using namespace detail;
+    while(true) {
+        flush_extent fe;
+        {
+            std::unique_lock<std::mutex> lock(g_input_queue_mutex);
+            g_input_available_condition.wait(lock, []()
+            {
+                return not g_input_queue.empty();
+            });
+            fe = g_input_queue.front();
+            g_input_queue.pop_front();
+        }
+        if(not fe.pinput_buffer)
+            // Request to shut down thread.
+            return;
+
+        char* pflush_start = fe.pinput_buffer->pflush_start_;
+        auto pdispatch = *reinterpret_cast<dispatch_function_t**>(pflush_start);
+                
+        if(pdispatch == WRAPAROUND_MARKER) {
+            pflush_start = fe.pinput_buffer->pbegin;
+            pdispatch = *reinterpret_cast<dispatch_function_t**>(
+                    pflush_start);
+        }
+
+        auto frame_size = (*pdispatch)(g_poutput_buffer.get(), pflush_start);
+        pflush_start = advance_frame_pointer(frame_size);
+        if(pflush_start >= g_input_buffer.pend)
+            pflush_start -= g_input_buffer.size;
+
+        // NEXT I don't really understand condition variables... we're doing an
+        // atomic write of pflush_start, so when do we actually need the mutex?
+        // The only place it is ever changed is in this thread. Similarly, the
+        // other threads will only read the variable so what purpose does the
+        // mutex fill?
+    }
+
+
+#if 0
     char const* pflush_start = g_input_buffer.pflush_start;
     while(true) {
         char const* pflush_end;
@@ -342,7 +402,7 @@ void dlog:::detail::output_worker()
             std::unique_lock<std::mutex> lock(g_input_buffer_mutex);
             g_input_buffer.pflush_start = pflush_start;
             g_input_available_condition.wait(lock, []() {
-                return g_input_buffer.pflush_start == g_input_buffer.pflush_end;
+                return g_input_buffer.pflush_start != g_input_buffer.pflush_end;
             });
             pflush_start = g_input_buffer.pflush_start;
             pflush_end = g_input_buffer.pflush_end;
@@ -369,6 +429,7 @@ void dlog:::detail::output_worker()
         g_input_consumed_condition.notify();
         g_poutput_buffer->flush();
     }
+#endif
 }
 
 // Moves an input-buffer pointer forward by the given distance while
@@ -381,7 +442,7 @@ void dlog:::detail::output_worker()
 // The distance must never be so great that the pointer moves *past* the end of
 // the buffer. To do so would be an error in our context, since no input frame
 // is allowed to be discontinuous.
-inline char* advance_frame_pointer(char* p, std::size_t distance)
+char* dlog::detail::input_buffer::advance_frame_pointer(char* p, std::size_t distance)
 {
     p = align(p + distance, FRAME_ALIGNMENT);
     auto remaining = p - (g_input_buffer.pbegin + g_input_buffer.size);
@@ -391,7 +452,7 @@ inline char* advance_frame_pointer(char* p, std::size_t distance)
     return p;
 }
 
-char* dlog::input_buffer::allocate_input_frame(std::size_t size)
+char* dlog::detail::input_buffer::allocate_input_frame(std::size_t size)
 {
     // Conceptually, we have the invariant that
     //   pflush_start <= pflush_end <= pfree_start,
@@ -423,7 +484,7 @@ char* dlog::input_buffer::allocate_input_frame(std::size_t size)
             } else {
                 // Not enough room. Wait for the output thread to consume some
                 // input.
-                .wait(lock);
+                g_input_consumed_condition.wait(lock);
             }
         } else {
             // Free space is non-contiguous.
@@ -447,8 +508,8 @@ char* dlog::input_buffer::allocate_input_frame(std::size_t size)
                     // the marker.
                     *reinterpret_cast<dispatch_function_t**>(pfree_start) =
                         WRAPAROUND_MARKER;
-                    p = g_input_buffer.pbegin;
-                    g_input_buffer.pfree_start = advance_frame_pointer(p, size);
+                    p = pbegin;
+                    pfree_start = advance_frame_pointer(p, size);
                     return p;
                 } else {
                     // Not enough room. Wait for the output thread to consume
