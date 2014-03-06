@@ -24,10 +24,6 @@ namespace dlog {
         thread_local input_buffer tls_input_buffer; 
         std::size_t g_input_buffer_size;   // static
 
-        struct flush_extent {
-            input_buffer* pinput_buffer;
-            std::size_t flush_size;
-        };
         std::mutex g_input_queue_mutex;
         std::deque<flush_extent> g_input_queue;
         std::condition_variable g_input_available_condition;
@@ -332,21 +328,22 @@ bool dlog::format(output_buffer* pbuffer, char const*& pformat, std::string cons
 dlog::detail::input_buffer::input_buffer() :
     pbegin_(allocate_buffer())
 {
-    pflush_start_ = pbegin_;
+    pinput_start_ = pbegin_;
     pflush_end_ = pbegin_;
-    pfree_start_ = pbegin_;
+    pinput_end_ = pbegin_;
 }
 
 dlog::detail::input_buffer::~input_buffer()
 {
     std::unique_lock<std::mutex> lock(mutex_);
     input_consumed_condition_.wait(lock, [this]() {
-        return pflush_start_ == pflush_end_;
+        return pinput_start_ == pflush_end_;
     });
 
     free(pbegin_);
 }
 
+// Helper for allocating aligned ring buffer in ctor.
 char* dlog::detail::input_buffer::allocate_buffer()
 {
     void* pbuffer = nullptr;
@@ -354,83 +351,6 @@ char* dlog::detail::input_buffer::allocate_buffer()
     return static_cast<char*>(pbuffer);
 }
 
-void dlog::detail::output_worker()
-{
-    using namespace detail;
-    while(true) {
-        flush_extent fe;
-        {
-            std::unique_lock<std::mutex> lock(g_input_queue_mutex);
-            g_input_available_condition.wait(lock, []()
-            {
-                return not g_input_queue.empty();
-            });
-            fe = g_input_queue.front();
-            g_input_queue.pop_front();
-        }
-        if(not fe.pinput_buffer)
-            // Request to shut down thread.
-            return;
-
-        char* pflush_start = fe.pinput_buffer->pflush_start_;
-        auto pdispatch = *reinterpret_cast<dispatch_function_t**>(pflush_start);
-                
-        if(pdispatch == WRAPAROUND_MARKER) {
-            pflush_start = fe.pinput_buffer->pbegin;
-            pdispatch = *reinterpret_cast<dispatch_function_t**>(
-                    pflush_start);
-        }
-
-        auto frame_size = (*pdispatch)(g_poutput_buffer.get(), pflush_start);
-        pflush_start = advance_frame_pointer(frame_size);
-        if(pflush_start >= g_input_buffer.pend)
-            pflush_start -= g_input_buffer.size;
-
-        // NEXT I don't really understand condition variables... we're doing an
-        // atomic write of pflush_start, so when do we actually need the mutex?
-        // The only place it is ever changed is in this thread. Similarly, the
-        // other threads will only read the variable so what purpose does the
-        // mutex fill?
-    }
-
-
-#if 0
-    char const* pflush_start = g_input_buffer.pflush_start;
-    while(true) {
-        char const* pflush_end;
-        {
-            std::unique_lock<std::mutex> lock(g_input_buffer_mutex);
-            g_input_buffer.pflush_start = pflush_start;
-            g_input_available_condition.wait(lock, []() {
-                return g_input_buffer.pflush_start != g_input_buffer.pflush_end;
-            });
-            pflush_start = g_input_buffer.pflush_start;
-            pflush_end = g_input_buffer.pflush_end;
-        }
-        while(pflush_start != pflush_end) {
-            auto pdispatch = *reinterpret_cast<dispatch_function_t**>(
-                    pflush_start);
-
-            if(pdispatch == WRAPAROUND_MARKER) {
-                pflush_start = g_input_buffer.pbegin;
-                pdispatch = *reinterpret_cast<dispatch_function_t**>(
-                        pflush_start);
-            } else if(pdispatch == CLEANUP_MARKER) {
-                g_poutput_buffer->flush();
-                return;
-            }
-
-            auto frame_size = (*pdispatch)(g_poutput_buffer.get(),
-                    pflush_start);
-            pflush_start = advance_frame_pointer(frame_size);
-            if(pflush_start >= g_input_buffer.pend)
-                pflush_start -= g_input_buffer.size;
-        }
-        g_input_consumed_condition.notify();
-        g_poutput_buffer->flush();
-    }
-#endif
-}
 
 // Moves an input-buffer pointer forward by the given distance while
 // maintaining the invariant that:
@@ -455,47 +375,44 @@ char* dlog::detail::input_buffer::advance_frame_pointer(char* p, std::size_t dis
 char* dlog::detail::input_buffer::allocate_input_frame(std::size_t size)
 {
     // Conceptually, we have the invariant that
-    //   pflush_start <= pflush_end <= pfree_start,
-    // and the memory area after pfree_start is free for us to use for
+    //   pinput_start <= pflush_end <= pinput_end,
+    // and the memory area after pinput_end is free for us to use for
     // allocating a frame. However, the fact that it's a circular buffer means
     // that:
     // 
-    // * The area after pfree_start is actually non-contiguous, wraps around
-    //   at the end of the buffer and ends at pflush_start.
+    // * The area after pinput_end is actually non-contiguous, wraps around
+    //   at the end of the buffer and ends at pinput_start.
     //   
-    // * Except, when pfree_start itself has fallen over the right edge and we
-    //   have the case pfree_start <= pflush_start. Then the free memory is
-    //   contiguous (it still starts at pfree_start and ends at pflush_start).
+    // * Except, when pinput_end itself has fallen over the right edge and we
+    //   have the case pinput_end <= pinput_start. Then the free memory is
+    //   contiguous (it still starts at pinput_end and ends at pinput_start).
     //   
     // (This is much, much easier to understand by drawing it on a paper than
     // by reading comment text).
-    std::unique_lock<std::mutex> lock(mutex);
     while(true) {
-        assert(pfree_start - pbegin != g_input_buffer_size);
-        assert(is_aligned(pfree_start, FRAME_ALIGNMENT));
+        auto pinput_end = pinput_end_;
+        assert(pinput_end - pbegin != g_input_buffer_size);
+        assert(is_aligned(pinput_end, FRAME_ALIGNMENT));
 
-        auto free = pflush_start - pfree_start;
+        auto pinput_start = pinput_start_.load(std::memory_order_acquire);
+        auto free = pinput_start - pinput_end;
         if(free >= 0) {
             // Free space is contiguous.
             if(size <= free) {
-                auto p = pfree_start;
-                pfree_start = advance_frame_pointer(pfree_start, size);
-                return p;
+                return pinput_end;
             } else {
                 // Not enough room. Wait for the output thread to consume some
                 // input.
-                g_input_consumed_condition.wait(lock);
+                wait_input_consumed();
             }
         } else {
             // Free space is non-contiguous.
             free += g_input_buffer_size;
             if(size <= free) {
                 // There's enough room in the first segment.
-                auto p = pfree_start;
-                pfree_start = advance_frame_pointer(pfree_start, size);
-                return p;
+                return pinput_end;
             } else {
-                std::size_t free2 = pflush_start - pbegin;
+                std::size_t free2 = pinput_start - pbegin_;
                 if(size <= free2) {
                     // We don't have enough room for a continuous input frame
                     // in the first segment (at the end of the circular
@@ -506,17 +423,116 @@ char* dlog::detail::input_buffer::allocate_input_frame(std::size_t size)
                     // supposed to be guaranteed enough room for the wraparound
                     // marker because FRAME_ALIGNMENT is at least the size of
                     // the marker.
-                    *reinterpret_cast<dispatch_function_t**>(pfree_start) =
+                    *reinterpret_cast<dispatch_function_t**>(pinput_end_) =
                         WRAPAROUND_MARKER;
-                    p = pbegin;
-                    pfree_start = advance_frame_pointer(p, size);
-                    return p;
+                    pinput_end_ = pbegin_;
+                    return pbegin_;
                 } else {
                     // Not enough room. Wait for the output thread to consume
                     // some input.
-                    g_input_consumed_condition.wait(lock);
+                    wait_input_consumed();
                 }
             }
         }
     }
+}
+
+char* dlog::detail::input_buffer::flush_start(std::size_t size)
+{
+    auto pinput_start = pinput_start_.load(std::memory_order_relaxed);
+    auto marker = *reinterpret_cast<dispatch_function_t**>(pinput_start);
+    if(marker == WRAPAROUND_MARKER) {
+        pinput_start = fe.pinput_buffer->pbegin;
+        pinput_start_.store(pinput_start, std::memory_order_relaxed);
+    }
+    return pinput_start;
+}
+
+void dlog::detail::input_buffer::discard_input_frame(std::size_t size)
+{
+    auto p = pinput_start_.load(std::memory_order_relaxed);
+    NEXT need advance here instead, gotta wrap around and align
+    pinput_start_.store(p + size, std::memory_order_release);
+}
+
+void dlog::detail::input_buffer::signal_input_consumed()
+{
+    input_consumed_event_.notify_one();
+}
+
+void dlog::detail::input_buffer::wait_input_consumed()
+{
+    // This is kind of icky, we need to lock a mutex just because the condition
+    // variable requires it. There would be less overhead if we could just use
+    // something like Windows event objects.
+    std::unique_lock<std::mutex> lock(mutex_);
+    input_consumed_event_.wait(lock);
+}
+void dlog::detail::output_worker()
+{
+    using namespace detail;
+    while(true) {
+        flush_extent fe;
+        {
+            std::unique_lock<std::mutex> lock(g_input_queue_mutex);
+            g_input_available_condition.wait(lock, []()
+            {
+                return not g_input_queue.empty();
+            });
+            fe = g_input_queue.front();
+            g_input_queue.pop_front();
+        }
+        if(not fe.pinput_buffer)
+            // Request to shut down thread.
+            return;
+
+        char* pinput_start = fe.pinput_buffer->flush_start();
+        while(pinput_start != fe.pflush_end) {
+            auto pdispatch = *reinterpret_cast<dispatch_function_t**>(pinput_start);
+            auto frame_size = (*pdispatch)(g_poutput_buffer.get(), pinput_start);
+            pinput_start = fe.pinput_buffer->discard_input_frame(frame_size);
+            if(pinput_start >= g_input_buffer.pend)
+                pinput_start -= g_input_buffer.size;
+        }
+        // TODO we *could* do something like flush on a timer instead when we're getting a lot of writes / sec.
+        g_poutput_buffer->flush();
+    }
+
+
+#if 0
+    char const* pinput_start = g_input_buffer.pinput_start;
+    while(true) {
+        char const* pflush_end;
+        {
+            std::unique_lock<std::mutex> lock(g_input_buffer_mutex);
+            g_input_buffer.pinput_start = pinput_start;
+            g_input_available_condition.wait(lock, []() {
+                return g_input_buffer.pinput_start != g_input_buffer.pflush_end;
+            });
+            pinput_start = g_input_buffer.pinput_start;
+            pflush_end = g_input_buffer.pflush_end;
+        }
+        while(pinput_start != pflush_end) {
+            auto pdispatch = *reinterpret_cast<dispatch_function_t**>(
+                    pinput_start);
+
+            if(pdispatch == WRAPAROUND_MARKER) {
+                pinput_start = g_input_buffer.pbegin;
+                pdispatch = *reinterpret_cast<dispatch_function_t**>(
+                        pinput_start);
+            } else if(pdispatch == CLEANUP_MARKER) {
+                g_poutput_buffer->flush();
+                return;
+            }
+
+            auto frame_size = (*pdispatch)(g_poutput_buffer.get(),
+                    pinput_start);
+            pinput_start = advance_frame_pointer(frame_size);
+            if(pinput_start >= g_input_buffer.pend)
+                pinput_start -= g_input_buffer.size;
+        }
+        g_input_consumed_condition.notify();
+        g_poutput_buffer->flush();
+    }
+#endif
 }

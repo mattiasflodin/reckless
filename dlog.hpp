@@ -1,5 +1,5 @@
 #include <mutex>
-//#include <condition_variable>
+#include <condition_variable>
 #include <atomic>
 #include <utility>
 #include <cstring>
@@ -65,26 +65,38 @@ namespace dlog {
     //};
 
     namespace detail {
+        struct flush_extent {
+            input_buffer* pinput_buffer;
+            char* pflush_end;
+        };
         // 64 bytes is the common cache-line size on modern x86 CPUs, which
         // avoids false sharing between the main thread and the output thread.
         // TODO we could perhaps detect the cache-line size instead (?).
         std::size_t const FRAME_ALIGNMENT = 64u;
+        extern std::mutex g_input_queue_mutex;
+        extern std::deque<flush_extent> g_input_queue;
+        extern std::condition_variable g_input_available_condition;
         class input_buffer {
         public:
             input_buffer();
             ~input_buffer();
             char* allocate_input_frame(std::size_t size);
+            char* flush_start();
+            void discard_input_frame(std::size_t size);
 
         private:
-            char* advance_frame_pointer(char* p, std::size_t distance);
             static char* allocate_buffer();
+            char* advance_frame_pointer(char* p, std::size_t distance);
+            void wait_input_consumed();
+            void signal_input_consumed();
 
-            //std::mutex mutex_;
+            std::mutex mutex_;
+            std::condition_variable input_consumed_event_;
 
             char* const pbegin_; // fixed value
-            std::atomic<char*> pflush_start_; // moved forward by output thread, read by logger::write (to determine free space left)
-            std::atomic<char*> pflush_end_;   // moved forward by flush(), read by output thread
-            char* pfree_start_;               // moved forward by logger::write, never read by anyone else
+            std::atomic<char*> pinput_start_; // moved forward by output thread, read by logger::write (to determine free space left)
+            //std::atomic<char*> pflush_end_; // moved forward by flush(), read by output thread
+            char* pinput_end_;                // moved forward by logger::write, never read by anyone else
         };
         extern thread_local input_buffer tls_input_buffer; 
         //std::mutex buffer_mutex;
@@ -221,8 +233,12 @@ namespace dlog {
 
     inline void flush()
     {
-        //std::unique_lock<std::mutex> lock(g_input_buffer_mutex);
-        //g_input_buffer.pflush_end = g_input_buffer.pb
+        auto& ib = tls_input_buffer;
+        {
+            std::unique_lock<std::mutex> lock(g_input_queue_mutex);
+            g_input_queue.emplace_back(&ib, ib.pwrite_start_);
+        }
+        g_input_available_condition.notify_one();
     }
 
     bool format(output_buffer* pbuffer, char const*& pformat, char v);
