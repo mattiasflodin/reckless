@@ -59,6 +59,7 @@ void dlog::initialize(writer* pwriter, std::size_t input_buffer_size,
 void dlog::cleanup()
 {
     using namespace detail;
+    flush();
     {
         std::unique_lock<std::mutex> lock(g_input_queue_mutex);
         g_input_queue.push_back({nullptr, 0});
@@ -463,12 +464,19 @@ char* dlog::detail::input_buffer::discard_input_frame(std::size_t size)
     // signaling the event is likely to create a full memory barrier anyway).
     auto p = pinput_start_.load(std::memory_order_relaxed);
     p = advance_frame_pointer(p, size);
-    auto marker = *reinterpret_cast<dispatch_function_t**>(p);
-    if(WRAPAROUND_MARKER == marker)
-        p = pbegin_;
     pinput_start_.store(p, std::memory_order_relaxed);
     signal_input_consumed();
     return p;
+}
+
+char* dlog::detail::input_buffer::wraparound()
+{
+#ifndef NDEBUG
+    auto p = pinput_start_.load(std::memory_order_relaxed);
+    auto marker = *reinterpret_cast<dispatch_function_t**>(p);
+    assert(WRAPAROUND_MARKER == marker);
+#endif
+    pinput_start_.store(pbegin_, std::memory_order_relaxed);
 }
 
 void dlog::detail::input_buffer::signal_input_consumed()
@@ -505,12 +513,14 @@ void dlog::detail::output_worker()
         char* pinput_start = fe.pinput_buffer->input_start();
         while(pinput_start != fe.pflush_end) {
             auto pdispatch = *reinterpret_cast<dispatch_function_t**>(pinput_start);
+            if(WRAPAROUND_MARKER == pdispatch) {
+                pinput_start = fe.pinput_buffer->wraparound();
+                pdispatch = *reinterpret_cast<dispatch_function_t**>(pinput_start);
+            }
             auto frame_size = (*pdispatch)(g_poutput_buffer.get(), pinput_start);
             pinput_start = fe.pinput_buffer->discard_input_frame(frame_size);
         }
         // TODO we *could* do something like flush on a timer instead when we're getting a lot of writes / sec.
         g_poutput_buffer->flush();
     }
-
-
 }

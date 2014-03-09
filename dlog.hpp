@@ -86,6 +86,7 @@ namespace dlog {
             char* allocate_input_frame(std::size_t size);
             // returns pointer to following input frame
             char* discard_input_frame(std::size_t size);
+            char* wraparound();
             char* input_start() const;
             char* input_end() const;
 
