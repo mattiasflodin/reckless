@@ -2,6 +2,8 @@
 #include <condition_variable>
 #include <atomic>
 #include <utility>
+#include <deque>
+
 #include <cstring>
 
 namespace dlog {
@@ -65,6 +67,7 @@ namespace dlog {
     //};
 
     namespace detail {
+        class input_buffer;
         struct flush_extent {
             input_buffer* pinput_buffer;
             char* pflush_end;
@@ -81,8 +84,10 @@ namespace dlog {
             input_buffer();
             ~input_buffer();
             char* allocate_input_frame(std::size_t size);
-            char* flush_start();
-            void discard_input_frame(std::size_t size);
+            // returns pointer to following input frame
+            char* discard_input_frame(std::size_t size);
+            char* input_start() const;
+            char* input_end() const;
 
         private:
             static char* allocate_buffer();
@@ -95,7 +100,6 @@ namespace dlog {
 
             char* const pbegin_; // fixed value
             std::atomic<char*> pinput_start_; // moved forward by output thread, read by logger::write (to determine free space left)
-            //std::atomic<char*> pflush_end_; // moved forward by flush(), read by output thread
             char* pinput_end_;                // moved forward by logger::write, never read by anyone else
         };
         extern thread_local input_buffer tls_input_buffer; 
@@ -233,10 +237,11 @@ namespace dlog {
 
     inline void flush()
     {
+        using namespace detail;
         auto& ib = tls_input_buffer;
         {
             std::unique_lock<std::mutex> lock(g_input_queue_mutex);
-            g_input_queue.emplace_back(&ib, ib.pwrite_start_);
+            g_input_queue.push_back({&ib, ib.input_end()});
         }
         g_input_available_condition.notify_one();
     }

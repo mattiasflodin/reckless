@@ -1,6 +1,5 @@
 #include "dlog.hpp"
 
-#include <cstring>
 #include <memory>
 #include <algorithm>
 #include <new>
@@ -8,6 +7,9 @@
 #include <deque>
 
 #include <sstream> // TODO probably won't need this when all is said and done
+
+#include <cstring>
+#include <cassert>
 
 #include <stdlib.h>
 #include <unistd.h>
@@ -59,7 +61,7 @@ void dlog::cleanup()
     using namespace detail;
     {
         std::unique_lock<std::mutex> lock(g_input_queue_mutex);
-        g_input_queue.emplace_back(nullptr, 0);
+        g_input_queue.push_back({nullptr, 0});
     }
     g_input_available_condition.notify_one();
     g_output_thread.join();
@@ -220,6 +222,7 @@ namespace {
             *p = static_cast<char>(v);
             pbuffer->commit(1);
             pformat += 1;
+            return true;
         } else {
             return generic_format_int(pbuffer, pformat, static_cast<int>(v));
         }
@@ -329,16 +332,14 @@ dlog::detail::input_buffer::input_buffer() :
     pbegin_(allocate_buffer())
 {
     pinput_start_ = pbegin_;
-    pflush_end_ = pbegin_;
     pinput_end_ = pbegin_;
 }
 
 dlog::detail::input_buffer::~input_buffer()
 {
-    std::unique_lock<std::mutex> lock(mutex_);
-    input_consumed_condition_.wait(lock, [this]() {
-        return pinput_start_ == pflush_end_;
-    });
+    flush();
+    while(pinput_start_.load(std::memory_order_acquire) != pinput_end_)
+        wait_input_consumed();
 
     free(pbegin_);
 }
@@ -358,6 +359,9 @@ char* dlog::detail::input_buffer::allocate_buffer()
 // * p is aligned by FRAME_ALIGNMENT
 // * p never points at the end of the buffer; it always wraps around to the
 //   beginning of the circular buffer.
+// * p does not point to a wraparound marker. If it would end at a wraparound
+//   marker, then that marker is honored and the returned pointer will point to
+//   the beginning of the buffer
 //
 // The distance must never be so great that the pointer moves *past* the end of
 // the buffer. To do so would be an error in our context, since no input frame
@@ -365,10 +369,13 @@ char* dlog::detail::input_buffer::allocate_buffer()
 char* dlog::detail::input_buffer::advance_frame_pointer(char* p, std::size_t distance)
 {
     p = align(p + distance, FRAME_ALIGNMENT);
-    auto remaining = p - (g_input_buffer.pbegin + g_input_buffer.size);
+    auto remaining = p - (pbegin_ + g_input_buffer_size);
     assert(remaining >= 0);
-    if(remaining == 0)
-        p = g_input_buffer.pbegin;
+    if(remaining == 0 or WRAPAROUND_MARKER ==
+            *reinterpret_cast<dispatch_function_t**>(p))
+    {
+        p = pbegin_;
+    }
     return p;
 }
 
@@ -387,11 +394,11 @@ char* dlog::detail::input_buffer::allocate_input_frame(std::size_t size)
     //   have the case pinput_end <= pinput_start. Then the free memory is
     //   contiguous (it still starts at pinput_end and ends at pinput_start).
     //   
-    // (This is much, much easier to understand by drawing it on a paper than
+    // (This is much easier to understand by drawing it on a paper than
     // by reading comment text).
     while(true) {
         auto pinput_end = pinput_end_;
-        assert(pinput_end - pbegin != g_input_buffer_size);
+        assert(pinput_end - pbegin_ != g_input_buffer_size);
         assert(is_aligned(pinput_end, FRAME_ALIGNMENT));
 
         auto pinput_start = pinput_start_.load(std::memory_order_acquire);
@@ -437,22 +444,27 @@ char* dlog::detail::input_buffer::allocate_input_frame(std::size_t size)
     }
 }
 
-char* dlog::detail::input_buffer::flush_start(std::size_t size)
+char* dlog::detail::input_buffer::input_start() const
 {
-    auto pinput_start = pinput_start_.load(std::memory_order_relaxed);
-    auto marker = *reinterpret_cast<dispatch_function_t**>(pinput_start);
-    if(marker == WRAPAROUND_MARKER) {
-        pinput_start = fe.pinput_buffer->pbegin;
-        pinput_start_.store(pinput_start, std::memory_order_relaxed);
-    }
-    return pinput_start;
+    return pinput_start_.load(std::memory_order_relaxed);
 }
 
-void dlog::detail::input_buffer::discard_input_frame(std::size_t size)
+char* dlog::detail::input_buffer::input_end() const
 {
+    return pinput_end_;
+}
+
+char* dlog::detail::input_buffer::discard_input_frame(std::size_t size)
+{
+    // We can use relaxed memory ordering everywhere here because there is
+    // nothing being written of interest that the pointer update makes visible;
+    // all it does is *discard* data, not provide any new data (besides,
+    // signaling the event is likely to create a full memory barrier anyway).
     auto p = pinput_start_.load(std::memory_order_relaxed);
-    NEXT need advance here instead, gotta wrap around and align
-    pinput_start_.store(p + size, std::memory_order_release);
+    p = advance_frame_pointer(p, size);
+    pinput_start_.store(p, std::memory_order_relaxed);
+    signal_input_consumed();
+    return p;
 }
 
 void dlog::detail::input_buffer::signal_input_consumed()
@@ -486,53 +498,15 @@ void dlog::detail::output_worker()
             // Request to shut down thread.
             return;
 
-        char* pinput_start = fe.pinput_buffer->flush_start();
+        char* pinput_start = fe.pinput_buffer->input_start();
         while(pinput_start != fe.pflush_end) {
             auto pdispatch = *reinterpret_cast<dispatch_function_t**>(pinput_start);
             auto frame_size = (*pdispatch)(g_poutput_buffer.get(), pinput_start);
             pinput_start = fe.pinput_buffer->discard_input_frame(frame_size);
-            if(pinput_start >= g_input_buffer.pend)
-                pinput_start -= g_input_buffer.size;
         }
         // TODO we *could* do something like flush on a timer instead when we're getting a lot of writes / sec.
         g_poutput_buffer->flush();
     }
 
 
-#if 0
-    char const* pinput_start = g_input_buffer.pinput_start;
-    while(true) {
-        char const* pflush_end;
-        {
-            std::unique_lock<std::mutex> lock(g_input_buffer_mutex);
-            g_input_buffer.pinput_start = pinput_start;
-            g_input_available_condition.wait(lock, []() {
-                return g_input_buffer.pinput_start != g_input_buffer.pflush_end;
-            });
-            pinput_start = g_input_buffer.pinput_start;
-            pflush_end = g_input_buffer.pflush_end;
-        }
-        while(pinput_start != pflush_end) {
-            auto pdispatch = *reinterpret_cast<dispatch_function_t**>(
-                    pinput_start);
-
-            if(pdispatch == WRAPAROUND_MARKER) {
-                pinput_start = g_input_buffer.pbegin;
-                pdispatch = *reinterpret_cast<dispatch_function_t**>(
-                        pinput_start);
-            } else if(pdispatch == CLEANUP_MARKER) {
-                g_poutput_buffer->flush();
-                return;
-            }
-
-            auto frame_size = (*pdispatch)(g_poutput_buffer.get(),
-                    pinput_start);
-            pinput_start = advance_frame_pointer(frame_size);
-            if(pinput_start >= g_input_buffer.pend)
-                pinput_start -= g_input_buffer.size;
-        }
-        g_input_consumed_condition.notify();
-        g_poutput_buffer->flush();
-    }
-#endif
 }
