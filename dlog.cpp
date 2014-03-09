@@ -23,7 +23,7 @@ namespace dlog {
 
         int const g_page_size = static_cast<int>(sysconf(_SC_PAGESIZE));
 
-        thread_local input_buffer tls_input_buffer; 
+        input_buffer tls_input_buffer; 
         std::size_t g_input_buffer_size;   // static
 
         std::mutex g_input_queue_mutex;
@@ -75,7 +75,11 @@ dlog::writer::~writer()
 dlog::file_writer::file_writer(char const* path) :
     fd_(-1)
 {
-    fd_ = open(path, O_WRONLY | O_CREAT);
+    auto full_access =
+        S_IRUSR | S_IWUSR | S_IXUSR |
+        S_IRGRP | S_IWGRP | S_IXGRP |
+        S_IROTH | S_IWOTH | S_IXOTH;
+    fd_ = open(path, O_WRONLY | O_CREAT, full_access);
     // TODO proper exception here.
     if(fd_ == -1)
         throw std::runtime_error("cannot open file");
@@ -359,9 +363,6 @@ char* dlog::detail::input_buffer::allocate_buffer()
 // * p is aligned by FRAME_ALIGNMENT
 // * p never points at the end of the buffer; it always wraps around to the
 //   beginning of the circular buffer.
-// * p does not point to a wraparound marker. If it would end at a wraparound
-//   marker, then that marker is honored and the returned pointer will point to
-//   the beginning of the buffer
 //
 // The distance must never be so great that the pointer moves *past* the end of
 // the buffer. To do so would be an error in our context, since no input frame
@@ -369,20 +370,17 @@ char* dlog::detail::input_buffer::allocate_buffer()
 char* dlog::detail::input_buffer::advance_frame_pointer(char* p, std::size_t distance)
 {
     p = align(p + distance, FRAME_ALIGNMENT);
-    auto remaining = p - (pbegin_ + g_input_buffer_size);
+    auto remaining = g_input_buffer_size - (p - pbegin_);
     assert(remaining >= 0);
-    if(remaining == 0 or WRAPAROUND_MARKER ==
-            *reinterpret_cast<dispatch_function_t**>(p))
-    {
+    if(remaining == 0)
         p = pbegin_;
-    }
     return p;
 }
 
 char* dlog::detail::input_buffer::allocate_input_frame(std::size_t size)
 {
     // Conceptually, we have the invariant that
-    //   pinput_start <= pflush_end <= pinput_end,
+    //   pinput_start <= pinput_end,
     // and the memory area after pinput_end is free for us to use for
     // allocating a frame. However, the fact that it's a circular buffer means
     // that:
@@ -391,11 +389,12 @@ char* dlog::detail::input_buffer::allocate_input_frame(std::size_t size)
     //   at the end of the buffer and ends at pinput_start.
     //   
     // * Except, when pinput_end itself has fallen over the right edge and we
-    //   have the case pinput_end <= pinput_start. Then the free memory is
-    //   contiguous (it still starts at pinput_end and ends at pinput_start).
+    //   have the case pinput_end <= pinput_start. Then the *used* memory is
+    //   non-contiguous, and the free memory is contiguous (it still starts at
+    //   pinput_end and ends at pinput_start modulo circular buffer size).
     //   
-    // (This is much easier to understand by drawing it on a paper than
-    // by reading comment text).
+    // (This is easier to understand by drawing it on a paper than by reading
+    // comment text).
     while(true) {
         auto pinput_end = pinput_end_;
         assert(pinput_end - pbegin_ != g_input_buffer_size);
@@ -403,9 +402,10 @@ char* dlog::detail::input_buffer::allocate_input_frame(std::size_t size)
 
         auto pinput_start = pinput_start_.load(std::memory_order_acquire);
         auto free = pinput_start - pinput_end;
-        if(free >= 0) {
+        if(free > 0) {
             // Free space is contiguous.
             if(size <= free) {
+                pinput_end_ = advance_frame_pointer(pinput_end, size);
                 return pinput_end;
             } else {
                 // Not enough room. Wait for the output thread to consume some
@@ -414,9 +414,10 @@ char* dlog::detail::input_buffer::allocate_input_frame(std::size_t size)
             }
         } else {
             // Free space is non-contiguous.
-            free += g_input_buffer_size;
-            if(size <= free) {
+            std::size_t free1 = g_input_buffer_size - (pinput_end - pbegin_);
+            if(size <= free1) {
                 // There's enough room in the first segment.
+                pinput_end_ = advance_frame_pointer(pinput_end, size);
                 return pinput_end;
             } else {
                 std::size_t free2 = pinput_start - pbegin_;
@@ -432,7 +433,7 @@ char* dlog::detail::input_buffer::allocate_input_frame(std::size_t size)
                     // the marker.
                     *reinterpret_cast<dispatch_function_t**>(pinput_end_) =
                         WRAPAROUND_MARKER;
-                    pinput_end_ = pbegin_;
+                    pinput_end_ = advance_frame_pointer(pbegin_, size);
                     return pbegin_;
                 } else {
                     // Not enough room. Wait for the output thread to consume
@@ -462,6 +463,9 @@ char* dlog::detail::input_buffer::discard_input_frame(std::size_t size)
     // signaling the event is likely to create a full memory barrier anyway).
     auto p = pinput_start_.load(std::memory_order_relaxed);
     p = advance_frame_pointer(p, size);
+    auto marker = *reinterpret_cast<dispatch_function_t**>(p);
+    if(WRAPAROUND_MARKER == marker)
+        p = pbegin_;
     pinput_start_.store(p, std::memory_order_relaxed);
     signal_input_consumed();
     return p;

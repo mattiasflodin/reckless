@@ -45,5 +45,7 @@ int main()
     dlog::file_writer writer("dlog.txt");
     dlog::initialize(&writer);
     logger::write("three numbers: %s %s %s", 'A', 66, 67L, obj);
+    dlog::flush();
+    dlog::cleanup();
     return 0;
 }

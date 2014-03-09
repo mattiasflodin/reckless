@@ -102,7 +102,7 @@ namespace dlog {
             std::atomic<char*> pinput_start_; // moved forward by output thread, read by logger::write (to determine free space left)
             char* pinput_end_;                // moved forward by logger::write, never read by anyone else
         };
-        extern thread_local input_buffer tls_input_buffer; 
+        extern input_buffer tls_input_buffer; 
         //std::mutex buffer_mutex;
 
         template <typename... Args>

@@ -9,4 +9,4 @@ def configure(ctx):
 
 def build(ctx):
     ctx.program(source='dlog.cpp main.cpp',
-            target='test', cxxflags='-std=c++11')
+            target='test', cxxflags='-std=c++11 -g', linkflags='-g -lpthread')
