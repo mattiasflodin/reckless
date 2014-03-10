@@ -1,3 +1,4 @@
+#define USE_THREAD_LOCAL
 #include <mutex>
 #include <condition_variable>
 #include <atomic>
@@ -103,7 +104,12 @@ namespace dlog {
             std::atomic<char*> pinput_start_; // moved forward by output thread, read by logger::write (to determine free space left)
             char* pinput_end_;                // moved forward by logger::write, never read by anyone else
         };
-        extern input_buffer tls_input_buffer; 
+#ifdef USE_THREAD_LOCAL
+        extern thread_local input_buffer tls_input_buffer; 
+#else
+        extern input_buffer* tls_pinput_buffer; 
+#endif
+        input_buffer* get_input_buffer();
         //std::mutex buffer_mutex;
 
         template <typename... Args>
@@ -239,10 +245,10 @@ namespace dlog {
     inline void flush()
     {
         using namespace detail;
-        auto& ib = tls_input_buffer;
+        auto pib = get_input_buffer();
         {
             std::unique_lock<std::mutex> lock(g_input_queue_mutex);
-            g_input_queue.push_back({&ib, ib.input_end()});
+            g_input_queue.push_back({pib, pib->input_end()});
         }
         g_input_available_condition.notify_one();
     }
@@ -291,13 +297,15 @@ public:
         std::size_t const frame_size = argument_binder::frame_size;
         using frame = detail::frame<Formatter, frame_size, bound_args>;
 
-        char* pframe = tls_input_buffer.allocate_input_frame(frame_size);
+        auto pib = get_input_buffer();
+        char* pframe = pib->allocate_input_frame(frame_size);
         frame::store_args(pframe, std::forward<Args>(args)...);
     }
 };
 
 class dlog::formatter {
 public:
+    // TODO this should perhapss be non-inline
     static void format(output_buffer* pbuffer, char const* pformat)
     {
         auto len = std::strlen(pformat);
@@ -311,32 +319,73 @@ public:
             T&& value, Args&&... args)
     {
         while(true) {
+            pformat = next_specifier(pbuffer, pformat);
+            if(not pformat)
+                return;
+
+            if(not invoke_custom_format(pbuffer, pformat,
+                    std::forward<T>(value)))
+            {
+                append_percent(pbuffer);
+            }
+            return formatter::format(pbuffer, pformat,
+                    std::forward<Args>(args)...);
+        }
+    }
+
+private:
+    // TODO these should perhaps be non-inline
+    static void append_percent(output_buffer* pbuffer)
+    {
+        auto p = pbuffer->reserve(1u);
+        *p = '%';
+        pbuffer->commit(1u);
+    }
+    static void specifier_error(output_buffer* pbuffer)
+    {
+        //static char const s[] = "<unrecognized format specifier> %";
+        //auto p = pbuffer->reserve(sizeof(s)-1);
+        //std::memcpy(p, s, sizeof(s)-1);
+        //pbuffer->commit(sizeof(s)-1);
+    }
+
+    static char const* next_specifier(output_buffer* pbuffer,
+            char const* pformat)
+    {
+        while(true) {
             char const* pspecifier = std::strchr(pformat, '%');
-            if(pspecifier == nullptr)
-                return format(pbuffer, pformat);
+            if(pspecifier == nullptr) {
+                format(pbuffer, pformat);
+                return nullptr;
+            }
 
             auto len = pspecifier - pformat;
-            char* p = pbuffer->reserve(len);
+            auto p = pbuffer->reserve(len);
             std::memcpy(p, pformat, len);
             pbuffer->commit(len);
 
             pformat = pspecifier + 1;
 
-            if(*pformat == '%') {
-                p = pbuffer->reserve(1u);
-                *p = '%';
-                pbuffer->commit(1u);
-                ++pformat;
-            } else {
-                if(invoke_custom_format(pbuffer, pformat,
-                            std::forward<T>(value)))
-                {
-                    return formatter::format(pbuffer, pformat,
-                            std::forward<Args>(args)...);
-                }
-            }
+            if(*pformat != '%')
+                return pformat;
+
+            ++pformat;
+            append_percent(pbuffer);
         }
     }
 };
 
-
+inline auto dlog::detail::get_input_buffer() -> input_buffer*
+{
+#ifdef USE_THREAD_LOCAL
+    return &tls_input_buffer;
+#else
+    if(__builtin_expect(tls_pinput_buffer != nullptr, 1)) {
+        return tls_pinput_buffer;
+    } else {
+        auto p = new input_buffer();
+        tls_pinput_buffer = p;
+        return p;
+    }
+#endif
+}

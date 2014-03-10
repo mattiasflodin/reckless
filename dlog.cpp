@@ -1,3 +1,4 @@
+#define NDEBUG
 #include "dlog.hpp"
 
 #include <memory>
@@ -23,7 +24,11 @@ namespace dlog {
 
         int const g_page_size = static_cast<int>(sysconf(_SC_PAGESIZE));
 
-        input_buffer tls_input_buffer; 
+#ifdef USE_THREAD_LOCAL
+        thread_local input_buffer tls_input_buffer; 
+#else
+        input_buffer* tls_pinput_buffer; 
+#endif
         std::size_t g_input_buffer_size;   // static
 
         std::mutex g_input_queue_mutex;
@@ -353,7 +358,10 @@ dlog::detail::input_buffer::~input_buffer()
 char* dlog::detail::input_buffer::allocate_buffer()
 {
     void* pbuffer = nullptr;
-    posix_memalign(&pbuffer, FRAME_ALIGNMENT, g_input_buffer_size);
+    // TODO proper error here. bad_alloc?
+    if(0 != posix_memalign(&pbuffer, FRAME_ALIGNMENT, g_input_buffer_size))
+        throw std::runtime_error("cannot allocate input frame");
+    *static_cast<char*>(pbuffer) = 'X';
     return static_cast<char*>(pbuffer);
 }
 
@@ -405,7 +413,7 @@ char* dlog::detail::input_buffer::allocate_input_frame(std::size_t size)
         auto free = pinput_start - pinput_end;
         if(free > 0) {
             // Free space is contiguous.
-            if(size <= free) {
+            if(__builtin_expect(size <= free, 1)) {
                 pinput_end_ = advance_frame_pointer(pinput_end, size);
                 return pinput_end;
             } else {
@@ -416,13 +424,13 @@ char* dlog::detail::input_buffer::allocate_input_frame(std::size_t size)
         } else {
             // Free space is non-contiguous.
             std::size_t free1 = g_input_buffer_size - (pinput_end - pbegin_);
-            if(size <= free1) {
+            if(__builtin_expect(size <= free1, 1)) {
                 // There's enough room in the first segment.
                 pinput_end_ = advance_frame_pointer(pinput_end, size);
                 return pinput_end;
             } else {
                 std::size_t free2 = pinput_start - pbegin_;
-                if(size <= free2) {
+                if(__builtin_expect(size <= free2, 1)) {
                     // We don't have enough room for a continuous input frame
                     // in the first segment (at the end of the circular
                     // buffer), but there is enough room in the second segment

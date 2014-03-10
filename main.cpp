@@ -8,7 +8,7 @@ public:
     Object(int x_) : x(x_) {}
     Object(Object const& rhs) : x(-rhs.x)
     {
-        std::cout << "Object::Object(Object const&)" << std::endl;
+        //std::cout << "Object::Object(Object const&)" << std::endl;
     }
     ~Object() {}
     Object& operator=(Object const& rhs)
@@ -44,7 +44,7 @@ int main()
 {
     dlog::file_writer writer("dlog.txt");
     dlog::initialize(&writer);
-    logger::write("three numbers: %s %s %s", 'A', 66, 67L, obj);
+    logger::write("three numbers: %s %d %d %s\n", 'A', 66, 67L, obj);
     //dlog::flush();
     dlog::cleanup();
     return 0;
