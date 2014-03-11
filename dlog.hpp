@@ -128,7 +128,6 @@ namespace dlog {
             using type = T*;
         };
 
-        // TODO are both of these still in use?
         template <typename T>
         T align(T p, std::size_t alignment)
         {
@@ -143,10 +142,10 @@ namespace dlog {
             return v % alignment == 0;
         }
 
-        template <class... Args>
-        void evaluate(Args&&...)
-        {
-        }
+        struct evaluate {
+            template <class... Args>
+            evaluate(Args&&...) {}
+        };
 
         template <typename T>
         int destroy(T* p)
@@ -192,7 +191,7 @@ namespace dlog {
                     std::forward<typename BoundArgs::type>(
                         *reinterpret_cast<typename BoundArgs::type*>(pinput + BoundArgs::offset)
                     )...);
-                evaluate(destroy(reinterpret_cast<typename BoundArgs::type*>(pinput + BoundArgs::offset))...);
+                evaluate{destroy(reinterpret_cast<typename BoundArgs::type*>(pinput + BoundArgs::offset))...};
                 return FrameSize;
             }
         };
@@ -288,10 +287,11 @@ public:
         //using bound_args = typename argument_binder::type;
         using bound_args = typename bind_args<Args...>::type;
         std::size_t const frame_size = argument_binder::frame_size;
-        using frame = detail::frame<Formatter, frame_size, bound_args>;
+        std::size_t const frame_size_aligned = (frame_size+FRAME_ALIGNMENT-1)/FRAME_ALIGNMENT*FRAME_ALIGNMENT;
+        using frame = detail::frame<Formatter, frame_size_aligned, bound_args>;
 
         auto pib = get_input_buffer();
-        char* pframe = pib->allocate_input_frame(frame_size);
+        char* pframe = pib->allocate_input_frame(frame_size_aligned);
         frame::store_args(pframe, std::forward<Args>(args)...);
     }
 };

@@ -29,7 +29,7 @@ namespace dlog {
 #else
         input_buffer* tls_pinput_buffer; 
 #endif
-        std::size_t g_input_buffer_size;   // static
+        std::size_t const INPUT_BUFFER_SIZE = 4096;   // static
 
         std::mutex g_input_queue_mutex;
         std::deque<flush_extent> g_input_queue;
@@ -54,7 +54,7 @@ void dlog::initialize(writer* pwriter, std::size_t input_buffer_size,
         input_buffer_size = g_page_size;
     if(max_output_buffer_size == 0)
         max_output_buffer_size = 1024*1024;
-    g_input_buffer_size = input_buffer_size;
+    //INPUT_BUFFER_SIZE = input_buffer_size;
 
     g_poutput_buffer.reset(new output_buffer(pwriter, max_output_buffer_size));
 
@@ -356,7 +356,7 @@ char* dlog::detail::input_buffer::allocate_buffer()
 {
     void* pbuffer = nullptr;
     // TODO proper error here. bad_alloc?
-    if(0 != posix_memalign(&pbuffer, FRAME_ALIGNMENT, g_input_buffer_size))
+    if(0 != posix_memalign(&pbuffer, FRAME_ALIGNMENT, INPUT_BUFFER_SIZE))
         throw std::runtime_error("cannot allocate input frame");
     *static_cast<char*>(pbuffer) = 'X';
     return static_cast<char*>(pbuffer);
@@ -375,8 +375,10 @@ char* dlog::detail::input_buffer::allocate_buffer()
 // is allowed to be discontinuous.
 char* dlog::detail::input_buffer::advance_frame_pointer(char* p, std::size_t distance)
 {
-    p = align(p + distance, FRAME_ALIGNMENT);
-    auto remaining = g_input_buffer_size - (p - pbegin_);
+    assert(is_aligned(distance));
+    //p = align(p + distance, FRAME_ALIGNMENT);
+    p += distance;
+    auto remaining = INPUT_BUFFER_SIZE - (p - pbegin_);
     assert(remaining >= 0);
     if(remaining == 0)
         p = pbegin_;
@@ -403,7 +405,7 @@ char* dlog::detail::input_buffer::allocate_input_frame(std::size_t size)
     // comment text).
     while(true) {
         auto pinput_end = pinput_end_;
-        assert(pinput_end - pbegin_ != g_input_buffer_size);
+        assert(pinput_end - pbegin_ != INPUT_BUFFER_SIZE);
         assert(is_aligned(pinput_end, FRAME_ALIGNMENT));
 
         // Even if we get an "old" value for pinput_start_ here, that's OK
@@ -427,7 +429,7 @@ char* dlog::detail::input_buffer::allocate_input_frame(std::size_t size)
             }
         } else {
             // Free space is non-contiguous.
-            std::size_t free1 = g_input_buffer_size - (pinput_end - pbegin_);
+            std::size_t free1 = INPUT_BUFFER_SIZE - (pinput_end - pbegin_);
             if(__builtin_expect(size <= free1, 1)) {
                 // There's enough room in the first segment.
                 pinput_end_ = advance_frame_pointer(pinput_end, size);
