@@ -137,13 +137,6 @@ namespace dlog {
             return reinterpret_cast<T>(v);
         }
         template <typename T>
-        T align_down(T p, std::size_t alignment)
-        {
-            std::uintptr_t v = reinterpret_cast<std::uintptr_t>(p);
-            v = (v/alignment)*alignment;
-            return reinterpret_cast<T>(v);
-        }
-        template <typename T>
         bool is_aligned(T p, std::size_t alignment)
         {
             std::uintptr_t v = reinterpret_cast<std::uintptr_t>(p);
@@ -305,74 +298,29 @@ public:
 
 class dlog::formatter {
 public:
-    // TODO this should perhapss be non-inline
-    static void format(output_buffer* pbuffer, char const* pformat)
-    {
-        auto len = std::strlen(pformat);
-        char* p = pbuffer->reserve(len);
-        std::memcpy(p, pformat, len);
-        pbuffer->commit(len);
-    }
+    static void format(output_buffer* pbuffer, char const* pformat);
 
     template <typename T, typename... Args>
     static void format(output_buffer* pbuffer, char const* pformat,
             T&& value, Args&&... args)
     {
-        while(true) {
-            pformat = next_specifier(pbuffer, pformat);
-            if(not pformat)
-                return;
+        pformat = next_specifier(pbuffer, pformat);
+        if(not pformat)
+            return;
 
-            if(not invoke_custom_format(pbuffer, pformat,
-                    std::forward<T>(value)))
-            {
-                append_percent(pbuffer);
-            }
-            return formatter::format(pbuffer, pformat,
-                    std::forward<Args>(args)...);
+        if(not invoke_custom_format(pbuffer, pformat,
+                std::forward<T>(value)))
+        {
+            append_percent(pbuffer);
         }
+        return formatter::format(pbuffer, pformat,
+                std::forward<Args>(args)...);
     }
 
 private:
-    // TODO these should perhaps be non-inline
-    static void append_percent(output_buffer* pbuffer)
-    {
-        auto p = pbuffer->reserve(1u);
-        *p = '%';
-        pbuffer->commit(1u);
-    }
-    static void specifier_error(output_buffer* pbuffer)
-    {
-        //static char const s[] = "<unrecognized format specifier> %";
-        //auto p = pbuffer->reserve(sizeof(s)-1);
-        //std::memcpy(p, s, sizeof(s)-1);
-        //pbuffer->commit(sizeof(s)-1);
-    }
-
+    static void append_percent(output_buffer* pbuffer);
     static char const* next_specifier(output_buffer* pbuffer,
-            char const* pformat)
-    {
-        while(true) {
-            char const* pspecifier = std::strchr(pformat, '%');
-            if(pspecifier == nullptr) {
-                format(pbuffer, pformat);
-                return nullptr;
-            }
-
-            auto len = pspecifier - pformat;
-            auto p = pbuffer->reserve(len);
-            std::memcpy(p, pformat, len);
-            pbuffer->commit(len);
-
-            pformat = pspecifier + 1;
-
-            if(*pformat != '%')
-                return pformat;
-
-            ++pformat;
-            append_percent(pbuffer);
-        }
-    }
+            char const* pformat);
 };
 
 inline auto dlog::detail::get_input_buffer() -> input_buffer*
@@ -389,3 +337,9 @@ inline auto dlog::detail::get_input_buffer() -> input_buffer*
     }
 #endif
 }
+
+inline void dlog::output_buffer::commit(std::size_t size)
+{
+    pcommit_end_ += size;
+}
+

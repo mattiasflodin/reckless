@@ -167,11 +167,6 @@ char* dlog::output_buffer::reserve(std::size_t size)
     return pcommit_end_;
 }
 
-void dlog::output_buffer::commit(std::size_t size)
-{
-    pcommit_end_ += size;
-}
-
 void dlog::output_buffer::flush()
 {
     // TODO keep track of a high watermark, i.e. max value of pcommit_end_.
@@ -539,5 +534,46 @@ void dlog::detail::output_worker()
         }
         // TODO we *could* do something like flush on a timer instead when we're getting a lot of writes / sec.
         g_poutput_buffer->flush();
+    }
+}
+
+
+void dlog::formatter::format(output_buffer* pbuffer, char const* pformat)
+{
+    auto len = std::strlen(pformat);
+    char* p = pbuffer->reserve(len);
+    std::memcpy(p, pformat, len);
+    pbuffer->commit(len);
+}
+
+void dlog::formatter::append_percent(output_buffer* pbuffer)
+{
+    auto p = pbuffer->reserve(1u);
+    *p = '%';
+    pbuffer->commit(1u);
+}
+
+char const* dlog::formatter::next_specifier(output_buffer* pbuffer,
+        char const* pformat)
+{
+    while(true) {
+        char const* pspecifier = std::strchr(pformat, '%');
+        if(pspecifier == nullptr) {
+            format(pbuffer, pformat);
+            return nullptr;
+        }
+
+        auto len = pspecifier - pformat;
+        auto p = pbuffer->reserve(len);
+        std::memcpy(p, pformat, len);
+        pbuffer->commit(len);
+
+        pformat = pspecifier + 1;
+
+        if(*pformat != '%')
+            return pformat;
+
+        ++pformat;
+        append_percent(pbuffer);
     }
 }
