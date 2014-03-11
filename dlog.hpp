@@ -89,7 +89,7 @@ namespace dlog {
             char* discard_input_frame(std::size_t size);
             char* wraparound();
             char* input_start() const;
-            char* input_end() const;
+            void flush();
 
         private:
             static char* allocate_buffer();
@@ -100,9 +100,12 @@ namespace dlog {
             std::mutex mutex_;
             std::condition_variable input_consumed_event_;
 
+        public:
             char* const pbegin_; // fixed value
+        private:
             std::atomic<char*> pinput_start_; // moved forward by output thread, read by logger::write (to determine free space left)
             char* pinput_end_;                // moved forward by logger::write, never read by anyone else
+            char* pflush_end_;                // moved forward by flush(), read by wait_input_consumed (same thread so no race)
         };
 #ifdef USE_THREAD_LOCAL
         extern thread_local input_buffer tls_input_buffer; 
@@ -238,11 +241,7 @@ namespace dlog {
     {
         using namespace detail;
         auto pib = get_input_buffer();
-        {
-            std::unique_lock<std::mutex> lock(g_input_queue_mutex);
-            g_input_queue.push_back({pib, pib->input_end()});
-        }
-        g_input_available_condition.notify_one();
+        pib->flush();
     }
 
     bool format(output_buffer* pbuffer, char const*& pformat, char v);

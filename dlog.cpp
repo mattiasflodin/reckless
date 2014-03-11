@@ -8,6 +8,7 @@
 #include <deque>
 
 #include <sstream> // TODO probably won't need this when all is said and done
+#include <iostream>
 
 #include <cstring>
 #include <cassert>
@@ -338,6 +339,7 @@ dlog::detail::input_buffer::input_buffer() :
 {
     pinput_start_ = pbegin_;
     pinput_end_ = pbegin_;
+    pflush_end_ = pbegin_;
 }
 
 dlog::detail::input_buffer::~input_buffer()
@@ -416,10 +418,19 @@ char* dlog::detail::input_buffer::allocate_input_frame(std::size_t size)
         // updated value for pinput_start_. So memory_order_relaxed should be
         // fine here.
         auto pinput_start = pinput_start_.load(std::memory_order_relaxed);
+        //std::cout << "W " <<  std::hex << (pinput_start - pbegin_) << " - " << std::hex << (pinput_end - pbegin_) << std::endl;
         auto free = pinput_start - pinput_end;
         if(free > 0) {
             // Free space is contiguous.
-            if(__builtin_expect(size <= free, 1)) {
+            // Technically, there is enough room if size == free. But the
+            // problem with using the free space in this situation is that when
+            // we increase pinput_end_ by size, we end up with pinput_start_ ==
+            // pinput_end_. Now, given that state, how do we know if the buffer
+            // is completely filled or empty? So, it's easier to just check for
+            // size < free instead of size <= free, and call pretend we're out
+            // of space if size == free. Same situation applies in the else
+            // clause below.
+            if(__builtin_expect(size < free, 1)) {
                 pinput_end_ = advance_frame_pointer(pinput_end, size);
                 return pinput_end;
             } else {
@@ -430,13 +441,13 @@ char* dlog::detail::input_buffer::allocate_input_frame(std::size_t size)
         } else {
             // Free space is non-contiguous.
             std::size_t free1 = INPUT_BUFFER_SIZE - (pinput_end - pbegin_);
-            if(__builtin_expect(size <= free1, 1)) {
+            if(__builtin_expect(size < free1, 1)) {
                 // There's enough room in the first segment.
                 pinput_end_ = advance_frame_pointer(pinput_end, size);
                 return pinput_end;
             } else {
                 std::size_t free2 = pinput_start - pbegin_;
-                if(__builtin_expect(size <= free2, 1)) {
+                if(__builtin_expect(size < free2, 1)) {
                     // We don't have enough room for a continuous input frame
                     // in the first segment (at the end of the circular
                     // buffer), but there is enough room in the second segment
@@ -465,9 +476,15 @@ char* dlog::detail::input_buffer::input_start() const
     return pinput_start_.load(std::memory_order_relaxed);
 }
 
-char* dlog::detail::input_buffer::input_end() const
+void dlog::detail::input_buffer::flush()
 {
-    return pinput_end_;
+    char* pflush_end = pinput_end_;
+    pflush_end_ = pflush_end;
+    {
+        std::unique_lock<std::mutex> lock(g_input_queue_mutex);
+        g_input_queue.push_back({this, pflush_end});
+    }
+    g_input_available_condition.notify_one();
 }
 
 char* dlog::detail::input_buffer::discard_input_frame(std::size_t size)
@@ -491,6 +508,7 @@ char* dlog::detail::input_buffer::wraparound()
     assert(WRAPAROUND_MARKER == marker);
 #endif
     pinput_start_.store(pbegin_, std::memory_order_relaxed);
+    return pbegin_;
 }
 
 void dlog::detail::input_buffer::signal_input_consumed()
@@ -503,6 +521,15 @@ void dlog::detail::input_buffer::wait_input_consumed()
     // This is kind of icky, we need to lock a mutex just because the condition
     // variable requires it. There would be less overhead if we could just use
     // something like Windows event objects.
+    if(pflush_end_ == pinput_start_.load(std::memory_order_relaxed)) {
+        // We are waiting for input to be consumed because the input buffer is
+        // full, but we haven't actually posted any data (i.e. we haven't
+        // called flush). In other words, the caller has written too much to
+        // the log without flushing. The best effort we can make is to flush
+        // whatever we have so far, otherwise the wait below will block
+        // forever.
+        flush();
+    }
     std::unique_lock<std::mutex> lock(mutex_);
     input_consumed_event_.wait(lock);
 }
@@ -526,6 +553,7 @@ void dlog::detail::output_worker()
 
         char* pinput_start = fe.pinput_buffer->input_start();
         while(pinput_start != fe.pflush_end) {
+            //std::cout << "R " <<  std::hex << (pinput_start - fe.pinput_buffer->pbegin_) << std::endl;
             auto pdispatch = *reinterpret_cast<dispatch_function_t**>(pinput_start);
             if(WRAPAROUND_MARKER == pdispatch) {
                 pinput_start = fe.pinput_buffer->wraparound();
