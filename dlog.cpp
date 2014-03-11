@@ -348,7 +348,9 @@ dlog::detail::input_buffer::input_buffer() :
 dlog::detail::input_buffer::~input_buffer()
 {
     flush();
-    while(pinput_start_.load(std::memory_order_acquire) != pinput_end_)
+    // Both flush() and wait_input_consumed should create full memory barriers,
+    // so no need for strict memory ordering in this load.
+    while(pinput_start_.load(std::memory_order_relaxed) != pinput_end_)
         wait_input_consumed();
 
     free(pbegin_);
@@ -409,7 +411,14 @@ char* dlog::detail::input_buffer::allocate_input_frame(std::size_t size)
         assert(pinput_end - pbegin_ != g_input_buffer_size);
         assert(is_aligned(pinput_end, FRAME_ALIGNMENT));
 
-        auto pinput_start = pinput_start_.load(std::memory_order_acquire);
+        // Even if we get an "old" value for pinput_start_ here, that's OK
+        // because other threads will never cause the amount of available
+        // buffer space to shrink. So either there is enough buffer space and
+        // we're done, or there isn't and we'll wait for an input-consumption
+        // event which creates a full memory barrier and hence gives us an
+        // updated value for pinput_start_. So memory_order_relaxed should be
+        // fine here.
+        auto pinput_start = pinput_start_.load(std::memory_order_relaxed);
         auto free = pinput_start - pinput_end;
         if(free > 0) {
             // Free space is contiguous.
