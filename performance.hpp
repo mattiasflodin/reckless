@@ -34,7 +34,7 @@ namespace performance {
         logger();
         ~logger();
 
-        timestamp start()
+        timestamp start() const
         {
             return ClockSource::start();
         }
@@ -46,7 +46,15 @@ namespace performance {
             _next_sample_position = (i + 1) % LogSize;
         }
 
-        begin()
+        sample const* begin() const
+        {
+            return _samples;
+        }
+
+        sample const* end() const
+        {
+            return _samples + _next_sample_position;
+        }
 
     private:
         sample _samples[LogSize]; 

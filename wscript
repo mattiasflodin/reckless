@@ -11,8 +11,8 @@ def build(ctx):
     # To see annotated assembly:
     # -std=c++11 -g -pthread -O3 -march=native -Wa,-adhln=main.s -masm=intel -fverbose-asm -c dlog.cpp
     ctx.program(source='dlog.cpp main.cpp', target='test',
-        cxxflags='-std=c++11 -g -pthread -O3 -march=native', linkflags='-g -pthread')
+        cxxflags='-std=c++11 -g -pthread -O0 -march=native', linkflags='-g -pthread')
     ctx.program(source='dlog.cpp time_simple_calls.cpp performance.cpp', target='time_simple_calls',
-        cxxflags='-std=c++11 -g -pthread -O3 -march=native', linkflags='-g -pthread')
+        cxxflags='-std=c++11 -g -pthread -O0 -march=native', linkflags='-g -pthread')
     #ctx.program(source='dlog.cpp main.cpp', target='test',
     #    cxxflags='-std=c++11 -g -pthread', linkflags='-g -pthread')

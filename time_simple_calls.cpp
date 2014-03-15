@@ -1,6 +1,8 @@
 #include "performance.hpp"
 #include "dlog.hpp"
 
+#include <iostream>
+
 typedef dlog::logger<dlog::formatter> logger;
 
 int main()
@@ -17,5 +19,8 @@ int main()
     }
     dlog::cleanup();
     performance::rdtscp_cpuid_clock::unbind_cpu();
+    for(auto sample : performance_log) {
+        std::cout << sample << std::endl;
+    }
     return 0;
 }
