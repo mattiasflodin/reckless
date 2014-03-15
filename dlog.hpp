@@ -109,6 +109,7 @@ namespace dlog {
         };
 #ifdef USE_THREAD_LOCAL
         extern thread_local input_buffer tls_input_buffer; 
+        extern thread_local input_buffer* tls_pinput_buffer; 
 #else
         extern input_buffer* tls_pinput_buffer; 
 #endif
@@ -325,7 +326,10 @@ private:
 inline auto dlog::detail::get_input_buffer() -> input_buffer*
 {
 #ifdef USE_THREAD_LOCAL
-    return &tls_input_buffer;
+    if(__builtin_expect(tls_pinput_buffer != nullptr, 1))
+        return tls_pinput_buffer;
+    else
+        return tls_pinput_buffer = &tls_input_buffer;
 #else
     if(__builtin_expect(tls_pinput_buffer != nullptr, 1)) {
         return tls_pinput_buffer;

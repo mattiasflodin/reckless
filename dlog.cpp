@@ -27,6 +27,7 @@ namespace dlog {
 
 #ifdef USE_THREAD_LOCAL
         thread_local input_buffer tls_input_buffer; 
+        thread_local input_buffer* tls_pinput_buffer; 
 #else
         input_buffer* tls_pinput_buffer; 
 #endif
