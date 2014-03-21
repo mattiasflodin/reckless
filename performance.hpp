@@ -63,7 +63,8 @@ namespace performance {
 }
 
 template <std::size_t LogSize, class ClockSource, class Sample>
-performance::logger<LogSize, ClockSource, Sample>::logger()
+performance::logger<LogSize, ClockSource, Sample>::logger() :
+    _next_sample_position(0)
 {
     detail::lock_memory(_samples, sizeof(_samples));
     std::memset(_samples, 0, sizeof(_samples));

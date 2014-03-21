@@ -1,4 +1,6 @@
 //#define USE_THREAD_LOCAL
+#include "spsc_event.hpp"
+
 #include <mutex>
 #include <condition_variable>
 #include <atomic>
@@ -97,8 +99,7 @@ namespace dlog {
             void wait_input_consumed();
             void signal_input_consumed();
 
-            std::mutex mutex_;
-            std::condition_variable input_consumed_event_;
+            spsc_event input_consumed_event_;
 
         public:
             char* const pbegin_; // fixed value

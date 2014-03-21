@@ -12,6 +12,8 @@
 
 #include <cstring>
 #include <cassert>
+#include <cstdio>
+#include <cmath>
 
 #include <stdlib.h>
 #include <unistd.h>
@@ -31,7 +33,7 @@ namespace dlog {
 #else
         input_buffer* tls_pinput_buffer; 
 #endif
-        std::size_t const INPUT_BUFFER_SIZE = 4096;   // static
+        std::size_t const INPUT_BUFFER_SIZE = 8*4096;   // static
 
         std::mutex g_input_queue_mutex;
         std::deque<flush_extent> g_input_queue;
@@ -203,19 +205,33 @@ namespace {
         }
     }
 
+    int typesafe_sprintf(char* str, double v)
+    {
+        return sprintf(str, "%f", v);
+    }
+
+    int typesafe_sprintf(char* str, long double v)
+    {
+        return sprintf(str, "%Lf", v);
+    }
+
     template <typename T>
     bool generic_format_float(output_buffer* pbuffer, char const*& pformat, T v)
     {
         char f = *pformat;
-        if(f != 'f')
+        if(f != 'd')
             return false;
 
-        std::ostringstream ostr;
-        ostr << v;
-        std::string const& s = ostr.str();
-        char* p = pbuffer->reserve(s.size());
-        std::memcpy(p, s.data(), s.size());
-        pbuffer->commit(s.size());
+        T v_for_counting_digits = std::fabs(v);
+        if(v_for_counting_digits < 1.0)
+            v_for_counting_digits = static_cast<T>(1.0);
+        std::size_t digits = static_cast<std::size_t>(std::log10(v_for_counting_digits)) + 1;
+        // %f without precision modifier gives us 6 digits after the decimal point.
+        // The format is [-]ddd.dddddd (minimum 9 chars). We can also get e.g.
+        // "-infinity" but that won't be more chars than the digits.
+        char* p = pbuffer->reserve(1+digits+1+6+1);
+        int written = typesafe_sprintf(p, v);
+        pbuffer->commit(written);
         pformat += 1;
         return true;
     }
@@ -514,7 +530,7 @@ char* dlog::detail::input_buffer::wraparound()
 
 void dlog::detail::input_buffer::signal_input_consumed()
 {
-    input_consumed_event_.notify_one();
+    input_consumed_event_.signal();
 }
 
 void dlog::detail::input_buffer::wait_input_consumed()
@@ -531,8 +547,10 @@ void dlog::detail::input_buffer::wait_input_consumed()
         // forever.
         flush();
     }
-    std::unique_lock<std::mutex> lock(mutex_);
-    input_consumed_event_.wait(lock);
+    //NEXT code hangs here, event probably fires before wait() is called... we
+    //can't just wait on the cv, we need to check a condition (= specific amount of memory is free)
+    //Reproducible in measure_periodic_calls
+    input_consumed_event_.wait();
 }
 void dlog::detail::output_worker()
 {

@@ -1,8 +1,13 @@
 #!/usr/bin/python2
-from pylab import *
-with open("timings.txt", 'r') as f:
-    data = f.readlines()
-data = [int(x) for x in data[:1000]]
-plot(data)
+import matplotlib.pyplot as plt
+import sys
 
-show()
+fig, ax = plt.subplots()
+for name in sys.argv[1:]:
+    with open(name, 'r') as f:
+        data = f.readlines()
+    data = [int(x) for x in data]
+    ax.plot(data, '.', label=name)
+
+legend = ax.legend()
+plt.show()
