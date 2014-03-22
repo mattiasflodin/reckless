@@ -38,7 +38,7 @@ int main()
     measure([&](char const* s, char c, int i, double d)
         {
             ofs << "string: " << s << " char: " << c << " int: "
-                << i << " double: " << d << '\n';
+                << i << " double: " << d << std::endl;
        }, "timings_periodic_calls_fstream.txt");
     ofs.close();
 
@@ -47,7 +47,7 @@ int main()
         {
             fprintf(stdio_file, "string: %s char: %c int: %d double: %f\n",
                 s, c, i, d);
-            //fflush(stdio_file);
+            fflush(stdio_file);
        }, "timings_periodic_calls_stdio.txt");
     std::fclose(stdio_file);
 

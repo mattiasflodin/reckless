@@ -36,14 +36,12 @@ private:
 
     int atomic_exchange_explicit(int* pvalue, int new_value, std::memory_order order)
     {
-        // TODO replace this with asm instead, the itanium builtins that gcc provides are weird.
         int res = new_value;
         asm volatile("xchg %0, %1\n\t"
                 : "+r"(res), "+m"(*pvalue)
                 :
                 : "memory", "cc");
         return res;
-        //return __sync_lock_test_and_set(pvalue, new_value);
     }
 
     int signal_;

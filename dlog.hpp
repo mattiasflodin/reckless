@@ -1,6 +1,8 @@
 //#define USE_THREAD_LOCAL
 #include "spsc_event.hpp"
 
+#include <boost/lockfree/queue.hpp>
+
 #include <mutex>
 #include <condition_variable>
 #include <atomic>
