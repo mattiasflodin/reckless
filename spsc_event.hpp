@@ -1,7 +1,10 @@
 #include <atomic>
+#include <system_error>
+
 #include <linux/futex.h>
 #include <unistd.h>
 #include <sys/syscall.h>
+#include <time.h>
 #include <sys/time.h>
 
 class spsc_event {
@@ -18,13 +21,44 @@ public:
         sys_futex(&signal_, FUTEX_WAKE, 1, nullptr, nullptr, 0);
     }
 
-    void wait(timespec const* timeout = nullptr)
+    void wait()
     {
         int signal = atomic_exchange_explicit(&signal_, 0, std::memory_order_acquire);
         while(not signal) {
-            sys_futex(&signal_, FUTEX_WAIT, 0, timeout, nullptr, 0);
+            sys_futex(&signal_, FUTEX_WAIT, 0, nullptr, nullptr, 0);
             signal = atomic_exchange_explicit(&signal_, 0, std::memory_order_acquire);
         }
+    }
+
+    bool wait(unsigned milliseconds)
+    {
+        int signal = atomic_exchange_explicit(&signal_, 0, std::memory_order_acquire);
+        if(signal)
+            return true;
+        struct timespec start;
+        if(0 != clock_gettime(CLOCK_MONOTONIC, &start))
+            throw std::system_error(errno, std::system_category());
+
+        unsigned elapsed_ms = 0;
+        struct timespec timeout = {0};
+
+        do {
+            unsigned remaining_ms = milliseconds - elapsed_ms;
+            timeout.tv_sec = remaining_ms/1000;
+            timeout.tv_nsec = static_cast<long>(remaining_ms%1000)*1000000;
+            sys_futex(&signal_, FUTEX_WAIT, 0, &timeout, nullptr, 0);
+            signal = atomic_exchange_explicit(&signal_, 0, std::memory_order_acquire);
+            if(signal)
+                return true;
+            
+            struct timespec now;
+            if(0 != clock_gettime(CLOCK_MONOTONIC, &now))
+                throw std::system_error(errno, std::system_category());
+            
+            elapsed_ms = 1000*static_cast<int>(now.tv_sec - start.tv_sec);
+            elapsed_ms += (now.tv_nsec - start.tv_nsec)/1000000;
+        } while(elapsed_ms < milliseconds);
+        return false;
     }
 
 private:

@@ -7,7 +7,7 @@ for name in sys.argv[1:]:
     with open(name, 'r') as f:
         data = f.readlines()
     data = [int(x) for x in data]
-    ax.plot(data, '.', label=name)
+    ax.plot(data, '-', label=name)
 
 legend = ax.legend()
 plt.show()

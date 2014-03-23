@@ -46,11 +46,7 @@ int main()
 {
     dlog::file_writer writer("dlog.txt");
     dlog::initialize(&writer);
-    for(std::size_t i=0; i!=10000; ++i) {
-        logger::write("three numbers: %s %d %d %s\n", 'A', 66, i, obj);
-        //dlog::flush();
-        //usleep(1000);
-    }
+    logger::write("three numbers: %s %d %d %s\n", 'A', 66, 3.0, obj);
     dlog::cleanup();
     return 0;
 }

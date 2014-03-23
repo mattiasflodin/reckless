@@ -57,7 +57,7 @@ int main()
     std::ofstream ofs("fstream.txt");
     measure([&](unsigned number, double percent)
         {
-            ofs << "file " << number << " (" << percent << "%)" << std::endl;
+            ofs << "file " << number << " (" << percent << "%)" << '\n';
        }, "timings_write_file_fstream.txt");
     ofs.close();
 
@@ -66,7 +66,6 @@ int main()
     measure([&](unsigned number, double percent)
         {
             fprintf(stdio_file, "file %u (%f%%)\n", number, percent);
-            fflush(stdio_file);
        }, "timings_write_file_stdio.txt");
     fclose(stdio_file);
 
@@ -76,7 +75,7 @@ int main()
     measure([&](unsigned number, double percent)
         {
         logger::write("file %d (%d%%)\n", number, percent);
-        dlog::flush();
+        dlog::commit();
        }, "timings_write_file_alog.txt");
     dlog::cleanup();
     return 0;

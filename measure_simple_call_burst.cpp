@@ -37,15 +37,16 @@ int main()
     measure([&](char const* s, char c, int i, double d)
         {
             ofs << "string: " << s << " char: " << c << " int: "
-                << i << " double: " << d << std::endl;
+                << i << " double: " << d << '\n';
        }, "timings_simple_call_burst_fstream.txt");
+    ofs.close();
 
     FILE* stdio_file = std::fopen("stdio.txt", "w");
     measure([&](char const* s, char c, int i, double d)
         {
             fprintf(stdio_file, "string: %s char: %c int: %d double: %f\n",
                 s, c, i, d);
-            fflush(stdio_file);
+            //fflush(stdio_file);
        }, "timings_simple_call_burst_stdio.txt");
     std::fclose(stdio_file);
 
@@ -58,7 +59,7 @@ int main()
         {
             logger::write("string: %s char: %s int: %d double: %d\n",
                 s, c, i, d);
-            dlog::flush();
+            dlog::commit();
         }, "timings_simple_call_burst_alog.txt");
     dlog::cleanup();
 

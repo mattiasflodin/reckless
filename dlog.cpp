@@ -33,11 +33,11 @@ namespace dlog {
 #else
         input_buffer* tls_pinput_buffer; 
 #endif
-        std::size_t const INPUT_BUFFER_SIZE = 8*4096;   // static
+        std::size_t const TLS_INPUT_BUFFER_SIZE = 8*4096;   // static
 
-        std::mutex g_input_queue_mutex;
-        std::deque<flush_extent> g_input_queue;
-        std::condition_variable g_input_available_condition;
+        shared_input_queue_t g_shared_input_queue;
+        spsc_event g_shared_input_consumed_event;
+        spsc_event g_shared_input_queue_full_event;
 
         std::unique_ptr<output_buffer> g_poutput_buffer;
         std::thread g_output_thread;
@@ -58,23 +58,22 @@ void dlog::initialize(writer* pwriter, std::size_t input_buffer_size,
         input_buffer_size = g_page_size;
     if(max_output_buffer_size == 0)
         max_output_buffer_size = 1024*1024;
-    //INPUT_BUFFER_SIZE = input_buffer_size;
+    //TLS_INPUT_BUFFER_SIZE = input_buffer_size;
 
     g_poutput_buffer.reset(new output_buffer(pwriter, max_output_buffer_size));
 
     g_output_thread = move(std::thread(&output_worker));
 }
 
+// TODO dlog::crash_cleanup or panic_cleanup or similar, just dump everything
+// to disk in the event of a crash.
 void dlog::cleanup()
 {
     using namespace detail;
-    flush();
-    {
-        std::unique_lock<std::mutex> lock(g_input_queue_mutex);
-        g_input_queue.push_back({nullptr, 0});
-    }
-    g_input_available_condition.notify_one();
+    commit();
+    queue_commit_extent({nullptr, 0});
     g_output_thread.join();
+    assert(g_input_queue.empty());
     g_poutput_buffer.reset();
 }
 
@@ -356,13 +355,13 @@ dlog::detail::input_buffer::input_buffer() :
 {
     pinput_start_ = pbegin_;
     pinput_end_ = pbegin_;
-    pflush_end_ = pbegin_;
+    pcommit_end_ = pbegin_;
 }
 
 dlog::detail::input_buffer::~input_buffer()
 {
-    flush();
-    // Both flush() and wait_input_consumed should create full memory barriers,
+    commit();
+    // Both commit() and wait_input_consumed should create full memory barriers,
     // so no need for strict memory ordering in this load.
     while(pinput_start_.load(std::memory_order_relaxed) != pinput_end_)
         wait_input_consumed();
@@ -375,7 +374,7 @@ char* dlog::detail::input_buffer::allocate_buffer()
 {
     void* pbuffer = nullptr;
     // TODO proper error here. bad_alloc?
-    if(0 != posix_memalign(&pbuffer, FRAME_ALIGNMENT, INPUT_BUFFER_SIZE))
+    if(0 != posix_memalign(&pbuffer, FRAME_ALIGNMENT, TLS_INPUT_BUFFER_SIZE))
         throw std::runtime_error("cannot allocate input frame");
     *static_cast<char*>(pbuffer) = 'X';
     return static_cast<char*>(pbuffer);
@@ -397,7 +396,7 @@ char* dlog::detail::input_buffer::advance_frame_pointer(char* p, std::size_t dis
     assert(is_aligned(distance));
     //p = align(p + distance, FRAME_ALIGNMENT);
     p += distance;
-    auto remaining = INPUT_BUFFER_SIZE - (p - pbegin_);
+    auto remaining = TLS_INPUT_BUFFER_SIZE - (p - pbegin_);
     assert(remaining >= 0);
     if(remaining == 0)
         p = pbegin_;
@@ -424,7 +423,7 @@ char* dlog::detail::input_buffer::allocate_input_frame(std::size_t size)
     // comment text).
     while(true) {
         auto pinput_end = pinput_end_;
-        assert(pinput_end - pbegin_ != INPUT_BUFFER_SIZE);
+        assert(pinput_end - pbegin_ != TLS_INPUT_BUFFER_SIZE);
         assert(is_aligned(pinput_end, FRAME_ALIGNMENT));
 
         // Even if we get an "old" value for pinput_start_ here, that's OK
@@ -447,7 +446,7 @@ char* dlog::detail::input_buffer::allocate_input_frame(std::size_t size)
             // size < free instead of size <= free, and call pretend we're out
             // of space if size == free. Same situation applies in the else
             // clause below.
-            if(__builtin_expect(size < free, 1)) {
+            if(likely(size < free)) {
                 pinput_end_ = advance_frame_pointer(pinput_end, size);
                 return pinput_end;
             } else {
@@ -457,14 +456,14 @@ char* dlog::detail::input_buffer::allocate_input_frame(std::size_t size)
             }
         } else {
             // Free space is non-contiguous.
-            std::size_t free1 = INPUT_BUFFER_SIZE - (pinput_end - pbegin_);
-            if(__builtin_expect(size < free1, 1)) {
+            std::size_t free1 = TLS_INPUT_BUFFER_SIZE - (pinput_end - pbegin_);
+            if(likely(size < free1)) {
                 // There's enough room in the first segment.
                 pinput_end_ = advance_frame_pointer(pinput_end, size);
                 return pinput_end;
             } else {
                 std::size_t free2 = pinput_start - pbegin_;
-                if(__builtin_expect(size < free2, 1)) {
+                if(likely(size < free2)) {
                     // We don't have enough room for a continuous input frame
                     // in the first segment (at the end of the circular
                     // buffer), but there is enough room in the second segment
@@ -491,17 +490,6 @@ char* dlog::detail::input_buffer::allocate_input_frame(std::size_t size)
 char* dlog::detail::input_buffer::input_start() const
 {
     return pinput_start_.load(std::memory_order_relaxed);
-}
-
-void dlog::detail::input_buffer::flush()
-{
-    char* pflush_end = pinput_end_;
-    pflush_end_ = pflush_end;
-    {
-        std::unique_lock<std::mutex> lock(g_input_queue_mutex);
-        g_input_queue.push_back({this, pflush_end});
-    }
-    g_input_available_condition.notify_one();
 }
 
 char* dlog::detail::input_buffer::discard_input_frame(std::size_t size)
@@ -538,50 +526,50 @@ void dlog::detail::input_buffer::wait_input_consumed()
     // This is kind of icky, we need to lock a mutex just because the condition
     // variable requires it. There would be less overhead if we could just use
     // something like Windows event objects.
-    if(pflush_end_ == pinput_start_.load(std::memory_order_relaxed)) {
+    if(pcommit_end_ == pinput_start_.load(std::memory_order_relaxed)) {
         // We are waiting for input to be consumed because the input buffer is
         // full, but we haven't actually posted any data (i.e. we haven't
-        // called flush). In other words, the caller has written too much to
-        // the log without flushing. The best effort we can make is to flush
+        // called commit). In other words, the caller has written too much to
+        // the log without committing. The best effort we can make is to commit
         // whatever we have so far, otherwise the wait below will block
         // forever.
-        flush();
+        commit();
     }
-    //NEXT code hangs here, event probably fires before wait() is called... we
-    //can't just wait on the cv, we need to check a condition (= specific amount of memory is free)
-    //Reproducible in measure_periodic_calls
+    // FIXME we need to think about what to do here, should we signal
+    // g_shared_input_queue_full_event to force the output thread to wake up?
+    // We probably should, or we could sit here for a full second.
     input_consumed_event_.wait();
 }
 void dlog::detail::output_worker()
 {
     using namespace detail;
     while(true) {
-        flush_extent fe;
-        {
-            std::unique_lock<std::mutex> lock(g_input_queue_mutex);
-            g_input_available_condition.wait(lock, []()
-            {
-                return not g_input_queue.empty();
-            });
-            fe = g_input_queue.front();
-            g_input_queue.pop_front();
+        commit_extent ce;
+        unsigned wait_time_ms = 0;
+        while(not g_shared_input_queue.pop(ce)) {
+            g_shared_input_queue_full_event.wait(wait_time_ms);
+            wait_time_ms = (wait_time_ms == 0)? 1 : 2*wait_time_ms;
+            wait_time_ms = std::min(wait_time_ms, 1000u);
         }
-        if(not fe.pinput_buffer)
+        g_shared_input_consumed_event.signal();
+            
+        if(not ce.pinput_buffer)
             // Request to shut down thread.
             return;
 
-        char* pinput_start = fe.pinput_buffer->input_start();
-        while(pinput_start != fe.pflush_end) {
-            //std::cout << "R " <<  std::hex << (pinput_start - fe.pinput_buffer->pbegin_) << std::endl;
+        char* pinput_start = ce.pinput_buffer->input_start();
+        while(pinput_start != ce.pcommit_end) {
+            //std::cout << "R " <<  std::hex << (pinput_start - ce.pinput_buffer->pbegin_) << std::endl;
             auto pdispatch = *reinterpret_cast<dispatch_function_t**>(pinput_start);
             if(WRAPAROUND_MARKER == pdispatch) {
-                pinput_start = fe.pinput_buffer->wraparound();
+                pinput_start = ce.pinput_buffer->wraparound();
                 pdispatch = *reinterpret_cast<dispatch_function_t**>(pinput_start);
             }
             auto frame_size = (*pdispatch)(g_poutput_buffer.get(), pinput_start);
-            pinput_start = fe.pinput_buffer->discard_input_frame(frame_size);
+            pinput_start = ce.pinput_buffer->discard_input_frame(frame_size);
         }
         // TODO we *could* do something like flush on a timer instead when we're getting a lot of writes / sec.
+        // OR, we should at least keep on dumping data without flush as long as the input queue has data to give us.
         g_poutput_buffer->flush();
     }
 }
@@ -626,3 +614,19 @@ char const* dlog::formatter::next_specifier(output_buffer* pbuffer,
         append_percent(pbuffer);
     }
 }
+
+void dlog::detail::queue_commit_extent_slow_path(commit_extent const& ce)
+{
+    do {
+        g_shared_input_queue_full_event.signal();
+        g_shared_input_consumed_event.wait();
+    } while(not g_shared_input_queue.push(ce));
+}
+void dlog::commit()
+{
+    using namespace detail;
+    auto pib = get_input_buffer();
+    pib->commit();
+}
+
+

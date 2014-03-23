@@ -1,4 +1,7 @@
 //#define USE_THREAD_LOCAL
+#ifndef DLOG_DLOG_HPP
+#define DLOG_DLOG_HPP
+
 #include "spsc_event.hpp"
 
 #include <boost/lockfree/queue.hpp>
@@ -10,6 +13,10 @@
 #include <deque>
 
 #include <cstring>
+
+// FIXME need to put these in separate header
+#define likely(x)   __builtin_expect(!!(x), 1)
+#define unlikely(x) __builtin_expect(!!(x), 0)
 
 namespace dlog {
     template <class Formatter>
@@ -73,17 +80,25 @@ namespace dlog {
 
     namespace detail {
         class input_buffer;
-        struct flush_extent {
+        struct commit_extent {
             input_buffer* pinput_buffer;
-            char* pflush_end;
+            char* pcommit_end;
         };
         // 64 bytes is the common cache-line size on modern x86 CPUs, which
         // avoids false sharing between the main thread and the output thread.
         // TODO we could perhaps detect the cache-line size instead (?).
         std::size_t const FRAME_ALIGNMENT = 64u;
-        extern std::mutex g_input_queue_mutex;
-        extern std::deque<flush_extent> g_input_queue;
-        extern std::condition_variable g_input_available_condition;
+        typedef boost::lockfree::queue<commit_extent, boost::lockfree::capacity<1024>> shared_input_queue_t;
+        extern shared_input_queue_t g_shared_input_queue;
+        extern std::condition_variable g_input_full_event;
+
+        void queue_commit_extent_slow_path(commit_extent const& ce);
+        inline void queue_commit_extent(commit_extent const& ce)
+        {
+            if(unlikely(not g_shared_input_queue.push(ce)))
+                queue_commit_extent_slow_path(ce);
+        }
+
         class input_buffer {
         public:
             input_buffer();
@@ -93,7 +108,12 @@ namespace dlog {
             char* discard_input_frame(std::size_t size);
             char* wraparound();
             char* input_start() const;
-            void flush();
+            void commit()
+            {
+                auto pcommit_end = pinput_end_;
+                queue_commit_extent({this, pcommit_end});
+                pcommit_end_ = pcommit_end;
+            }
 
         private:
             static char* allocate_buffer();
@@ -108,7 +128,7 @@ namespace dlog {
         private:
             std::atomic<char*> pinput_start_; // moved forward by output thread, read by logger::write (to determine free space left)
             char* pinput_end_;                // moved forward by logger::write, never read by anyone else
-            char* pflush_end_;                // moved forward by flush(), read by wait_input_consumed (same thread so no race)
+            char* pcommit_end_;               // moved forward by commit(), read by wait_input_consumed (same thread so no race)
         };
 #ifdef USE_THREAD_LOCAL
         extern thread_local input_buffer tls_input_buffer; 
@@ -241,12 +261,13 @@ namespace dlog {
     {
     }
 
-    inline void flush()
-    {
-        using namespace detail;
-        auto pib = get_input_buffer();
-        pib->flush();
-    }
+    void commit();
+    //inline void commit()
+    //{
+    //    using namespace detail;
+    //    auto pib = get_input_buffer();
+    //    pib->commit();
+    //}
 
     bool format(output_buffer* pbuffer, char const*& pformat, char v);
     bool format(output_buffer* pbuffer, char const*& pformat, signed char v);
@@ -329,12 +350,12 @@ private:
 inline auto dlog::detail::get_input_buffer() -> input_buffer*
 {
 #ifdef USE_THREAD_LOCAL
-    if(__builtin_expect(tls_pinput_buffer != nullptr, 1))
+    if(likely(tls_pinput_buffer != nullptr))
         return tls_pinput_buffer;
     else
         return tls_pinput_buffer = &tls_input_buffer;
 #else
-    if(__builtin_expect(tls_pinput_buffer != nullptr, 1)) {
+    if(likely(tls_pinput_buffer != nullptr)) {
         return tls_pinput_buffer;
     } else {
         auto p = new input_buffer();
@@ -349,3 +370,4 @@ inline void dlog::output_buffer::commit(std::size_t size)
     pcommit_end_ += size;
 }
 
+#endif    // DLOG_DLOG_HPP
