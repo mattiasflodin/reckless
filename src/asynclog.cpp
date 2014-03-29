@@ -21,13 +21,15 @@
 #include <sys/stat.h>
 #include <sys/mman.h>
 
+namespace {
+    int const g_page_size = static_cast<int>(sysconf(_SC_PAGESIZE));
+}
+
 namespace dlog {
     namespace detail {
         void output_worker();
 
-        int const g_page_size = static_cast<int>(sysconf(_SC_PAGESIZE));
-
-#ifdef USE_THREAD_LOCAL
+#ifdef ASYNCLOG_USE_CXX11_THREAD_LOCAL
         thread_local input_buffer tls_input_buffer; 
         thread_local input_buffer* tls_pinput_buffer; 
 #else
@@ -49,16 +51,12 @@ void dlog::initialize(writer* pwriter)
     initialize(pwriter, 0, 0);
 }
 
-void dlog::initialize(writer* pwriter, std::size_t input_buffer_size,
-        std::size_t max_output_buffer_size)
+void dlog::initialize(writer* pwriter, std::size_t max_output_buffer_size)
 {
     using namespace detail;
 
-    if(input_buffer_size == 0)
-        input_buffer_size = g_page_size;
     if(max_output_buffer_size == 0)
         max_output_buffer_size = 1024*1024;
-    //TLS_INPUT_BUFFER_SIZE = input_buffer_size;
 
     g_poutput_buffer.reset(new output_buffer(pwriter, max_output_buffer_size));
 
