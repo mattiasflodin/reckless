@@ -304,25 +304,6 @@ void dlog::detail::input_buffer::signal_input_consumed()
     input_consumed_event_.signal();
 }
 
-void dlog::detail::input_buffer::wait_input_consumed()
-{
-    // This is kind of icky, we need to lock a mutex just because the condition
-    // variable requires it. There would be less overhead if we could just use
-    // something like Windows event objects.
-    if(pcommit_end_ == pinput_start_.load(std::memory_order_relaxed)) {
-        // We are waiting for input to be consumed because the input buffer is
-        // full, but we haven't actually posted any data (i.e. we haven't
-        // called commit). In other words, the caller has written too much to
-        // the log without committing. The best effort we can make is to commit
-        // whatever we have so far, otherwise the wait below will block
-        // forever.
-        commit();
-    }
-    // FIXME we need to think about what to do here, should we signal
-    // g_shared_input_queue_full_event to force the output thread to wake up?
-    // We probably should, or we could sit here for a full second.
-    input_consumed_event_.wait();
-}
 void dlog::detail::output_worker()
 {
 }

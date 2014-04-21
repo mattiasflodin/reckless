@@ -1,12 +1,14 @@
 #ifndef ASYNCLOG_DETAIL_INPUT_HPP
 #define ASYNCLOG_DETAIL_INPUT_HPP
 
+#include "log_base.hpp"
+
 namespace asynclog {
 namespace detail {
 
 class thread_input_buffer {
 public:
-    thread_input_buffer();
+    thread_input_buffer(detail::log_base* plog);
     ~thread_input_buffer();
     char* allocate_input_frame(std::size_t size);
     // returns pointer to following input frame
@@ -24,6 +26,7 @@ private:
     void wait_input_consumed();
     void signal_input_consumed();
 
+    log_base* plog_;                    // Owner log instance
     spsc_event input_consumed_event_;
 
     char* const pbegin_;              // fixed value

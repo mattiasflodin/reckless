@@ -4,7 +4,6 @@
 #include "asynclog/detail/spsc_event.hpp"
 #include "asynclog/detail/input.hpp"
 #include "asynclog/detail/frame.hpp"
-#include "asynclog/detail/thread_object.hpp"
 #include "asynclog/detail/branch_hints.hpp"
 #include "asynclog/detail/utility.hpp"
 
@@ -87,7 +86,7 @@ private:
 };
 
 template <class Formatter>
-class log {
+class log : private detail::log_base {
 public:
     // TODO is it right to just do g_page_size/sizeof(commit_extent) if we want
     // the buffer to use up one page? There's likely more overhead in the
@@ -98,6 +97,7 @@ public:
             std::size_t shared_input_queue_size = detail::get_page_size()/sizeof(detail::commit_extent),
             std::size_t thread_input_buffer_size = detail::get_page_size()) :
         input_frame_alignment_mask_(input_frame_alignment-1),
+        pthread_input_buffer_(this),
         shared_input_queue_(shared_input_queue_size),
         output_buffer_(pwriter, output_buffer_max_capacity),
         output_thread_(std::mem_fn(&log::output_worker), this)
@@ -131,14 +131,6 @@ public:
         auto frame_size_aligned = (frame_size + mask) & ~mask;
         char* pframe = pib->allocate_input_frame(frame_size_aligned);
         frame::store_args(pframe, std::forward<Args>(args)...);
-    }
-
-    void commit()
-    {
-        using namespace detail;
-        thread_input_buffer* pib = pthread_input_buffer_.get();
-        auto pcommit_end = pib->input_end();
-        queue_commit_extent({pib, pcommit_end});
     }
 
 private:
@@ -180,23 +172,8 @@ private:
         }
     }
 
-    void queue_commit_extent(detail::commit_extent const& ce)
-    {
-        using namespace detail;
-        if(unlikely(not shared_input_queue_.push(ce)))
-            queue_commit_extent_slow_path(ce);
-    }
-    void queue_commit_extent_slow_path(detail::commit_extent const& ce)
-    {
-        do {
-            shared_input_queue_full_event_.signal();
-            shared_input_consumed_event_.wait();
-        } while(not shared_input_queue_.push(ce));
-    }
-
     spsc_event shared_input_consumed_event_;
     std::size_t const input_frame_alignment_mask_;
-    detail::thread_object<detail::thread_input_buffer> pthread_input_buffer_;
     shared_input_queue_t shared_input_queue_;
     spsc_event shared_input_queue_full_event_;
     output_buffer output_buffer_;
