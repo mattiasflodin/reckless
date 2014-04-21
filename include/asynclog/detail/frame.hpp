@@ -1,7 +1,12 @@
 #ifndef ASYNCLOG_DETAIL_FRAME_HPP
 #define ASYNCLOG_DETAIL_FRAME_HPP
 
+#include "utility.hpp"
+
 namespace asynclog {
+
+class output_buffer;
+
 namespace detail {
 
 template <std::size_t Offset, typename Type>
@@ -11,13 +16,14 @@ struct bound_argument {
 };
 
 typedef std::size_t dispatch_function_t(output_buffer*, char*);
-static_assert(alignof(dispatch_function_t*) <= ASYNCLOG_FRAME_ALIGNMENT,
-        "ASYNCLOG_FRAME_ALIGNMENT must at least match that of a function pointer");
-// We need the requirement below to ensure that, after alignment, there
-// will either be 0 free bytes available in the circular buffer, or
-// enough to fit a dispatch pointer. This simplifies the code a bit.
-static_assert(sizeof(dispatch_function_t*) <= FRAME_ALIGNMENT,
-        "ASYNCLOG_FRAME_ALIGNMENT must at least match the size of a function pointer");
+// TODO these checks need to be done at runtime now
+//static_assert(alignof(dispatch_function_t*) <= ASYNCLOG_FRAME_ALIGNMENT,
+//        "ASYNCLOG_FRAME_ALIGNMENT must at least match that of a function pointer");
+//// We need the requirement below to ensure that, after alignment, there
+//// will either be 0 free bytes available in the circular buffer, or
+//// enough to fit a dispatch pointer. This simplifies the code a bit.
+//static_assert(sizeof(dispatch_function_t*) <= FRAME_ALIGNMENT,
+//        "ASYNCLOG_FRAME_ALIGNMENT must at least match the size of a function pointer");
 dispatch_function_t* const WRAPAROUND_MARKER = reinterpret_cast<
     dispatch_function_t*>(0);
 

@@ -9,7 +9,7 @@ struct typelist {
 };
 
 template <typename T>
-struct make_pointer_from_array;
+struct make_pointer_from_array
 {
     using type = T;
 };
@@ -45,6 +45,8 @@ int destroy(T* p)
     p->~T();
     return 0;
 }
+
+std::size_t get_page_size();
 
 }
 }

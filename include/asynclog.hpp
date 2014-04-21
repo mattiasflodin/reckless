@@ -1,10 +1,32 @@
 #ifndef ASYNCLOG_ASYNCLOG_HPP
 #define ASYNCLOG_ASYNCLOG_HPP
 
-#include "spsc_event.hpp"
+#include "asynclog/detail/spsc_event.hpp"
+#include "asynclog/detail/input.hpp"
+#include "asynclog/detail/frame.hpp"
+#include "asynclog/detail/thread_object.hpp"
+#include "asynclog/detail/branch_hints.hpp"
+#include "asynclog/detail/utility.hpp"
+
 #include <boost/lockfree/queue.hpp>
 
+#include <thread>
+#include <functional>
+
 namespace asynclog {
+
+// TODO this is a bit vague, rename to e.g. log_target or someting?
+class writer {
+public:
+    enum Result
+    {
+        SUCCESS,
+        ERROR_TRY_LATER,
+        ERROR_GIVE_UP
+    };
+    virtual ~writer() = 0;
+    virtual Result write(void const* pbuffer, std::size_t count) = 0;
+};
 
 class output_buffer {
 public:
@@ -27,6 +49,9 @@ private:
 template <typename T>
 char const* invoke_format(output_buffer* pbuffer, char const* pformat, T&& v)
 {
+    typedef decltype(format(pbuffer, pformat, std::forward<T>(v))) return_type;
+    static_assert(std::is_convertible<return_type, char const*>::value,
+        "return type of format<T> must be char const*");
     return format(pbuffer, pformat, std::forward<T>(v));
 }
 
@@ -45,13 +70,13 @@ public:
         // TODO can we invoke free format() using argument-dependent lookup
         // without causing infinite recursion on this member function, without
         // this intermediary kludge?
-        char const* next_pformat = invoke_format(pbuffer, pformat,
+        char const* pnext_format = invoke_format(pbuffer, pformat,
                 std::forward<T>(value));
-        if(new_pformat)
-            pformat = next_pformat;
+        if(pnext_format)
+            pformat = pnext_format;
         else
             append_percent(pbuffer);
-        return formatter::format(pbuffer, pformat,
+        return default_formatter::format(pbuffer, pformat,
                 std::forward<Args>(args)...);
     }
 
@@ -61,42 +86,124 @@ private:
             char const* pformat);
 };
 
-template <class Formatter, std::size_t SharedInputQueueSize = ASYNCLOG_ARCH_PAGE_SIZE/sizeof(detail::commit_extent), std::size_t ThreadInputBufferSize = ASYNCLOG_ARCH_PAGE_SIZE, InputFrameAlignment, >
-class channel {
+template <class Formatter>
+class log {
 public:
-    template <typename... Args>
-    static void write(Args&&... args)
+    // TODO is it right to just do g_page_size/sizeof(commit_extent) if we want
+    // the buffer to use up one page? There's likely more overhead in the
+    // buffer.
+    log(writer* pwriter,
+            std::size_t input_frame_alignment,
+            std::size_t output_buffer_max_capacity = detail::get_page_size(),
+            std::size_t shared_input_queue_size = detail::get_page_size()/sizeof(detail::commit_extent),
+            std::size_t thread_input_buffer_size = detail::get_page_size()) :
+        input_frame_alignment_mask_(input_frame_alignment-1),
+        shared_input_queue_(shared_input_queue_size),
+        output_buffer_(pwriter, output_buffer_max_capacity),
+        output_thread_(std::mem_fn(&log::output_worker), this)
     {
-        using namespace dlog::detail;
+        // FIXME need an assert to make sure input_frame_alignment is power of
+        // two.
+    }
+
+    ~log()
+    {
+        using namespace detail;
+        commit();
+        queue_commit_extent({nullptr, 0});
+        output_thread_.join();
+        assert(shared_input_queue_.empty());
+    }
+
+    template <typename... Args>
+    void write(Args&&... args)
+    {
+        using namespace detail;
         using argument_binder = bind_args<Args...>;
         // fails in gcc 4.7.3
         //using bound_args = typename argument_binder::type;
         using bound_args = typename bind_args<Args...>::type;
         std::size_t const frame_size = argument_binder::frame_size;
-        std::size_t const frame_size_aligned = (frame_size+FRAME_ALIGNMENT-1)/FRAME_ALIGNMENT*FRAME_ALIGNMENT;
-        using frame = detail::frame<Formatter, frame_size_aligned, bound_args>;
+        using frame = detail::frame<Formatter, frame_size, bound_args>;
 
-        auto pib = get_thread_input_buffer();
+        auto pib = pthread_input_buffer_.get();
+        auto mask = input_frame_alignment_mask_;
+        auto frame_size_aligned = (frame_size + mask) & ~mask;
         char* pframe = pib->allocate_input_frame(frame_size_aligned);
         frame::store_args(pframe, std::forward<Args>(args)...);
     }
+
+    void commit()
+    {
+        using namespace detail;
+        thread_input_buffer* pib = pthread_input_buffer_.get();
+        auto pcommit_end = pib->input_end();
+        queue_commit_extent({pib, pcommit_end});
+    }
+
+private:
+    typedef boost::lockfree::queue<detail::commit_extent, boost::lockfree::fixed_sized<true>> shared_input_queue_t;
+
+    void output_worker()
+    {
+        using namespace detail;
+        while(true) {
+            commit_extent ce;
+            unsigned wait_time_ms = 0;
+            while(not shared_input_queue_.pop(ce)) {
+                shared_input_queue_full_event_.wait(wait_time_ms);
+                wait_time_ms = (wait_time_ms == 0)? 1 : 2*wait_time_ms;
+                wait_time_ms = std::min(wait_time_ms, 1000u);
+            }
+            shared_input_consumed_event_.signal();
+                
+            if(not ce.pinput_buffer)
+                // Request to shut down thread.
+                return;
+
+            char* pinput_start = ce.pinput_buffer->input_start();
+            while(pinput_start != ce.pcommit_end) {
+                auto pdispatch = *reinterpret_cast<dispatch_function_t**>(pinput_start);
+                if(WRAPAROUND_MARKER == pdispatch) {
+                    pinput_start = ce.pinput_buffer->wraparound();
+                    pdispatch = *reinterpret_cast<dispatch_function_t**>(pinput_start);
+                }
+                auto frame_size = (*pdispatch)(&output_buffer_, pinput_start);
+                auto mask = input_frame_alignment_mask_;
+                auto frame_size_aligned = (frame_size + mask) & ~mask;
+                pinput_start = ce.pinput_buffer->discard_input_frame(
+                        frame_size_aligned);
+            }
+            // TODO we *could* do something like flush on a timer instead when we're getting a lot of writes / sec.
+            // OR, we should at least keep on dumping data without flush as long as the input queue has data to give us.
+            output_buffer_.flush();
+        }
+    }
+
+    void queue_commit_extent(detail::commit_extent const& ce)
+    {
+        using namespace detail;
+        if(unlikely(not shared_input_queue_.push(ce)))
+            queue_commit_extent_slow_path(ce);
+    }
+    void queue_commit_extent_slow_path(detail::commit_extent const& ce)
+    {
+        do {
+            shared_input_queue_full_event_.signal();
+            shared_input_consumed_event_.wait();
+        } while(not shared_input_queue_.push(ce));
+    }
+
+    spsc_event shared_input_consumed_event_;
+    std::size_t const input_frame_alignment_mask_;
+    detail::thread_object<detail::thread_input_buffer> pthread_input_buffer_;
+    shared_input_queue_t shared_input_queue_;
+    spsc_event shared_input_queue_full_event_;
+    output_buffer output_buffer_;
+    std::thread output_thread_;
 };
 
 // TODO synchronous_channel for wrapping a channel and calling the formatter immediately
-
-typedef logger<default_formatter> default_channel;
-
-class writer {
-public:
-    enum Result
-    {
-        SUCCESS,
-        ERROR_TRY_LATER,
-        ERROR_GIVE_UP
-    };
-    virtual ~writer() = 0;
-    virtual Result write(void const* pbuffer, std::size_t count) = 0;
-};
 
 class file_writer : public writer {
 public:
@@ -106,34 +213,6 @@ public:
 private:
     int fd_;
 };
-
-void initialize(writer* pwriter);
-void initialize(writer* pwriter, std::size_t max_output_buffer_size);
-void cleanup();
-
-//class initializer {
-//public:
-//    initializer(writer* pwriter)
-//    {
-//        initialize(pwriter);
-//    }
-//    initializer(writer* pwriter, std::size_t max_capacity)
-//    {
-//        initialize(pwriter, max_capacity);
-//    }
-//    ~initializer()
-//    {
-//        cleanup();
-//    }
-//};
-
-template <typename... Args>
-void write(char const* fmt, Args&&... args)
-{
-    default_channel::write(fmt, std::forward(args)...);
-}
-
-void commit();
 
 char const* format(output_buffer* pbuffer, char const* pformat, char v);
 char const* format(output_buffer* pbuffer, char const* pformat, signed char v);

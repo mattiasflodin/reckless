@@ -1,4 +1,4 @@
-#include "dlog.hpp"
+#include "asynclog.hpp"
 #include <iostream>
 #include <sstream>
 #include <cstring>
@@ -29,10 +29,10 @@ private:
 };
 
 
-bool format(dlog::output_buffer* pbuffer, char const*& pformat, Object const& v)
+char const* format(asynclog::output_buffer* pbuffer, char const* pformat, Object const& v)
 {
     if(*pformat != 's')
-        return false;
+        return nullptr;
     ++pformat;
     char const* fmt = "d";
     return format(pbuffer, fmt, v.get());
@@ -40,13 +40,11 @@ bool format(dlog::output_buffer* pbuffer, char const*& pformat, Object const& v)
 
 Object obj(3);
 
-typedef dlog::logger<dlog::formatter> logger;
 
 int main()
 {
-    dlog::file_writer writer("dlog.txt");
-    dlog::initialize(&writer);
-    logger::write("three numbers: %s %d %d %s\n", 'A', 66, 3.0, obj);
-    dlog::cleanup();
+    asynclog::file_writer writer("dlog.txt");
+    asynclog::log<asynclog::default_formatter> log(&writer, 64);
+    log.write("three numbers: %s %d %d %s\n", 'A', 66, 3.0, obj);
     return 0;
 }
