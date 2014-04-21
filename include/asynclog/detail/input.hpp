@@ -1,10 +1,10 @@
 #ifndef ASYNCLOG_DETAIL_INPUT_HPP
 #define ASYNCLOG_DETAIL_INPUT_HPP
 
-#include "log_base.hpp"
-
 namespace asynclog {
 namespace detail {
+
+class log_base;
 
 class thread_input_buffer {
 public:
