@@ -56,6 +56,7 @@ public:
     // TODO is it right to just do g_page_size/sizeof(commit_extent) if we want
     // the buffer to use up one page? There's likely more overhead in the
     // buffer.
+    // TODO all these calls to get_page_size are redundant, can it be cached somehow?
     log(writer* pwriter,
             std::size_t input_frame_alignment,
             std::size_t output_buffer_max_capacity = detail::get_page_size(),
@@ -70,6 +71,7 @@ public:
         // FIXME need an assert to make sure input_frame_alignment is power of
         // two.
         assert(detail::is_power_of_two(input_frame_alignment));
+        // FIXME enforce minimum alignment requirement to size / alignment of pointer
     }
 
     ~log()

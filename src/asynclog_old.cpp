@@ -248,67 +248,6 @@ bool dlog::format(output_buffer* pbuffer, char const*& pformat, std::string cons
 }
 
 
-// Moves an input-buffer pointer forward by the given distance while
-// maintaining the invariant that:
-//
-// * p is aligned by FRAME_ALIGNMENT
-// * p never points at the end of the buffer; it always wraps around to the
-//   beginning of the circular buffer.
-//
-// The distance must never be so great that the pointer moves *past* the end of
-// the buffer. To do so would be an error in our context, since no input frame
-// is allowed to be discontinuous.
-char* dlog::detail::input_buffer::advance_frame_pointer(char* p, std::size_t distance)
-{
-    assert(is_aligned(distance));
-    //p = align(p + distance, FRAME_ALIGNMENT);
-    p += distance;
-    auto remaining = TLS_INPUT_BUFFER_SIZE - (p - pbegin_);
-    assert(remaining >= 0);
-    if(remaining == 0)
-        p = pbegin_;
-    return p;
-}
-
-char* dlog::detail::input_buffer::input_start() const
-{
-    return pinput_start_.load(std::memory_order_relaxed);
-}
-
-char* dlog::detail::input_buffer::discard_input_frame(std::size_t size)
-{
-    // We can use relaxed memory ordering everywhere here because there is
-    // nothing being written of interest that the pointer update makes visible;
-    // all it does is *discard* data, not provide any new data (besides,
-    // signaling the event is likely to create a full memory barrier anyway).
-    auto p = pinput_start_.load(std::memory_order_relaxed);
-    p = advance_frame_pointer(p, size);
-    pinput_start_.store(p, std::memory_order_relaxed);
-    signal_input_consumed();
-    return p;
-}
-
-char* dlog::detail::input_buffer::wraparound()
-{
-#ifndef NDEBUG
-    auto p = pinput_start_.load(std::memory_order_relaxed);
-    auto marker = *reinterpret_cast<dispatch_function_t**>(p);
-    assert(WRAPAROUND_MARKER == marker);
-#endif
-    pinput_start_.store(pbegin_, std::memory_order_relaxed);
-    return pbegin_;
-}
-
-void dlog::detail::input_buffer::signal_input_consumed()
-{
-    input_consumed_event_.signal();
-}
-
-void dlog::detail::output_worker()
-{
-}
-
-
 void dlog::formatter::append_percent(output_buffer* pbuffer)
 {
     auto p = pbuffer->reserve(1u);

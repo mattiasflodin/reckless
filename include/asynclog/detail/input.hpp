@@ -26,9 +26,9 @@ private:
     void wait_input_consumed();
     void signal_input_consumed();
 
-    log_base* plog_;                    // Owner log instance
+    log_base* plog_;                  // Owner log instance
     spsc_event input_consumed_event_;
-    std::size_t size_;
+    std::size_t size_;                // number of chars in buffer
 
     char* const pbegin_;              // fixed value
     std::atomic<char*> pinput_start_; // moved forward by output thread, read by logger::write (to determine free space left)

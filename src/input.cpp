@@ -1,13 +1,14 @@
 #include "asynclog.hpp"
+#include "asynclog/detail/utility.hpp"
 
 asynclog::detail::thread_input_buffer::thread_input_buffer(detail::log_base* plog, std::size_t size, std::size_t frame_alignment) :
     plog_(plog),
     size_(size),
-    pbegin_(allocate_buffer(size, frame_alignment))
+    pbegin_(allocate_buffer(size, frame_alignment)),
+    pinput_start_(pbegin_),
+    pinput_end_(pbegin_),
+    pcommit_end_(pbegin_)
 {
-    pinput_start_ = pbegin_;
-    pinput_end_ = pbegin_;
-    pcommit_end_ = pbegin_;
 }
 
 asynclog::detail::thread_input_buffer::~thread_input_buffer()
@@ -21,6 +22,35 @@ asynclog::detail::thread_input_buffer::~thread_input_buffer()
     free(pbegin_);
 }
 
+char* asynclog::detail::thread_input_buffer::discard_input_frame(std::size_t size)
+{
+    // We can use relaxed memory ordering everywhere here because there is
+    // nothing being written of interest that the pointer update makes visible;
+    // all it does is *discard* data, not provide any new data (besides,
+    // signaling the event is likely to create a full memory barrier anyway).
+    auto p = pinput_start_.load(std::memory_order_relaxed);
+    p = advance_frame_pointer(p, size);
+    pinput_start_.store(p, std::memory_order_relaxed);
+    signal_input_consumed();
+    return p;
+}
+
+char* asynclog::detail::thread_input_buffer::wraparound()
+{
+#ifndef NDEBUG
+    auto p = pinput_start_.load(std::memory_order_relaxed);
+    auto marker = *reinterpret_cast<dispatch_function_t**>(p);
+    assert(WRAPAROUND_MARKER == marker);
+#endif
+    pinput_start_.store(pbegin_, std::memory_order_relaxed);
+    return pbegin_;
+}
+
+char* asynclog::detail::thread_input_buffer::input_start() const
+{
+    return pinput_start_.load(std::memory_order_relaxed);
+}
+
 // Helper for allocating aligned ring buffer in ctor.
 char* asynclog::detail::thread_input_buffer::allocate_buffer(std::size_t size, std::size_t alignment)
 {
@@ -28,8 +58,30 @@ char* asynclog::detail::thread_input_buffer::allocate_buffer(std::size_t size, s
     // TODO proper error here. bad_alloc?
     if(0 != posix_memalign(&pbuffer, alignment, size))
         throw std::runtime_error("cannot allocate input frame");
-    *static_cast<char*>(pbuffer) = 'X';
     return static_cast<char*>(pbuffer);
+}
+
+// Moves an input-buffer pointer forward by the given distance while
+// maintaining the invariant that:
+//
+// * p is aligned by FRAME_ALIGNMENT
+// * p never points at the end of the buffer; it always wraps around to the
+//   beginning of the circular buffer.
+//
+// The distance must never be so great that the pointer moves *past* the end of
+// the buffer. To do so would be an error in our context, since no input frame
+// is allowed to be discontinuous.
+char* asynclog::detail::thread_input_buffer::advance_frame_pointer(char* p, std::size_t distance)
+{
+    // FIXME this check should preferably stay here
+    //assert(is_aligned(distance));
+    //p = align(p + distance, FRAME_ALIGNMENT);
+    p += distance;
+    auto remaining = size_ - (p - pbegin_);
+    assert(remaining >= 0);
+    if(remaining == 0)
+        p = pbegin_;
+    return p;
 }
 
 void asynclog::detail::thread_input_buffer::wait_input_consumed()
@@ -50,6 +102,11 @@ void asynclog::detail::thread_input_buffer::wait_input_consumed()
     // g_shared_input_queue_full_event to force the output thread to wake up?
     // We probably should, or we could sit here for a full second.
     input_consumed_event_.wait();
+}
+
+void asynclog::detail::thread_input_buffer::signal_input_consumed()
+{
+    input_consumed_event_.signal();
 }
 
 char* asynclog::detail::thread_input_buffer::allocate_input_frame(std::size_t size)
@@ -73,7 +130,7 @@ char* asynclog::detail::thread_input_buffer::allocate_input_frame(std::size_t si
     while(true) {
         auto pinput_end = pinput_end_;
         // FIXME these asserts should / can be enabled again?
-        //assert(pinput_end - pbegin_ != TLS_INPUT_BUFFER_SIZE);
+        assert(pinput_end - pbegin_ < size_);
         //assert(is_aligned(pinput_end, FRAME_ALIGNMENT));
 
         // Even if we get an "old" value for pinput_start_ here, that's OK

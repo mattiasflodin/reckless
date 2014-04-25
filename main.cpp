@@ -45,6 +45,6 @@ int main()
 {
     asynclog::file_writer writer("dlog.txt");
     asynclog::log<asynclog::default_formatter> log(&writer, 64);
-    log.write("three numbers: %s %d %d %s\n", 'A', 66, 3.0, obj);
+    log.write("three numbers: %s %d %d %s\n\n", 'A', 66, 3.0, obj);
     return 0;
 }
