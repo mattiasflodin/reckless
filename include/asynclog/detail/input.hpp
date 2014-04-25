@@ -14,7 +14,10 @@ public:
     // returns pointer to following input frame
     char* discard_input_frame(std::size_t size);
     char* wraparound();
-    char* input_start() const;
+    char* input_start() const
+    {
+        return pinput_start_.load(std::memory_order_relaxed);
+    }
     char* input_end() const
     {
         return pinput_end_;

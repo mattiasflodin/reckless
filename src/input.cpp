@@ -46,11 +46,6 @@ char* asynclog::detail::thread_input_buffer::wraparound()
     return pbegin_;
 }
 
-char* asynclog::detail::thread_input_buffer::input_start() const
-{
-    return pinput_start_.load(std::memory_order_relaxed);
-}
-
 // Helper for allocating aligned ring buffer in ctor.
 char* asynclog::detail::thread_input_buffer::allocate_buffer(std::size_t size, std::size_t alignment)
 {

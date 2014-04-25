@@ -33,9 +33,9 @@ char const* format(asynclog::output_buffer* pbuffer, char const* pformat, Object
 {
     if(*pformat != 's')
         return nullptr;
-    ++pformat;
     char const* fmt = "d";
-    return format(pbuffer, fmt, v.get());
+    format(pbuffer, fmt, v.get());
+    return pformat+1;
 }
 
 Object obj(3);
@@ -44,7 +44,7 @@ Object obj(3);
 int main()
 {
     asynclog::file_writer writer("dlog.txt");
-    asynclog::log<asynclog::default_formatter> log(&writer, 64);
-    log.write("three numbers: %s %d %d %s\n\n", 'A', 66, 3.0, obj);
+    asynclog::log<> log(&writer, 64);
+    log.write("three numbers: %s %d %d %s\n", 'A', 66, 3.0, obj);
     return 0;
 }

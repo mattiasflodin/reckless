@@ -18,7 +18,7 @@ namespace performance {
         typedef std::uint64_t duration;
 
         timestamp start() const;
-        timestamp end() const;
+        timestamp stop() const;
 
         static void bind_cpu(int cpu);
         static void unbind_cpu();
@@ -38,9 +38,9 @@ namespace performance {
         {
             return ClockSource::start();
         }
-        void end(timestamp start_timestamp)
+        void stop(timestamp start_timestamp)
         {
-            sample d = static_cast<sample>(ClockSource::end() - start_timestamp);
+            sample d = static_cast<sample>(ClockSource::stop() - start_timestamp);
             auto i = _next_sample_position;
             _samples[i] = d;
             _next_sample_position = (i + 1) % LogSize;
@@ -89,7 +89,7 @@ inline auto performance::rdtscp_cpuid_clock::start() const -> timestamp
     return (t_high << 32) | static_cast<std::uint32_t>(t_low);
 }
 
-inline auto performance::rdtscp_cpuid_clock::end() const -> timestamp
+inline auto performance::rdtscp_cpuid_clock::stop() const -> timestamp
 {
     std::uint64_t t_high;
     std::uint64_t t_low;

@@ -67,7 +67,6 @@ namespace {
             char* p = pbuffer->reserve(1);
             *p = static_cast<char>(v);
             pbuffer->commit(1);
-            pformat += 1;
             return pformat + 1;
         } else {
             return generic_format_int(pbuffer, pformat, static_cast<int>(v));

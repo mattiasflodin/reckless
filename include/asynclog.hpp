@@ -50,7 +50,7 @@ private:
             char const* pformat);
 };
 
-template <class Formatter>
+template <class Formatter=default_formatter>
 class log : private detail::log_base {
 public:
     // TODO is it right to just do g_page_size/sizeof(commit_extent) if we want
@@ -58,7 +58,7 @@ public:
     // buffer.
     // TODO all these calls to get_page_size are redundant, can it be cached somehow?
     log(writer* pwriter,
-            std::size_t input_frame_alignment,
+            std::size_t input_frame_alignment = detail::get_cache_line_size(),
             std::size_t output_buffer_max_capacity = detail::get_page_size(),
             std::size_t shared_input_queue_size = detail::get_page_size()/sizeof(detail::commit_extent),
             std::size_t thread_input_buffer_size = detail::get_page_size()) :
@@ -68,14 +68,13 @@ public:
                  shared_input_queue_size,
                  thread_input_buffer_size)
     {
-        // FIXME need an assert to make sure input_frame_alignment is power of
-        // two.
         assert(detail::is_power_of_two(input_frame_alignment));
-        // FIXME enforce minimum alignment requirement to size / alignment of pointer
-    }
-
-    ~log()
-    {
+        // input_frame_alignment must at least match that of a function pointer
+        assert(input_frame_alignment >= sizeof(detail::dispatch_function_t*));
+        // We need the requirement below to ensure that, after alignment, there
+        // will either be 0 free bytes available in the input buffer, or
+        // enough to fit a function pointer. This simplifies the code a bit.
+        assert(input_frame_alignment >= alignof(detail::dispatch_function_t*));
     }
 
     template <typename... Args>
@@ -94,6 +93,12 @@ public:
         auto frame_size_aligned = (frame_size + mask) & ~mask;
         char* pframe = pib->allocate_input_frame(frame_size_aligned);
         frame::store_args(pframe, std::forward<Args>(args)...);
+    }
+
+
+    void commit()
+    {
+        log_base::commit();
     }
 };
 

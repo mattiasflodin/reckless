@@ -61,7 +61,7 @@ struct bind_args_helper<Accumulator, Offset> {
 };
 template <class... Accumulator, std::size_t Offset, class Arg, class... RemainingArgs>
 struct bind_args_helper<typelist<Accumulator...>, Offset, Arg, RemainingArgs...> {
-    using Value = typename std::remove_reference<typename make_pointer_from_array<Arg>::type>::type;
+    using Value = typename std::decay<Arg>::type;
     static std::size_t const my_offset = (Offset + alignof(Value)-1)/alignof(Value)*alignof(Value);
     using next = bind_args_helper<
         typelist<Accumulator..., bound_argument<my_offset, Value>>,
