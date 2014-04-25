@@ -16,9 +16,13 @@ namespace detail {
 class log_base {
 public:
     log_base(writer* pwriter, 
+            std::size_t input_frame_alignment,
             std::size_t output_buffer_max_capacity,
-            std::size_t shared_input_queue_size) :
+            std::size_t shared_input_queue_size,
+            std::size_t thread_input_buffer_size) :
         shared_input_queue_(shared_input_queue_size),
+        input_frame_alignment_mask_(input_frame_alignment-1),
+        pthread_input_buffer_(this, thread_input_buffer_size, input_frame_alignment),
         output_buffer_(pwriter, output_buffer_max_capacity),
         output_thread_(std::mem_fn(&log_base::output_worker), this)
     {
@@ -95,7 +99,7 @@ protected:
 
     typedef boost::lockfree::queue<detail::commit_extent, boost::lockfree::fixed_sized<true>> shared_input_queue_t;
 
-    detail::thread_object<detail::thread_input_buffer> pthread_input_buffer_;
+    detail::thread_object<detail::thread_input_buffer, log_base*, std::size_t, std::size_t> pthread_input_buffer_;
     shared_input_queue_t shared_input_queue_;
     spsc_event shared_input_queue_full_event_;
     spsc_event shared_input_consumed_event_;

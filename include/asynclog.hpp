@@ -61,10 +61,11 @@ public:
             std::size_t output_buffer_max_capacity = detail::get_page_size(),
             std::size_t shared_input_queue_size = detail::get_page_size()/sizeof(detail::commit_extent),
             std::size_t thread_input_buffer_size = detail::get_page_size()) :
-        log_base(shared_input_queue_size),
-        input_frame_alignment_mask_(input_frame_alignment-1),
-        pthread_input_buffer_(this),
-        output_buffer_(pwriter, output_buffer_max_capacity),
+        log_base(pwriter,
+                 input_frame_alignment,
+                 output_buffer_max_capacity,
+                 shared_input_queue_size,
+                 thread_input_buffer_size)
     {
         // FIXME need an assert to make sure input_frame_alignment is power of
         // two.

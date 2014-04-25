@@ -6,20 +6,45 @@
 #include <functional>
 #include <cassert>
 #include <new>
+#include <tuple>
 
 namespace asynclog {
 namespace detail {
+
+template <std::size_t... Seq>
+struct index_sequence
+{
+};
+
+template <std::size_t Pos, std::size_t N, std::size_t... Seq>
+struct make_index_sequence_helper
+{
+    typedef typename make_index_sequence_helper<Pos+1, N, Seq..., Pos>::type type;
+};
+
+
+template <std::size_t N, std::size_t... Seq>
+struct make_index_sequence_helper<N, N, Seq...>
+{
+    typedef index_sequence<Seq...> type;
+};
+
+template <std::size_t N>
+struct make_index_sequence
+{
+    typedef typename make_index_sequence_helper<0, N>::type type;
+};
 
 // TODO take an allocator argument here, somehow. The tricky part is that
 // pthread_key_create takes a destroy function that doesn't have any additional
 // context argument. All we get is the key value, so the allocator instance
 // isn't available when we wish to destroy the contained object.
-template <typename T>
+template <typename T, class... Args>
 class thread_object {
+private:
 public:
-    template <typename... Args>
-    thread_object(Args&&... args) :
-        create_(std::bind(&thread_object::create<Args...>, args...))
+    thread_object(Args const&... args) :
+        args_(args...)
     {
         if(0 != pthread_key_create(&key_, &destroy))
             throw std::bad_alloc();
@@ -37,10 +62,11 @@ public:
     T* get() const
     {
         T* p = static_cast<T*>(pthread_getspecific(key_));
-        if(likely(p != nullptr))
+        if(likely(p != nullptr)) {
             return p;
-        else
+        } else {
             return create_and_get();
+        }
     }
 
     T* operator->() const
@@ -51,16 +77,17 @@ public:
 private:
     T* create_and_get() const
     {
-        T* p = create_();
+        typename make_index_sequence<sizeof...(Args)>::type indexes;
+        T* p = create(indexes);
         int result = pthread_setspecific(key_, p);
         assert(result == 0);
         return p;
     }
 
-    template <typename... Args>
-    static T* create(Args&&... args)
+    template <std::size_t... Indexes>
+    T* create(index_sequence<Indexes...>) const
     {
-        return new T(std::forward(args)...);
+        new T(std::get<Indexes>(args_)...);
     }
 
     static void destroy(void* p)
@@ -68,7 +95,7 @@ private:
         delete static_cast<T*>(p);
     }
 
-    std::function<T* ()> create_;
+    std::tuple<Args...> args_;
     pthread_key_t key_;
 };
 

@@ -1,7 +1,9 @@
 #include "asynclog.hpp"
 
-asynclog::detail::thread_input_buffer::thread_input_buffer() :
-    pbegin_(allocate_buffer())
+asynclog::detail::thread_input_buffer::thread_input_buffer(detail::log_base* plog, std::size_t size, std::size_t frame_alignment) :
+    plog_(plog),
+    size_(size),
+    pbegin_(allocate_buffer(size, frame_alignment))
 {
     pinput_start_ = pbegin_;
     pinput_end_ = pbegin_;
@@ -20,17 +22,17 @@ asynclog::detail::thread_input_buffer::~thread_input_buffer()
 }
 
 // Helper for allocating aligned ring buffer in ctor.
-char* asynclog::detail::thread_input_buffer::allocate_buffer()
+char* asynclog::detail::thread_input_buffer::allocate_buffer(std::size_t size, std::size_t alignment)
 {
     void* pbuffer = nullptr;
     // TODO proper error here. bad_alloc?
-    if(0 != posix_memalign(&pbuffer, FRAME_ALIGNMENT, TLS_INPUT_BUFFER_SIZE))
+    if(0 != posix_memalign(&pbuffer, alignment, size))
         throw std::runtime_error("cannot allocate input frame");
     *static_cast<char*>(pbuffer) = 'X';
     return static_cast<char*>(pbuffer);
 }
 
-void dlog::detail::input_buffer::wait_input_consumed()
+void asynclog::detail::thread_input_buffer::wait_input_consumed()
 {
     // This is kind of icky, we need to lock a mutex just because the condition
     // variable requires it. There would be less overhead if we could just use
@@ -42,7 +44,7 @@ void dlog::detail::input_buffer::wait_input_consumed()
         // the log without committing. The best effort we can make is to commit
         // whatever we have so far, otherwise the wait below will block
         // forever.
-        commit();
+        plog_->commit();
     }
     // FIXME we need to think about what to do here, should we signal
     // g_shared_input_queue_full_event to force the output thread to wake up?
@@ -70,8 +72,9 @@ char* asynclog::detail::thread_input_buffer::allocate_input_frame(std::size_t si
     // the comment text).
     while(true) {
         auto pinput_end = pinput_end_;
-        assert(pinput_end - pbegin_ != TLS_INPUT_BUFFER_SIZE);
-        assert(is_aligned(pinput_end, FRAME_ALIGNMENT));
+        // FIXME these asserts should / can be enabled again?
+        //assert(pinput_end - pbegin_ != TLS_INPUT_BUFFER_SIZE);
+        //assert(is_aligned(pinput_end, FRAME_ALIGNMENT));
 
         // Even if we get an "old" value for pinput_start_ here, that's OK
         // because other threads will never cause the amount of available
@@ -103,7 +106,8 @@ char* asynclog::detail::thread_input_buffer::allocate_input_frame(std::size_t si
             }
         } else {
             // Free space is non-contiguous.
-            std::size_t free1 = TLS_INPUT_BUFFER_SIZE - (pinput_end - pbegin_);
+            // TODO should we use an end pointer instead of a size_?
+            std::size_t free1 = size_ - (pinput_end - pbegin_);
             if(likely(size < free1)) {
                 // There's enough room in the first segment.
                 pinput_end_ = advance_frame_pointer(pinput_end, size);
@@ -118,7 +122,7 @@ char* asynclog::detail::thread_input_buffer::allocate_input_frame(std::size_t si
                     // thread to skip ahead to the second segment, we need to
                     // put a marker value at the current position. We're
                     // supposed to be guaranteed enough room for the wraparound
-                    // marker because FRAME_ALIGNMENT is at least the size of
+                    // marker because frame alignment is at least the size of
                     // the marker.
                     *reinterpret_cast<dispatch_function_t**>(pinput_end_) =
                         WRAPAROUND_MARKER;
