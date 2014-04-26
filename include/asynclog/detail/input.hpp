@@ -1,6 +1,8 @@
 #ifndef ASYNCLOG_DETAIL_INPUT_HPP
 #define ASYNCLOG_DETAIL_INPUT_HPP
 
+#include "asynclog/detail/spsc_event.hpp"
+
 namespace asynclog {
 namespace detail {
 
@@ -32,6 +34,7 @@ private:
     log_base* plog_;                  // Owner log instance
     spsc_event input_consumed_event_;
     std::size_t size_;                // number of chars in buffer
+    std::size_t frame_alignment_mask_;     // alignment mask for input frames
 
     char* const pbegin_;              // fixed value
     std::atomic<char*> pinput_start_; // moved forward by output thread, read by logger::write (to determine free space left)

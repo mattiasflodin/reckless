@@ -59,7 +59,7 @@ public:
         assert(result == 0);
     }
 
-    T* get() const
+    T* get() const __attribute__((const))
     {
         T* p = static_cast<T*>(pthread_getspecific(key_));
         if(likely(p != nullptr)) {

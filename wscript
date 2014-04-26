@@ -9,12 +9,13 @@ def configure(ctx):
     ctx.env.append_value('INCLUDES', ['include'])
     ctx.env.append_value('CXXFLAGS', ['-std=c++11', '-g', '-pthread', '-O3', '-march=native'])
     ctx.env.append_value('LINKFLAGS', ['-g', '-pthread'])
+    ctx.env.append_value('DEFINES', ['NDEBUG'])
     ctx.env.append_value('LIB', ['rt'])
 
 def build(ctx):
     # To see annotated assembly:
     # -std=c++11 -g -pthread -O3 -march=native -Wa,-adhln=main.s -masm=intel -fverbose-asm -c dlog.cpp
-    ctx.stlib(source='src/asynclog.cpp src/output_buffer.cpp src/file_writer.cpp src/default_formatter.cpp src/input.cpp', target='dlog')
+    ctx.stlib(source='src/asynclog.cpp src/output_buffer.cpp src/file_writer.cpp src/default_formatter.cpp src/input.cpp src/log_base.cpp', target='dlog')
     ctx.stlib(source='performance.cpp', target='performance')
     ctx.program(source='main.cpp', target='test',
             use='dlog')

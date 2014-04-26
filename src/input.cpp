@@ -4,11 +4,13 @@
 asynclog::detail::thread_input_buffer::thread_input_buffer(detail::log_base* plog, std::size_t size, std::size_t frame_alignment) :
     plog_(plog),
     size_(size),
+    frame_alignment_mask_(frame_alignment),
     pbegin_(allocate_buffer(size, frame_alignment)),
     pinput_start_(pbegin_),
     pinput_end_(pbegin_),
     pcommit_end_(pbegin_)
 {
+    assert(detail::is_power_of_two(frame_alignment));
 }
 
 asynclog::detail::thread_input_buffer::~thread_input_buffer()
@@ -24,6 +26,8 @@ asynclog::detail::thread_input_buffer::~thread_input_buffer()
 
 char* asynclog::detail::thread_input_buffer::discard_input_frame(std::size_t size)
 {
+    auto mask = frame_alignment_mask_;
+    size = (size + mask) & ~mask;
     // We can use relaxed memory ordering everywhere here because there is
     // nothing being written of interest that the pointer update makes visible;
     // all it does is *discard* data, not provide any new data (besides,
@@ -122,11 +126,13 @@ char* asynclog::detail::thread_input_buffer::allocate_input_frame(std::size_t si
     //   
     // (This is easier to understand by drawing it on a paper than by reading
     // the comment text).
+    auto mask = frame_alignment_mask_;
+    size = (size + mask) & ~mask;
     while(true) {
         auto pinput_end = pinput_end_;
         // FIXME these asserts should / can be enabled again?
         assert(pinput_end - pbegin_ < size_);
-        //assert(is_aligned(pinput_end, FRAME_ALIGNMENT));
+        assert(is_aligned(pinput_end, frame_alignment_));
 
         // Even if we get an "old" value for pinput_start_ here, that's OK
         // because other threads will never cause the amount of available

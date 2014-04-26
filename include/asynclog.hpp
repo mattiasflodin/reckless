@@ -89,9 +89,7 @@ public:
         using frame = detail::frame<Formatter, frame_size, bound_args>;
 
         auto pib = pthread_input_buffer_.get();
-        auto mask = input_frame_alignment_mask_;
-        auto frame_size_aligned = (frame_size + mask) & ~mask;
-        char* pframe = pib->allocate_input_frame(frame_size_aligned);
+        char* pframe = pib->allocate_input_frame(frame_size);
         frame::store_args(pframe, std::forward<Args>(args)...);
     }
 

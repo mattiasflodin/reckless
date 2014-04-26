@@ -1,3 +1,5 @@
+#ifndef ASYNCLOG_DETAIL_SPSC_EVENT_HPP
+#define ASYNCLOG_DETAIL_SPSC_EVENT_HPP
 #include <atomic>
 #include <system_error>
 
@@ -80,3 +82,5 @@ private:
 
     int signal_;
 };
+
+#endif // ASYNCLOG_DETAIL_SPSC_EVENT_HPP
