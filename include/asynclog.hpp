@@ -8,6 +8,8 @@
 #include "asynclog/detail/frame.hpp"
 #include "asynclog/detail/log_base.hpp"
 
+#include <iostream>     // FIXME remove
+
 namespace asynclog {
 
 template <typename T>
@@ -88,8 +90,7 @@ public:
         std::size_t const frame_size = argument_binder::frame_size;
         using frame = detail::frame<Formatter, frame_size, bound_args>;
 
-        auto pib = pthread_input_buffer_.get();
-        char* pframe = pib->allocate_input_frame(frame_size);
+        char* pframe = allocate_input_frame(frame_size);
         frame::store_args(pframe, std::forward<Args>(args)...);
     }
 

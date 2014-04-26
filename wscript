@@ -14,13 +14,13 @@ def configure(ctx):
 
 def build(ctx):
     # To see annotated assembly:
-    # -std=c++11 -g -pthread -O3 -march=native -Wa,-adhln=main.s -masm=intel -fverbose-asm -c dlog.cpp
-    ctx.stlib(source='src/asynclog.cpp src/output_buffer.cpp src/file_writer.cpp src/default_formatter.cpp src/input.cpp src/log_base.cpp', target='dlog')
+    # -std=c++11 -g -pthread -O3 -march=native -Wa,-adhln=main.s -masm=intel -fverbose-asm -c main.cpp
+    ctx.stlib(source='src/asynclog.cpp src/output_buffer.cpp src/file_writer.cpp src/default_formatter.cpp src/input.cpp src/log_base.cpp', target='asynclog')
     ctx.stlib(source='performance.cpp', target='performance')
     ctx.program(source='main.cpp', target='test',
-            use='dlog')
+            use='asynclog')
     ctx.program(source='measure_simple_call_burst.cpp', target='measure_simple_call_burst',
-        use='dlog performance')
+        use='asynclog performance')
     #ctx.program(source='dlog.cpp measure_periodic_calls.cpp', target='measure_periodic_calls',
     #    use='dlog performance')
     #ctx.program(source='dlog.cpp measure_write_files.cpp', target='measure_write_files',

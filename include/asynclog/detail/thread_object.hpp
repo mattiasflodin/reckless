@@ -1,12 +1,13 @@
 #include "branch_hints.hpp"
 
 #include <pthread.h>
+#include <errno.h>
 
 #include <memory>
-#include <functional>
-#include <cassert>
-#include <new>
-#include <tuple>
+#include <cassert>      // assert
+#include <new>          // bad_alloc, ?
+#include <tuple>        // tuple
+#include <system_error> // system_error
 
 namespace asynclog {
 namespace detail {
@@ -59,7 +60,7 @@ public:
         assert(result == 0);
     }
 
-    T* get() const __attribute__((const))
+    T* get() const //__attribute__ ((const))
     {
         T* p = static_cast<T*>(pthread_getspecific(key_));
         if(likely(p != nullptr)) {
@@ -79,15 +80,20 @@ private:
     {
         typename make_index_sequence<sizeof...(Args)>::type indexes;
         T* p = create(indexes);
+        // TODO put this in a cpp file to avoid #includes in global namespace, also to reduce code bloat
         int result = pthread_setspecific(key_, p);
-        assert(result == 0);
-        return p;
+        if(likely(result == 0))
+            return p;
+        else if(result == ENOMEM)
+            throw std::bad_alloc();
+        else
+            throw std::system_error(result, std::system_category());
     }
 
     template <std::size_t... Indexes>
     T* create(index_sequence<Indexes...>) const
     {
-        new T(std::get<Indexes>(args_)...);
+        return new T(std::get<Indexes>(args_)...);
     }
 
     static void destroy(void* p)

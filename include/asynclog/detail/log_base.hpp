@@ -27,6 +27,7 @@ public:
 protected:
     void output_worker();
     void queue_commit_extent(detail::commit_extent const& ce);
+    char* allocate_input_frame(std::size_t frame_size);
 
     typedef boost::lockfree::queue<detail::commit_extent, boost::lockfree::fixed_sized<true>> shared_input_queue_t;
 

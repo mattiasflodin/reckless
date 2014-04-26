@@ -73,3 +73,9 @@ void asynclog::detail::log_base::queue_commit_extent(detail::commit_extent const
         } while(not shared_input_queue_.push(ce));
     }
 }
+
+char* asynclog::detail::log_base::allocate_input_frame(std::size_t frame_size)
+{
+    auto pib = pthread_input_buffer_.get();
+    char* pframe = pib->allocate_input_frame(frame_size);
+}

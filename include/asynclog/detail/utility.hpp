@@ -46,9 +46,9 @@ int destroy(T* p)
     return 0;
 }
 
-std::size_t get_page_size();
+std::size_t get_page_size() __attribute__ ((const));
 
-std::size_t get_cache_line_size();
+std::size_t get_cache_line_size() __attribute__((const));
 
 inline bool is_power_of_two(std::size_t v)
 {
