@@ -22,19 +22,6 @@ asynclog::output_buffer::~output_buffer()
     std::free(pbuffer_);
 }
 
-char* asynclog::output_buffer::reserve(std::size_t size)
-{
-    if(pbuffer_end_ - pcommit_end_ < size) {
-        flush();
-        // TODO if the flush fails above, the only thing we can do is discard
-        // the data. But perhaps we should invoke a callback that can do
-        // something, such as log a message about the discarded data.
-        if(pbuffer_end_ - pbuffer_ < size)
-            throw std::bad_alloc();
-    }
-    return pcommit_end_;
-}
-
 void asynclog::output_buffer::flush()
 {
     // TODO keep track of a high watermark, i.e. max value of pcommit_end_.

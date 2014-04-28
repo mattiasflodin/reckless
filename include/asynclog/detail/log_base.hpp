@@ -25,6 +25,8 @@ public:
     void commit();
 
 protected:
+    log_base(log_base const&);  // not defined
+    log_base& operator=(log_base const&); // not defined
     void output_worker();
     void queue_commit_extent(detail::commit_extent const& ce);
     char* allocate_input_frame(std::size_t frame_size);

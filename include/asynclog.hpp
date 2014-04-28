@@ -8,8 +8,6 @@
 #include "asynclog/detail/frame.hpp"
 #include "asynclog/detail/log_base.hpp"
 
-#include <iostream>     // FIXME remove
-
 namespace asynclog {
 
 template <typename T>

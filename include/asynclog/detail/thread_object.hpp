@@ -2,6 +2,7 @@
 
 #include <pthread.h>
 #include <errno.h>
+#include <signal.h>     // raise
 
 #include <memory>
 #include <cassert>      // assert
@@ -43,6 +44,18 @@ struct make_index_sequence
 template <typename T, class... Args>
 class thread_object {
 private:
+    // We need to store the key together with the object to be able to call
+    // pthread_setspecific from inside the destructor function.
+    struct holder : public T
+    {
+        template <class... Args2>
+        holder(Args2&&... args) :
+            T(std::forward<Args2>(args)...)
+        {
+        }
+        pthread_key_t key;
+    };
+
 public:
     thread_object(Args const&... args) :
         args_(args...)
@@ -54,15 +67,15 @@ public:
     ~thread_object()
     {
         // TODO check that there's only one instance of the contained object.
-        T* p = static_cast<T*>(pthread_getspecific(key_));
+        holder* p = static_cast<holder*>(pthread_getspecific(key_));
         delete p;
         int result = pthread_key_delete(key_);
         assert(result == 0);
     }
 
-    T* get() const //__attribute__ ((const))
+    T* get() const
     {
-        T* p = static_cast<T*>(pthread_getspecific(key_));
+        holder* p = static_cast<holder*>(pthread_getspecific(key_));
         if(likely(p != nullptr)) {
             return p;
         } else {
@@ -79,8 +92,9 @@ private:
     T* create_and_get() const
     {
         typename make_index_sequence<sizeof...(Args)>::type indexes;
-        T* p = create(indexes);
-        // TODO put this in a cpp file to avoid #includes in global namespace, also to reduce code bloat
+        holder* p = create(indexes);
+        p->key = key_;
+        // TODO put pthread calls in a cpp file to avoid #includes in global namespace, also to reduce code bloat
         int result = pthread_setspecific(key_, p);
         if(likely(result == 0))
             return p;
@@ -91,14 +105,43 @@ private:
     }
 
     template <std::size_t... Indexes>
-    T* create(index_sequence<Indexes...>) const
+    holder* create(index_sequence<Indexes...>) const
     {
-        return new T(std::get<Indexes>(args_)...);
+        return new holder(std::get<Indexes>(args_)...);
     }
 
     static void destroy(void* p)
     {
-        delete static_cast<T*>(p);
+        if(not p)
+            return;
+        holder* qp = static_cast<holder*>(p);
+        auto key = qp->key;
+        // pthreads will already have set the value to null, meaning that a
+        // call to thread_object::get() inside the object's dtor will create a
+        // new instance of the contained object, and that's bad. The easiest
+        // way around this is to temporarily set the value again for the dtor
+        // call, then clear it. This will count towards
+        // PTHREAD_DESTRUCTOR_ITERATIONS but I don't think that will be a
+        // problem.
+        if(0 != pthread_setspecific(key, p))
+        {
+            // I can think of three options for dealing with this failure:
+            // 1) Throw an exception, but who is going to catch an exception
+            //    during thread teardown? Also, the thread teardown can
+            //    possibly be due to an exception, and in this case C++ will be
+            //    really disappointed in us if we try to throw another one.
+            // 2) Crash, e.g. via SIGSEGV.
+            // 3) Leak the object.
+            // None of these are good options, but if we're running out of
+            // memory in the 21st century we are close to a crash in 999 times
+            // of 1000 anyway. Linux, for example, doesn't even tell
+            // applications that memory has run out, it just kills them. I'm
+            // going to go with option 2 for now, because I prefer crashing to
+            // hiding leaks that could trigger later failures.
+            raise(SIGSEGV);
+        }
+        delete qp;
+        pthread_setspecific(key, nullptr);
     }
 
     std::tuple<Args...> args_;

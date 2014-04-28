@@ -17,6 +17,8 @@ asynclog::detail::log_base::~log_base()
 {
     using namespace detail;
     commit();
+    // FIXME always signal a buffer full event, so we don't have to wait 1
+    // second before the thread exits.
     queue_commit_extent({nullptr, 0});
     output_thread_.join();
     assert(shared_input_queue_.empty());
