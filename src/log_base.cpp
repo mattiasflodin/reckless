@@ -6,8 +6,8 @@ asynclog::detail::log_base::log_base(writer* pwriter,
         std::size_t output_buffer_max_capacity,
         std::size_t shared_input_queue_size,
         std::size_t thread_input_buffer_size) :
-    shared_input_queue_(shared_input_queue_size),
     pthread_input_buffer_(this, thread_input_buffer_size, input_frame_alignment),
+    shared_input_queue_(shared_input_queue_size),
     output_buffer_(pwriter, output_buffer_max_capacity),
     output_thread_(std::mem_fn(&log_base::output_worker), this)
 {
@@ -15,13 +15,53 @@ asynclog::detail::log_base::log_base(writer* pwriter,
 
 asynclog::detail::log_base::~log_base()
 {
+    close();
+}
+
+void asynclog::detail::log_base::open(writer* pwriter, 
+        std::size_t input_frame_alignment,
+        std::size_t output_buffer_max_capacity,
+        std::size_t shared_input_queue_size,
+        std::size_t thread_input_buffer_size)
+{
+    pthread_input_buffer_ = thread_input_buffer_t(this, thread_input_buffer_size, input_frame_alignment);
+    reset_shared_input_queue(shared_input_queue_size);
+    output_buffer_ = output_buffer(pwriter, output_buffer_max_capacity);
+    output_thread_ = std::thread(std::mem_fn(&log_base::output_worker), this);
+}
+
+void asynclog::detail::log_base::close()
+{
     using namespace detail;
+    if( not is_open() )
+        return;
     commit();
     // FIXME always signal a buffer full event, so we don't have to wait 1
     // second before the thread exits.
     queue_commit_extent({nullptr, 0});
     output_thread_.join();
     assert(shared_input_queue_.empty());
+}
+
+
+asynclog::detail::log_base& asynclog::detail::log_base::operator=(log_base&& other)
+{
+    close();
+    if(not other.is_open())
+        return *this;
+
+    other.close();
+
+    // FIXME this is wrong, pthread_input_buffer has reference to this
+    pthread_input_buffer_ = std::move(other.pthread_input_buffer_);
+    // node_count() does not exist in the original boost.lockfree and has been
+    // added to our copy of the headers, to expose an internal node count that
+    // is stored privately in the fixed-size freelist.
+    reset_shared_input_queue(other.shared_input_queue_.node_count());
+    output_buffer_ = std::move(other.output_buffer_);
+    output_thread_ = std::thread(std::mem_fn(&log_base::output_worker), this);
+
+    return *this;
 }
 
 void asynclog::detail::log_base::commit()
@@ -79,5 +119,15 @@ void asynclog::detail::log_base::queue_commit_extent(detail::commit_extent const
 char* asynclog::detail::log_base::allocate_input_frame(std::size_t frame_size)
 {
     auto pib = pthread_input_buffer_.get();
-    char* pframe = pib->allocate_input_frame(frame_size);
+    return pib->allocate_input_frame(frame_size);
+}
+
+void asynclog::detail::log_base::reset_shared_input_queue(std::size_t node_count)
+{
+    // boost's lockfree queue has no move constructor and provides no reserve()
+    // function when you use fixed_sized policy. So we'll just explicitly
+    // destroy the current queue and create a new one with the desired size. We
+    // are guaranteed that the queue is empty since close() clears it.
+    shared_input_queue_.~shared_input_queue_t();
+    new (&shared_input_queue_) shared_input_queue_t(node_count);
 }

@@ -236,6 +236,11 @@ public:
         pool.template reserve<false>(n);
     }
 
+    std::size_t node_count() const
+    {
+        return pool.node_count();
+    }
+
     /** Destroys queue, free all nodes from freelist.
      * */
     ~queue(void)

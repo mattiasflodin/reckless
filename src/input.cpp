@@ -142,7 +142,7 @@ char* asynclog::detail::thread_input_buffer::allocate_input_frame(std::size_t si
         // updated value for pinput_start_. So memory_order_relaxed should be
         // fine here.
         auto pinput_start = pinput_start_.load(std::memory_order_relaxed);
-        auto free = pinput_start - pinput_end;
+        std::size_t free = pinput_start - pinput_end;
         if(free > 0) {
             // Free space is contiguous.
             // Technically, there is enough room if size == free. But the

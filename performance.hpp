@@ -6,7 +6,7 @@ namespace performance {
     namespace detail {
         void lock_memory(void const* addr, std::size_t len);
         void unlock_memory(void const* addr, std::size_t len);
-    };
+    }
 
     // Evalutates timestamp counter using rdtscp/rdtsc/cpuid combo according to
     // "How to Benchmark Code Execution Times on Intel IA-32 and IA-64

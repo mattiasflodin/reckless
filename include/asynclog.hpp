@@ -53,6 +53,10 @@ private:
 template <class Formatter=default_formatter>
 class log : private detail::log_base {
 public:
+    log()
+    {
+    }
+
     // TODO is it right to just do g_page_size/sizeof(commit_extent) if we want
     // the buffer to use up one page? There's likely more overhead in the
     // buffer.
@@ -68,6 +72,7 @@ public:
                  shared_input_queue_size,
                  thread_input_buffer_size)
     {
+        // TODO move assertions into log_base
         assert(detail::is_power_of_two(input_frame_alignment));
         // input_frame_alignment must at least match that of a function pointer
         assert(input_frame_alignment >= sizeof(detail::dispatch_function_t*));
@@ -77,9 +82,38 @@ public:
         assert(input_frame_alignment >= alignof(detail::dispatch_function_t*));
     }
 
+    log(log&& other) :
+        log_base(std::move(other))
+    {
+    }
+
+    log& operator=(log&& other)
+    {
+        log_base::operator=(std::move(other));
+        return *this;
+    }
+
+    void open(writer* pwriter, 
+            std::size_t input_frame_alignment,
+            std::size_t output_buffer_max_capacity,
+            std::size_t shared_input_queue_size,
+            std::size_t thread_input_buffer_size)
+    {
+        log_base::open(pwriter, input_frame_alignment,
+                output_buffer_max_capacity, shared_input_queue_size,
+                thread_input_buffer_size);
+    }
+
+    void close()
+    {
+        log_base::close();
+    }
+
     template <typename... Args>
     void write(Args&&... args)
     {
+        assert(initialized_.load(std::memory_order_acquire()));
+        assert(output_thread_.get_id() != std::thread::id());
         using namespace detail;
         using argument_binder = bind_args<Args...>;
         // fails in gcc 4.7.3
@@ -95,6 +129,9 @@ public:
 
     void commit()
     {
+        // TODO move asserts into log_base
+        assert(initialized_.load(std::memory_order_acquire()));
+        assert(output_thread_.get_id() != std::thread::id());
         log_base::commit();
     }
 };

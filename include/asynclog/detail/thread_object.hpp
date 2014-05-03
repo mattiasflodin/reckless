@@ -37,6 +37,9 @@ struct make_index_sequence
     typedef typename make_index_sequence_helper<0, N>::type type;
 };
 
+struct uninitialized_t {};
+static uninitialized_t const uninitialized;
+
 // TODO take an allocator argument here, somehow. The tricky part is that
 // pthread_key_create takes a destroy function that doesn't have any additional
 // context argument. All we get is the key value, so the allocator instance
@@ -57,24 +60,54 @@ private:
     };
 
 public:
+    thread_object(uninitialized_t) :
+        initialized_(false)
+    {
+    }
+    thread_object(typename std::enable_if<sizeof...(Args)!=0>::type* = 0) :
+        initialized_(false)
+    {
+    }
     thread_object(Args const&... args) :
-        args_(args...)
+        args_(args...),
+        initialized_(true)
     {
         if(0 != pthread_key_create(&key_, &destroy))
             throw std::bad_alloc();
     }
 
+    thread_object(thread_object&& other) :
+        args_(std::move(other.args_)),
+        key_(other.key_),
+        initialized_(other.initialized_)
+    {
+        other.initialized_ = false;
+    }
+
     ~thread_object()
     {
         // TODO check that there's only one instance of the contained object.
+        if(not initialized_)
+            return;
         holder* p = static_cast<holder*>(pthread_getspecific(key_));
         delete p;
         int result = pthread_key_delete(key_);
         assert(result == 0);
+        (void) result;  /// avoid warning about unused variable when NDEBUG is defined
+    }
+
+    thread_object& operator=(thread_object&& other)
+    {
+        args_ = std::move(other.args_);
+        key_ = other.key_;
+        initialized_ = other.initialized_;
+        other.initialized_ = false;
+        return *this;
     }
 
     T* get() const
     {
+        assert(initialized_);
         holder* p = static_cast<holder*>(pthread_getspecific(key_));
         if(likely(p != nullptr)) {
             return p;
@@ -89,6 +122,9 @@ public:
     }
 
 private:
+    thread_object(thread_object const&);               // not defined
+    thread_object& operator=(thread_object const&);    // not defined
+
     T* create_and_get() const
     {
         typename make_index_sequence<sizeof...(Args)>::type indexes;
@@ -146,7 +182,9 @@ private:
 
     std::tuple<Args...> args_;
     pthread_key_t key_;
+    bool initialized_;
 };
+
 
 }   // detail
 }   // asynclog

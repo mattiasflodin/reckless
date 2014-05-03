@@ -518,6 +518,11 @@ public:
         return ptr;
     }
 
+    std::size_t node_count() const
+    {
+        return NodeStorage::node_count();
+    }
+
 protected: // allow use from subclasses
     template <bool ThreadSafe>
     index_t allocate (void)

@@ -7,7 +7,7 @@ def options(ctx):
 def configure(ctx):
     ctx.load('compiler_cxx')
     ctx.env.append_value('INCLUDES', ['include'])
-    ctx.env.append_value('CXXFLAGS', ['-std=c++11', '-g', '-pthread', '-O3', '-march=native'])
+    ctx.env.append_value('CXXFLAGS', ['-std=c++11', '-Wall', '-pedantic', '-g', '-pthread', '-O0', '-march=native'])
     #ctx.env.append_value('CXXFLAGS', ['-fprofile-arcs', '-ftest-coverage'])
     ctx.env.append_value('LINKFLAGS', ['-g', '-pthread'])
     #ctx.env.append_value('LINKFLAGS', ['-fprofile-arcs'])
@@ -23,7 +23,7 @@ def build(ctx):
             use='asynclog')
     ctx.program(source='measure_simple_call_burst.cpp', target='measure_simple_call_burst',
         use='asynclog performance')
-    #ctx.program(source='dlog.cpp measure_periodic_calls.cpp', target='measure_periodic_calls',
-    #    use='dlog performance')
-    #ctx.program(source='dlog.cpp measure_write_files.cpp', target='measure_write_files',
-    #    use='dlog performance')
+    #ctx.program(source='measure_periodic_calls.cpp', target='measure_periodic_calls',
+    #    use='asynclog performance')
+    #ctx.program(source='measure_write_files.cpp', target='measure_write_files',
+    #    use='asynclog performance')
