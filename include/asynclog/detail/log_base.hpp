@@ -25,8 +25,6 @@ public:
             std::size_t thread_input_buffer_size);
     ~log_base();
 
-    log_base& operator=(log_base&& other);
-
     void open(writer* pwriter, 
             std::size_t input_frame_alignment,
             std::size_t output_buffer_max_capacity,
@@ -37,9 +35,6 @@ public:
     void commit();
 
 protected:
-    log_base(log_base const&);  // not defined
-    log_base& operator=(log_base const&); // not defined
-
     bool is_open()
     {
         return output_thread_.get_id() != std::thread::id();
@@ -58,6 +53,10 @@ protected:
     spsc_event shared_input_consumed_event_;
     output_buffer output_buffer_;
     std::thread output_thread_;
+
+private:
+    log_base(log_base const&);  // not defined
+    log_base& operator=(log_base const&); // not defined
 };
 
 }

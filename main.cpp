@@ -51,9 +51,10 @@ int main()
 {
     // FIXME need to be able to move log object
     asynclog::file_writer writer("dlog.txt");
-    g_log = asynclog::log<>(&writer);
+    g_log.open(&writer);
     std::thread thread(&thread_test);
     //log.write("three numbers: %s %d %d %s\n", 'A', 66, 3.0, obj);
     thread.join();
+    g_log.close();
     return 0;
 }

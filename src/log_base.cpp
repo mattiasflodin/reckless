@@ -43,27 +43,6 @@ void asynclog::detail::log_base::close()
     assert(shared_input_queue_.empty());
 }
 
-
-asynclog::detail::log_base& asynclog::detail::log_base::operator=(log_base&& other)
-{
-    close();
-    if(not other.is_open())
-        return *this;
-
-    other.close();
-
-    // FIXME this is wrong, pthread_input_buffer has reference to this
-    pthread_input_buffer_ = std::move(other.pthread_input_buffer_);
-    // node_count() does not exist in the original boost.lockfree and has been
-    // added to our copy of the headers, to expose an internal node count that
-    // is stored privately in the fixed-size freelist.
-    reset_shared_input_queue(other.shared_input_queue_.node_count());
-    output_buffer_ = std::move(other.output_buffer_);
-    output_thread_ = std::thread(std::mem_fn(&log_base::output_worker), this);
-
-    return *this;
-}
-
 void asynclog::detail::log_base::commit()
 {
     using namespace detail;

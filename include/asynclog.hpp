@@ -60,7 +60,7 @@ public:
     // TODO is it right to just do g_page_size/sizeof(commit_extent) if we want
     // the buffer to use up one page? There's likely more overhead in the
     // buffer.
-    // TODO all these calls to get_page_size are redundant, can it be cached somehow?
+    // TODO all these calls to get_page_size are redundant, can it be cached somehow? Same for open() below.
     log(writer* pwriter,
             std::size_t input_frame_alignment = detail::get_cache_line_size(),
             std::size_t output_buffer_max_capacity = detail::get_page_size(),
@@ -82,22 +82,11 @@ public:
         assert(input_frame_alignment >= alignof(detail::dispatch_function_t*));
     }
 
-    log(log&& other) :
-        log_base(std::move(other))
-    {
-    }
-
-    log& operator=(log&& other)
-    {
-        log_base::operator=(std::move(other));
-        return *this;
-    }
-
     void open(writer* pwriter, 
-            std::size_t input_frame_alignment,
-            std::size_t output_buffer_max_capacity,
-            std::size_t shared_input_queue_size,
-            std::size_t thread_input_buffer_size)
+            std::size_t input_frame_alignment = detail::get_cache_line_size(),
+            std::size_t output_buffer_max_capacity = detail::get_page_size(),
+            std::size_t shared_input_queue_size = detail::get_page_size()/sizeof(detail::commit_extent),
+            std::size_t thread_input_buffer_size = detail::get_page_size())
     {
         log_base::open(pwriter, input_frame_alignment,
                 output_buffer_max_capacity, shared_input_queue_size,
@@ -134,6 +123,10 @@ public:
         assert(output_thread_.get_id() != std::thread::id());
         log_base::commit();
     }
+
+private:
+    log(log const&);  // not defined
+    log& operator=(log const&); // not defined
 };
 
 // TODO synchronous_channel for wrapping a channel and calling the formatter immediately

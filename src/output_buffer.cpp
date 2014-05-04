@@ -73,6 +73,10 @@ void asynclog::output_buffer::flush()
 {
     // TODO keep track of a high watermark, i.e. max value of pcommit_end_.
     // Clear every second or some such. Use madvise to release unused memory.
+    
+    // NOTE if you get a crash here, it could be because your log object has a
+    // longer lifetime than the writer (i.e. the writer has been destroyed
+    // already).
     pwriter_->write(pbuffer_, pcommit_end_ - pbuffer_);
     pcommit_end_ = pbuffer_;
 }
