@@ -101,8 +101,8 @@ public:
     template <typename... Args>
     void write(Args&&... args)
     {
-        assert(initialized_.load(std::memory_order_acquire()));
-        assert(output_thread_.get_id() != std::thread::id());
+        // TODO move asserts into log_base
+        assert(is_open());
         using namespace detail;
         using argument_binder = bind_args<Args...>;
         // fails in gcc 4.7.3
@@ -119,8 +119,7 @@ public:
     void commit()
     {
         // TODO move asserts into log_base
-        assert(initialized_.load(std::memory_order_acquire()));
-        assert(output_thread_.get_id() != std::thread::id());
+        assert(is_open());
         log_base::commit();
     }
 

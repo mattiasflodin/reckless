@@ -31,6 +31,7 @@ template <class Formatter, std::size_t FrameSize, class BoundArgs>
 struct frame;
 template <class Formatter, std::size_t FrameSize, class... BoundArgs>
 struct frame<Formatter, FrameSize, typelist<BoundArgs...>> {
+    // FIXME probably a lot of this handling can be replaced with std::tuple.
     template<typename... Args>
     static void store_args(char* pbuffer, Args&&... args)
     {
@@ -39,8 +40,9 @@ struct frame<Formatter, FrameSize, typelist<BoundArgs...>> {
         // seems to push arguments backwards and i'm not sure that's
         // good for the cache. See wikipedia page on varadic templates,
         // it has info on how to get deterministic evaluation order.
-        evaluate(new (pbuffer + BoundArgs::offset) typename BoundArgs::type(args)...);
+        evaluate{new (pbuffer + BoundArgs::offset) typename BoundArgs::type(args)...};
     }
+    // TODO this should be rename to format() or something more descriptive.
     static std::size_t dispatch(output_buffer* poutput, char* pinput)
     {
         Formatter::format(poutput,

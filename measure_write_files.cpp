@@ -7,7 +7,7 @@
 
 #include <sys/stat.h>
 
-typedef dlog::logger<dlog::formatter> logger;
+asynclog::log<> g_log;
 
 template <class Fun>
 void measure(Fun fun, char const* timings_file_name)
@@ -26,7 +26,7 @@ void measure(Fun fun, char const* timings_file_name)
         std::ofstream ofs(ostr.str().c_str());
         auto start = performance_log.start();
         fun(number, 100.0*number/1000.0);
-        performance_log.end(start);
+        performance_log.stop(start);
         for(std::size_t i=0; i!=1024u*1024u; ++i) {
             char const c = 'a';
             ofs.write(&c, 1);
@@ -70,13 +70,13 @@ int main()
     fclose(stdio_file);
 
     std::system("/bin/sync");
-    dlog::file_writer writer("alog.txt");
-    dlog::initialize(&writer);
-    measure([&](unsigned number, double percent)
+    asynclog::file_writer writer("alog.txt");
+    g_log.open(&writer);
+    measure([](unsigned number, double percent)
         {
-        logger::write("file %d (%d%%)\n", number, percent);
-        dlog::commit();
+        g_log.write("file %d (%d%%)\n", number, percent);
+        g_log.commit();
        }, "timings_write_file_alog.txt");
-    dlog::cleanup();
+    g_log.close();
     return 0;
 }

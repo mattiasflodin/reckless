@@ -15,7 +15,8 @@ asynclog::detail::log_base::log_base(writer* pwriter,
 
 asynclog::detail::log_base::~log_base()
 {
-    close();
+    if(is_open())
+        close();
 }
 
 void asynclog::detail::log_base::open(writer* pwriter, 
@@ -33,8 +34,7 @@ void asynclog::detail::log_base::open(writer* pwriter,
 void asynclog::detail::log_base::close()
 {
     using namespace detail;
-    if( not is_open() )
-        return;
+    assert(is_open());
     commit();
     // FIXME always signal a buffer full event, so we don't have to wait 1
     // second before the thread exits.

@@ -1,5 +1,5 @@
 #include "performance.hpp"
-#include "dlog.hpp"
+#include "asynclog.hpp"
 
 #include <cmath>
 #include <fstream>
@@ -7,7 +7,7 @@
 
 #include <unistd.h>
 
-typedef dlog::logger<dlog::formatter> logger;
+asynclog::log<> g_log;
 
 template <class Fun>
 void measure(Fun fun, char const* timings_file_name)
@@ -18,7 +18,7 @@ void measure(Fun fun, char const* timings_file_name)
         usleep(1000);
         auto start = performance_log.start();
         fun("Hello, world!", 'A', i, M_PI);
-        performance_log.end(start);
+        performance_log.stop(start);
     }
 
     std::ofstream timings(timings_file_name);
@@ -54,15 +54,15 @@ int main()
     measure([&](char const* s, char c, int i, double d) { },
             "timings_periodic_calls_nop.txt");
 
-    dlog::file_writer writer("alog.txt");
-    dlog::initialize(&writer);
+    asynclog::file_writer writer("alog.txt");
+    g_log.open(&writer);
     measure([](char const* s, char c, int i, double d)
         {
-            logger::write("string: %s char: %s int: %d double: %d\n",
+            g_log.write("string: %s char: %s int: %d double: %d\n",
                 s, c, i, d);
-            dlog::commit();
+            g_log.commit();
         }, "timings_periodic_calls_alog.txt");
-    dlog::cleanup();
+    g_log.close();
 
     performance::rdtscp_cpuid_clock::unbind_cpu();
     return 0;

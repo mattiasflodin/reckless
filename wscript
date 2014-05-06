@@ -11,7 +11,7 @@ def configure(ctx):
     #ctx.env.append_value('CXXFLAGS', ['-fprofile-arcs', '-ftest-coverage'])
     ctx.env.append_value('LINKFLAGS', ['-g', '-pthread'])
     #ctx.env.append_value('LINKFLAGS', ['-fprofile-arcs'])
-    ctx.env.append_value('DEFINES', ['NDEBUG'])
+    #ctx.env.append_value('DEFINES', ['NDEBUG'])
     ctx.env.append_value('LIB', ['rt'])
 
 def build(ctx):
@@ -23,7 +23,7 @@ def build(ctx):
             use='asynclog')
     ctx.program(source='measure_simple_call_burst.cpp', target='measure_simple_call_burst',
         use='asynclog performance')
-    #ctx.program(source='measure_periodic_calls.cpp', target='measure_periodic_calls',
-    #    use='asynclog performance')
-    #ctx.program(source='measure_write_files.cpp', target='measure_write_files',
-    #    use='asynclog performance')
+    ctx.program(source='measure_periodic_calls.cpp', target='measure_periodic_calls',
+        use='asynclog performance')
+    ctx.program(source='measure_write_files.cpp', target='measure_write_files',
+        use='asynclog performance')

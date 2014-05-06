@@ -27,12 +27,6 @@ T align(T p, std::size_t alignment)
     v = ((v + alignment-1)/alignment)*alignment;
     return reinterpret_cast<T>(v);
 }
-template <typename T>
-bool is_aligned(T p, std::size_t alignment)
-{
-    std::uintptr_t v = reinterpret_cast<std::uintptr_t>(p);
-    return v % alignment == 0;
-}
 
 struct evaluate {
     template <class... Args>

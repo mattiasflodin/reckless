@@ -15,7 +15,8 @@ namespace detail {
 
 class log_base {
 public:
-    log_base()
+    log_base() :
+        shared_input_queue_(0)
     {
     }
     log_base(writer* pwriter, 
@@ -37,7 +38,7 @@ public:
 protected:
     bool is_open()
     {
-        return output_thread_.get_id() != std::thread::id();
+        return output_thread_.joinable();
     }
     void output_worker();
     void queue_commit_extent(detail::commit_extent const& ce);

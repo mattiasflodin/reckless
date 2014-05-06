@@ -24,6 +24,8 @@ void measure(Fun fun, char const* timings_file_name)
     }
 }
 
+asynclog::log<> g_log;
+
 int main()
 {
     unlink("fstream.txt");
@@ -52,13 +54,14 @@ int main()
     //        "timings_periodic_calls_nop.txt");
 
     asynclog::file_writer writer("alog.txt");
-    asynclog::log<> log(&writer);
-    measure([&](char const* s, char c, int i, double d)
+    g_log.open(&writer);
+    measure([](char const* s, char c, int i, double d)
         {
-            log.write("string: %s char: %s int: %d double: %d\n",
+            g_log.write("string: %s char: %s int: %d double: %d\n",
                 s, c, i, d);
-            log.commit();
+            g_log.commit();
         }, "timings_simple_call_burst_alog.txt");
+    g_log.close();
 
     performance::rdtscp_cpuid_clock::unbind_cpu();
     return 0;

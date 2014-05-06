@@ -4,7 +4,7 @@
 asynclog::detail::thread_input_buffer::thread_input_buffer(detail::log_base* plog, std::size_t size, std::size_t frame_alignment) :
     plog_(plog),
     size_(size),
-    frame_alignment_mask_(frame_alignment),
+    frame_alignment_mask_(frame_alignment-1),
     pbegin_(allocate_buffer(size, frame_alignment)),
     pinput_start_(pbegin_),
     pinput_end_(pbegin_),
@@ -72,9 +72,8 @@ char* asynclog::detail::thread_input_buffer::allocate_buffer(std::size_t size, s
 // is allowed to be discontinuous.
 char* asynclog::detail::thread_input_buffer::advance_frame_pointer(char* p, std::size_t distance)
 {
-    // FIXME this check should preferably stay here
-    //assert(is_aligned(distance));
-    //p = align(p + distance, FRAME_ALIGNMENT);
+    assert(is_aligned(p));
+    assert(is_aligned(distance));
     p += distance;
     auto remaining = size_ - (p - pbegin_);
     assert(remaining >= 0);
@@ -131,8 +130,8 @@ char* asynclog::detail::thread_input_buffer::allocate_input_frame(std::size_t si
     while(true) {
         auto pinput_end = pinput_end_;
         // FIXME these asserts should / can be enabled again?
-        assert(pinput_end - pbegin_ < size_);
-        assert(is_aligned(pinput_end, frame_alignment_));
+        assert(static_cast<std::size_t>(pinput_end - pbegin_) < size_);
+        assert(is_aligned(pinput_end));
 
         // Even if we get an "old" value for pinput_start_ here, that's OK
         // because other threads will never cause the amount of available
@@ -142,7 +141,7 @@ char* asynclog::detail::thread_input_buffer::allocate_input_frame(std::size_t si
         // updated value for pinput_start_. So memory_order_relaxed should be
         // fine here.
         auto pinput_start = pinput_start_.load(std::memory_order_relaxed);
-        std::size_t free = pinput_start - pinput_end;
+        std::ptrdiff_t free = pinput_start - pinput_end;
         if(free > 0) {
             // Free space is contiguous.
             // Technically, there is enough room if size == free. But the
@@ -153,7 +152,7 @@ char* asynclog::detail::thread_input_buffer::allocate_input_frame(std::size_t si
             // size < free instead of size <= free, and pretend we're out
             // of space if size == free. Same situation applies in the else
             // clause below.
-            if(likely(size < free)) {
+            if(likely(static_cast<std::ptrdiff_t>(size) < free)) {
                 pinput_end_ = advance_frame_pointer(pinput_end, size);
                 return pinput_end;
             } else {
