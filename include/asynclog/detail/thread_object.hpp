@@ -1,4 +1,8 @@
+#ifndef ASYNCLOG_DETAIL_THREAD_OBJECT_HPP
+#define ASYNCLOG_DETAIL_THREAD_OBJECT_HPP
+
 #include "branch_hints.hpp"
+#include "utility.hpp"
 
 #include <pthread.h>
 #include <errno.h>
@@ -12,31 +16,6 @@
 
 namespace asynclog {
 namespace detail {
-
-template <std::size_t... Seq>
-struct index_sequence
-{
-};
-
-template <std::size_t Pos, std::size_t N, std::size_t... Seq>
-struct make_index_sequence_helper
-{
-    typedef typename make_index_sequence_helper<Pos+1, N, Seq..., Pos>::type type;
-};
-
-
-template <std::size_t N, std::size_t... Seq>
-struct make_index_sequence_helper<N, N, Seq...>
-{
-    typedef index_sequence<Seq...> type;
-};
-
-template <std::size_t N>
-struct make_index_sequence
-{
-    typedef typename make_index_sequence_helper<0, N>::type type;
-};
-
 struct uninitialized_t {};
 static uninitialized_t const uninitialized;
 
@@ -188,3 +167,5 @@ private:
 
 }   // detail
 }   // asynclog
+
+#endif  // ASYNCLOG_DETAIL_THREAD_OBJECT_HPP

@@ -1,6 +1,9 @@
 #ifndef ASYNCLOG_DETAIL_UTILITY_HPP
 #define ASYNCLOG_DETAIL_UTILITY_HPP
 
+#include <cstddef>  // size_t
+#include <cstdint>  // uintptr_t
+
 namespace asynclog {
 namespace detail {
 
@@ -48,6 +51,30 @@ inline bool is_power_of_two(std::size_t v)
 {
     return (v & (v - 1)) == 0;
 }
+
+template <std::size_t... Seq>
+struct index_sequence
+{
+};
+
+template <std::size_t Pos, std::size_t N, std::size_t... Seq>
+struct make_index_sequence_helper
+{
+    typedef typename make_index_sequence_helper<Pos+1, N, Seq..., Pos>::type type;
+};
+
+
+template <std::size_t N, std::size_t... Seq>
+struct make_index_sequence_helper<N, N, Seq...>
+{
+    typedef index_sequence<Seq...> type;
+};
+
+template <std::size_t N>
+struct make_index_sequence
+{
+    typedef typename make_index_sequence_helper<0, N>::type type;
+};
 
 }
 }

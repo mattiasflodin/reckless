@@ -1,6 +1,11 @@
 #ifndef ASYNCLOG_OUTPUT_BUFFER_HPP
 #define ASYNCLOG_OUTPUT_BUFFER_HPP
 
+#include "detail/branch_hints.hpp"
+
+#include <cstddef>  // size_t
+#include <new>      // bad_alloc
+
 namespace asynclog {
 
 // TODO this is a bit vague, rename to e.g. log_target or someting?

@@ -43,7 +43,7 @@ char* asynclog::detail::thread_input_buffer::wraparound()
 {
 #ifndef NDEBUG
     auto p = pinput_start_.load(std::memory_order_relaxed);
-    auto marker = *reinterpret_cast<dispatch_function_t**>(p);
+    auto marker = *reinterpret_cast<formatter_dispatch_function_t**>(p);
     assert(WRAPAROUND_MARKER == marker);
 #endif
     pinput_start_.store(pbegin_, std::memory_order_relaxed);
@@ -180,7 +180,7 @@ char* asynclog::detail::thread_input_buffer::allocate_input_frame(std::size_t si
                     // supposed to be guaranteed enough room for the wraparound
                     // marker because frame alignment is at least the size of
                     // the marker.
-                    *reinterpret_cast<dispatch_function_t**>(pinput_end_) =
+                    *reinterpret_cast<formatter_dispatch_function_t**>(pinput_end_) =
                         WRAPAROUND_MARKER;
                     pinput_end_ = advance_frame_pointer(pbegin_, size);
                     return pbegin_;

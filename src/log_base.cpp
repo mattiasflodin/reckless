@@ -1,5 +1,4 @@
 #include "asynclog/detail/log_base.hpp"
-#include "asynclog/detail/frame.hpp"
 
 asynclog::detail::log_base::log_base(writer* pwriter, 
         std::size_t input_frame_alignment,
@@ -70,10 +69,10 @@ void asynclog::detail::log_base::output_worker()
 
         char* pinput_start = ce.pinput_buffer->input_start();
         while(pinput_start != ce.pcommit_end) {
-            auto pdispatch = *reinterpret_cast<dispatch_function_t**>(pinput_start);
+            auto pdispatch = *reinterpret_cast<formatter_dispatch_function_t**>(pinput_start);
             if(WRAPAROUND_MARKER == pdispatch) {
                 pinput_start = ce.pinput_buffer->wraparound();
-                pdispatch = *reinterpret_cast<dispatch_function_t**>(pinput_start);
+                pdispatch = *reinterpret_cast<formatter_dispatch_function_t**>(pinput_start);
             }
             auto frame_size = (*pdispatch)(&output_buffer_, pinput_start);
             pinput_start = ce.pinput_buffer->discard_input_frame(frame_size);

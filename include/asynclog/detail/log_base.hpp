@@ -1,5 +1,5 @@
-#ifndef ASYNCLOG_LOG_BASE_HPP
-#define ASYNCLOG_LOG_BASE_HPP
+#ifndef ASYNCLOG_DETAIL_LOG_BASE_HPP
+#define ASYNCLOG_DETAIL_LOG_BASE_HPP
 
 #include "asynclog/detail/thread_object.hpp"
 #include "asynclog/detail/input.hpp"
@@ -12,6 +12,18 @@
 
 namespace asynclog {
 namespace detail {
+
+typedef std::size_t formatter_dispatch_function_t(output_buffer*, char*);
+// TODO these checks need to be done at runtime now
+//static_assert(alignof(dispatch_function_t*) <= ASYNCLOG_FRAME_ALIGNMENT,
+//        "ASYNCLOG_FRAME_ALIGNMENT must at least match that of a function pointer");
+//// We need the requirement below to ensure that, after alignment, there
+//// will either be 0 free bytes available in the circular buffer, or
+//// enough to fit a dispatch pointer. This simplifies the code a bit.
+//static_assert(sizeof(dispatch_function_t*) <= FRAME_ALIGNMENT,
+//        "ASYNCLOG_FRAME_ALIGNMENT must at least match the size of a function pointer");
+formatter_dispatch_function_t* const WRAPAROUND_MARKER = reinterpret_cast<
+    formatter_dispatch_function_t*>(0);
 
 class log_base {
 public:
@@ -63,4 +75,4 @@ private:
 }
 }
 
-#endif  // ASYNCLOG_LOG_BASE_HPP
+#endif  // ASYNCLOG_DETAIL_LOG_BASE_HPP
