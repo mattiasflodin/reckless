@@ -35,6 +35,9 @@ std::size_t formatter_dispatch(output_buffer* poutput, char* pinput)
     return frame_size;
 }
 
+// TODO can we invoke free format() using argument-dependent lookup without
+// causing infinite recursion on this member function, without this
+// intermediary kludge?
 template <typename T>
 char const* invoke_custom_format(output_buffer* pbuffer, char const* pformat, T&& v)
 {

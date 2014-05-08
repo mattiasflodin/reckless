@@ -25,11 +25,8 @@ public:
         if(not pformat)
             return;
 
-        // TODO can we invoke free format() using argument-dependent lookup
-        // without causing infinite recursion on this member function, without
-        // this intermediary kludge?
-        char const* pnext_format = detail::invoke_custom_format(pbuffer, pformat,
-                std::forward<T>(value));
+        char const* pnext_format = detail::invoke_custom_format(pbuffer,
+                pformat, std::forward<T>(value));
         if(pnext_format)
             pformat = pnext_format;
         else
