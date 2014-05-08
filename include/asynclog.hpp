@@ -56,6 +56,7 @@ public:
     // the buffer to use up one page? There's likely more overhead in the
     // buffer.
     // TODO all these calls to get_page_size are redundant, can it be cached somehow? Same for open() below.
+    // TODO input_frame_alignment should probably be the last argument.
     log(writer* pwriter,
             std::size_t input_frame_alignment = detail::get_cache_line_size(),
             std::size_t output_buffer_max_capacity = detail::get_page_size(),
