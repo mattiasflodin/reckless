@@ -4,14 +4,16 @@
 #include "asynclog/detail/spsc_event.hpp"
 
 namespace asynclog {
-namespace detail {
 
-class log_base;
+class basic_log;
+
+namespace detail {
 
 class thread_input_buffer {
 public:
-    thread_input_buffer(detail::log_base* plog, std::size_t size, std::size_t frame_alignment);
+    thread_input_buffer(std::size_t size, std::size_t frame_alignment);
     ~thread_input_buffer();
+    // returns pointer to allocated input frame, moves input_end() forward.
     char* allocate_input_frame(std::size_t size);
     // returns pointer to following input frame
     char* discard_input_frame(std::size_t size);
@@ -39,7 +41,7 @@ private:
         return (v & frame_alignment_mask_) == 0;
     }
 
-    log_base* plog_;                  // Owner log instance
+    basic_log* plog_;                 // Owner log instance
     spsc_event input_consumed_event_;
     std::size_t size_;                // number of chars in buffer
     std::size_t frame_alignment_mask_;     // alignment mask for input frames
@@ -47,7 +49,6 @@ private:
     char* const pbegin_;              // fixed value
     std::atomic<char*> pinput_start_; // moved forward by output thread, read by logger::write (to determine free space left)
     char* pinput_end_;                // moved forward by logger::write, never read by anyone else
-    char* pcommit_end_;               // moved forward by commit(), read by wait_input_consumed (same thread so no race)
 };
 
 struct commit_extent {

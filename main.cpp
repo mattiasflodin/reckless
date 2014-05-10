@@ -5,7 +5,7 @@
 
 #include <unistd.h>
 
-asynclog::log<> g_log;
+asynclog::silly_log g_log;
 
 class Object {
 public:
@@ -44,6 +44,11 @@ Object obj(3);
 
 void thread_test()
 {
+    // TODO I don't think this call does what it should do.
+    //g_log.write("three numbers: %s %d %d %s\n", 66, 3.0, obj);
+
+    g_log.write("three numbers: %s %d %d %s\n", 'B', 66, 3.0, obj);
+    g_log.write("three numbers: %s %d %d %s\n", 'B', 66, 3.0, obj);
     g_log.write("three numbers: %s %d %d %s\n", 'B', 66, 3.0, obj);
 }
 

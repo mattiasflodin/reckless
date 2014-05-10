@@ -24,7 +24,7 @@ void measure(Fun fun, char const* timings_file_name)
     }
 }
 
-asynclog::log<> g_log;
+asynclog::simple_log g_log;
 
 int main()
 {
@@ -38,7 +38,7 @@ int main()
         {
             ofs << "string: " << s << " char: " << c << " int: "
                 << i << " double: " << d << '\n';
-       }, "timings_simple_call_burst_fstream.txt");
+        }, "timings_simple_call_burst_fstream.txt");
     ofs.close();
 
     FILE* stdio_file = std::fopen("stdio.txt", "w");
@@ -47,7 +47,7 @@ int main()
             fprintf(stdio_file, "string: %s char: %c int: %d double: %f\n",
                 s, c, i, d);
             //fflush(stdio_file);
-       }, "timings_simple_call_burst_stdio.txt");
+        }, "timings_simple_call_burst_stdio.txt");
     std::fclose(stdio_file);
 
     //measure([&](char const* s, char c, int i, double d) { },
@@ -59,7 +59,6 @@ int main()
         {
             g_log.write("string: %s char: %s int: %d double: %d\n",
                 s, c, i, d);
-            g_log.commit();
         }, "timings_simple_call_burst_alog.txt");
     g_log.close();
 

@@ -17,7 +17,7 @@ def configure(ctx):
 def build(ctx):
     # To see annotated assembly:
     # -std=c++11 -g -pthread -O3 -march=native -Wa,-adhln=main.s -masm=intel -fverbose-asm -c main.cpp
-    ctx.stlib(source='src/asynclog.cpp src/output_buffer.cpp src/file_writer.cpp src/default_formatter.cpp src/input.cpp src/log_base.cpp', target='asynclog')
+    ctx.stlib(source='src/asynclog.cpp src/output_buffer.cpp src/file_writer.cpp src/template_formatter.cpp src/input.cpp src/basic_log.cpp', target='asynclog')
     ctx.stlib(source='performance.cpp', target='performance')
     ctx.program(source='main.cpp', target='test',
             use='asynclog')

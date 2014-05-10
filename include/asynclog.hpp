@@ -3,17 +3,20 @@
 
 #include "asynclog/output_buffer.hpp"
 
+// TODO clean these includes up
 #include "asynclog/detail/spsc_event.hpp"
 #include "asynclog/detail/branch_hints.hpp"
 #include "asynclog/detail/input.hpp"
-#include "asynclog/detail/formatter.hpp"
-#include "asynclog/detail/log_base.hpp"
+#include "asynclog/detail/basic_log.hpp"
 
 #include <tuple>
 
 namespace asynclog {
 
-class default_formatter {
+// TODO some way of allocating a specific input buffer size for a thread that
+// needs extra space.
+
+class template_formatter {
 public:
     static void format(output_buffer* pbuffer, char const* pformat);
 
@@ -31,7 +34,7 @@ public:
             pformat = pnext_format;
         else
             append_percent(pbuffer);
-        return default_formatter::format(pbuffer, pformat,
+        return template_formatter::format(pbuffer, pformat,
                 std::forward<Args>(args)...);
     }
 
@@ -41,84 +44,76 @@ private:
             char const* pformat);
 };
 
-
-template <class Formatter=default_formatter>
-class log : private detail::log_base {
+class simple_log : public basic_log {
 public:
-    log()
+    simple_log()
     {
     }
 
-    // TODO is it right to just do g_page_size/sizeof(commit_extent) if we want
-    // the buffer to use up one page? There's likely more overhead in the
-    // buffer.
-    // TODO all these calls to get_page_size are redundant, can it be cached somehow? Same for open() below.
-    // TODO input_frame_alignment should probably be the last argument.
-    log(writer* pwriter,
-            std::size_t input_frame_alignment = detail::get_cache_line_size(),
-            std::size_t output_buffer_max_capacity = detail::get_page_size(),
-            std::size_t shared_input_queue_size = detail::get_page_size()/sizeof(detail::commit_extent),
-            std::size_t thread_input_buffer_size = detail::get_page_size()) :
-        log_base(pwriter,
-                 input_frame_alignment,
+    simple_log(writer* pwriter,
+            std::size_t output_buffer_max_capacity = 0,
+            std::size_t shared_input_queue_size = 0,
+            std::size_t thread_input_buffer_size = 0,
+            std::size_t input_frame_alignment = 0) :
+        basic_log(pwriter,
                  output_buffer_max_capacity,
                  shared_input_queue_size,
-                 thread_input_buffer_size)
+                 thread_input_buffer_size,
+                 input_frame_alignment)
     {
-        // TODO move assertions into log_base
-        assert(detail::is_power_of_two(input_frame_alignment));
-        // input_frame_alignment must at least match that of a function pointer
-        assert(input_frame_alignment >= sizeof(detail::formatter_dispatch_function_t*));
-        // We need the requirement below to ensure that, after alignment, there
-        // will either be 0 free bytes available in the input buffer, or
-        // enough to fit a function pointer. This simplifies the code a bit.
-        assert(input_frame_alignment >= alignof(detail::formatter_dispatch_function_t*));
-    }
-
-    void open(writer* pwriter, 
-            std::size_t input_frame_alignment = detail::get_cache_line_size(),
-            std::size_t output_buffer_max_capacity = detail::get_page_size(),
-            std::size_t shared_input_queue_size = detail::get_page_size()/sizeof(detail::commit_extent),
-            std::size_t thread_input_buffer_size = detail::get_page_size())
-    {
-        log_base::open(pwriter, input_frame_alignment,
-                output_buffer_max_capacity, shared_input_queue_size,
-                thread_input_buffer_size);
-    }
-
-    void close()
-    {
-        log_base::close();
     }
 
     template <typename... Args>
-    void write(Args&&... args)
+    void write(char const* fmt, Args&&... args)
     {
-        using namespace detail;
-        // TODO move asserts into log_base
-        assert(is_open());
-        typedef std::tuple<typename std::decay<Args>::type...> args_t;
-        std::size_t const args_align = alignof(args_t);
-        std::size_t const args_offset = (sizeof(formatter_dispatch_function_t*) + args_align-1)/args_align*args_align;
-        std::size_t const frame_size = args_offset + sizeof(args_t);
+        basic_log::write<template_formatter>(fmt, std::forward<Args>(args)...);
+    }
+};
 
-        char* pframe = allocate_input_frame(frame_size);
-        *reinterpret_cast<formatter_dispatch_function_t**>(pframe) =
-            &formatter_dispatch<Formatter, typename std::decay<Args>::type...>;
-        new (pframe + args_offset) args_t(std::forward<Args>(args)...);
+class silly_formatter {
+public:
+    template <typename... Args>
+    static void format(output_buffer* pbuffer, int count, char const* pformat,
+             Args&&... args)
+    {
+        // TODO invoke_custom_format should probably not be an implementation detail.
+        detail::invoke_custom_format(pbuffer, "d", count);
+        char* p = pbuffer->reserve(1);
+        *p = ' ';
+        pbuffer->commit(1);
+        template_formatter::format(pbuffer, pformat, std::forward<Args>(args)...);
+    }
+};
+
+class silly_log : public basic_log {
+public:
+    silly_log()
+    {
     }
 
-
-    void commit()
+    silly_log(writer* pwriter,
+            std::size_t output_buffer_max_capacity = 0,
+            std::size_t shared_input_queue_size = 0,
+            std::size_t thread_input_buffer_size = 0,
+            std::size_t input_frame_alignment = 0) :
+        basic_log(pwriter,
+                 input_frame_alignment,
+                 output_buffer_max_capacity,
+                 shared_input_queue_size,
+                 thread_input_buffer_size),
+        count_(0)
     {
-        // TODO move asserts into log_base
-        assert(is_open());
-        log_base::commit();
+    }
+
+    template <typename... Args>
+    void write(char const* fmt, Args&&... args)
+    {
+        basic_log::write<silly_formatter>(count_, fmt, std::forward<Args>(args)...);
+        ++count_;
     }
 
 private:
-    log(log const&);  // not defined
-    log& operator=(log const&); // not defined
+    int count_;
 };
 
 // TODO synchronous_channel for wrapping a channel and calling the formatter immediately

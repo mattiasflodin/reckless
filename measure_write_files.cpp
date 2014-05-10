@@ -7,7 +7,7 @@
 
 #include <sys/stat.h>
 
-asynclog::log<> g_log;
+asynclog::simple_log g_log;
 
 template <class Fun>
 void measure(Fun fun, char const* timings_file_name)
@@ -74,9 +74,8 @@ int main()
     g_log.open(&writer);
     measure([](unsigned number, double percent)
         {
-        g_log.write("file %d (%d%%)\n", number, percent);
-        g_log.commit();
-       }, "timings_write_file_alog.txt");
+            g_log.write("file %d (%d%%)\n", number, percent);
+        }, "timings_write_file_alog.txt");
     g_log.close();
     return 0;
 }

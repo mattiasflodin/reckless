@@ -1,22 +1,21 @@
 #include "asynclog.hpp"
 #include "asynclog/detail/utility.hpp"
 
-asynclog::detail::thread_input_buffer::thread_input_buffer(detail::log_base* plog, std::size_t size, std::size_t frame_alignment) :
-    plog_(plog),
+asynclog::detail::thread_input_buffer::thread_input_buffer(std::size_t size, std::size_t frame_alignment) :
     size_(size),
     frame_alignment_mask_(frame_alignment-1),
     pbegin_(allocate_buffer(size, frame_alignment)),
     pinput_start_(pbegin_),
-    pinput_end_(pbegin_),
-    pcommit_end_(pbegin_)
+    pinput_end_(pbegin_)
 {
     assert(detail::is_power_of_two(frame_alignment));
 }
 
 asynclog::detail::thread_input_buffer::~thread_input_buffer()
 {
-    plog_->commit();
-    // Both commit() and wait_input_consumed should create full memory barriers,
+    // Wait for the output thread to consume all the contents of the buffer
+    // before release it.
+    // Both write() and wait_input_consumed should create full memory barriers,
     // so no need for strict memory ordering in this load.
     while(pinput_start_.load(std::memory_order_relaxed) != pinput_end_)
         wait_input_consumed();
@@ -82,20 +81,9 @@ char* asynclog::detail::thread_input_buffer::advance_frame_pointer(char* p, std:
     return p;
 }
 
+// TODO inline this function? Maybe not considering that fixme.
 void asynclog::detail::thread_input_buffer::wait_input_consumed()
 {
-    // This is kind of icky, we need to lock a mutex just because the condition
-    // variable requires it. There would be less overhead if we could just use
-    // something like Windows event objects.
-    if(pcommit_end_ == pinput_start_.load(std::memory_order_relaxed)) {
-        // We are waiting for input to be consumed because the input buffer is
-        // full, but we haven't actually posted any data (i.e. we haven't
-        // called commit). In other words, the caller has written too much to
-        // the log without committing. The best effort we can make is to commit
-        // whatever we have so far, otherwise the wait below will block
-        // forever.
-        plog_->commit();
-    }
     // FIXME we need to think about what to do here, should we signal
     // g_shared_input_queue_full_event to force the output thread to wake up?
     // We probably should, or we could sit here for a full second.
@@ -127,6 +115,12 @@ char* asynclog::detail::thread_input_buffer::allocate_input_frame(std::size_t si
     // the comment text).
     auto mask = frame_alignment_mask_;
     size = (size + mask) & ~mask;
+
+    // We can't write a frame that is larger than the entire capacity of the
+    // input buffer. If you hit this assert then you either need to write a
+    // smaller log entry, or you need to make the input buffer larger.
+    assert(size < size_);
+ 
     while(true) {
         auto pinput_end = pinput_end_;
         // FIXME these asserts should / can be enabled again?

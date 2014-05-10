@@ -171,14 +171,14 @@ char const* asynclog::format(output_buffer* pbuffer, char const* pformat, std::s
     return pformat + 1;
 }
 
-void asynclog::default_formatter::append_percent(output_buffer* pbuffer)
+void asynclog::template_formatter::append_percent(output_buffer* pbuffer)
 {
     auto p = pbuffer->reserve(1u);
     *p = '%';
     pbuffer->commit(1u);
 }
 
-char const* asynclog::default_formatter::next_specifier(output_buffer* pbuffer,
+char const* asynclog::template_formatter::next_specifier(output_buffer* pbuffer,
         char const* pformat)
 {
     while(true) {
@@ -203,7 +203,7 @@ char const* asynclog::default_formatter::next_specifier(output_buffer* pbuffer,
     }
 }
 
-void asynclog::default_formatter::format(output_buffer* pbuffer, char const* pformat)
+void asynclog::template_formatter::format(output_buffer* pbuffer, char const* pformat)
 {
     auto len = std::strlen(pformat);
     char* p = pbuffer->reserve(len);

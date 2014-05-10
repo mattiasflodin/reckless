@@ -7,7 +7,7 @@
 
 #include <unistd.h>
 
-asynclog::log<> g_log;
+asynclog::simple_log g_log;
 
 template <class Fun>
 void measure(Fun fun, char const* timings_file_name)
@@ -60,7 +60,6 @@ int main()
         {
             g_log.write("string: %s char: %s int: %d double: %d\n",
                 s, c, i, d);
-            g_log.commit();
         }, "timings_periodic_calls_alog.txt");
     g_log.close();
 
