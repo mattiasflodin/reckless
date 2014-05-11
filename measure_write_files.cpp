@@ -51,14 +51,14 @@ int main()
     // first case doesn't get so much of an advantage.
     measure([&](unsigned number, double percent)
         {
-       }, "timings_write_file_noop.txt");
+        }, "timings_write_file_noop.txt");
 
     std::system("/bin/sync");
     std::ofstream ofs("fstream.txt");
     measure([&](unsigned number, double percent)
         {
             ofs << "file " << number << " (" << percent << "%)" << '\n';
-       }, "timings_write_file_fstream.txt");
+        }, "timings_write_file_fstream.txt");
     ofs.close();
 
     std::system("/bin/sync");
@@ -66,7 +66,7 @@ int main()
     measure([&](unsigned number, double percent)
         {
             fprintf(stdio_file, "file %u (%f%%)\n", number, percent);
-       }, "timings_write_file_stdio.txt");
+        }, "timings_write_file_stdio.txt");
     fclose(stdio_file);
 
     std::system("/bin/sync");

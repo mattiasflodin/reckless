@@ -70,6 +70,105 @@ public:
     }
 };
 
+class timestamp_formatter {
+public:
+    template <typename... Args>
+    static void format(output_buffer* pbuffer, timeval const& tv, 
+        char const* pformat, Args&&... args)
+    {
+        // "YYYY-mm-dd HH:MM:SS.FFF " -> 24 chars
+        // Need 25 chars since sprintf wants to add a NUL char.
+        char* p = pbuffer->reserve(25);
+        struct tm tm;
+        localtime_r(&tv.tv_sec, &tm);
+        strftime(p, 26, "%Y-%m-%d %H:%M:%S.", &tm);
+        sprintf(p+21, "%3u ", static_cast<unsigned>(tv.tv_usec)/1000u);
+        pbuffer->commit(24);
+        template_formatter::format(pbuffer, pformat, std::forward<Args>(args)...);
+    }
+};
+
+class timestamped_log : public basic_log {
+public:
+    timestamped_log()
+    {
+    }
+
+    timestamped_log(writer* pwriter,
+            std::size_t output_buffer_max_capacity = 0,
+            std::size_t shared_input_queue_size = 0,
+            std::size_t thread_input_buffer_size = 0,
+            std::size_t input_frame_alignment = 0) :
+        basic_log(pwriter,
+                 input_frame_alignment,
+                 output_buffer_max_capacity,
+                 shared_input_queue_size,
+                 thread_input_buffer_size)
+    {
+    }
+
+    template <typename... Args>
+    void write(char const* fmt, Args&&... args)
+    {
+        timeval tv;
+        gettimeofday(&tv, nullptr);
+        basic_log::write<timestamp_formatter>(tv, fmt, std::forward<Args>(args)...);
+    }
+
+private:
+    int count_;
+};
+
+class severity_formatter {
+public:
+    template <typename... Args>
+    static void format(output_buffer* pbuffer, char severity, char const* pformat,
+             Args&&... args)
+    {
+        char* p = pbuffer->reserve(2);
+        p[0] = severity;
+        p[1] = ' ';
+        pbuffer->commit(2);
+        template_formatter::format(pbuffer, pformat, std::forward<Args>(args)...);
+    }
+};
+
+class severity_log : public basic_log {
+public:
+    severity_log()
+    {
+    }
+
+    severity_log(writer* pwriter,
+            std::size_t output_buffer_max_capacity = 0,
+            std::size_t shared_input_queue_size = 0,
+            std::size_t thread_input_buffer_size = 0,
+            std::size_t input_frame_alignment = 0) :
+        basic_log(pwriter,
+                 input_frame_alignment,
+                 output_buffer_max_capacity,
+                 shared_input_queue_size,
+                 thread_input_buffer_size)
+    {
+    }
+
+    template <typename... Args>
+    void info(char const* fmt, Args&&... args)
+    {
+        basic_log::write<severity_formatter>('I', fmt, std::forward<Args>(args)...);
+    }
+    template <typename... Args>
+    void warn(char const* fmt, Args&&... args)
+    {
+        basic_log::write<severity_formatter>('W', fmt, std::forward<Args>(args)...);
+    }
+    template <typename... Args>
+    void err(char const* fmt, Args&&... args)
+    {
+        basic_log::write<severity_formatter>('E', fmt, std::forward<Args>(args)...);
+    }
+};
+
 class silly_formatter {
 public:
     template <typename... Args>

@@ -13,6 +13,7 @@
 
 namespace asynclog {
 
+// TODO generic_log better name?
 class basic_log {
 public:
     basic_log() :
@@ -47,6 +48,9 @@ public:
         char* pframe = pbuffer->allocate_input_frame(frame_size);
         *reinterpret_cast<formatter_dispatch_function_t**>(pframe) =
             &formatter_dispatch<Formatter, typename std::decay<Args>::type...>;
+
+        // FIXME exception safety when copy constructing arguments, both here
+        // and in the output thread.
         new (pframe + args_offset) args_t(std::forward<Args>(args)...);
 
         queue_commit_extent({pbuffer, pbuffer->input_end()});
