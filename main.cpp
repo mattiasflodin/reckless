@@ -5,7 +5,8 @@
 
 #include <unistd.h>
 
-asynclog::severity_log g_log;
+//asynclog::header_log<' ', asynclog::indent_field<' ', 2>, asynclog::timestamp_field> g_log;
+asynclog::header_log<' ', asynclog::timestamp_field, asynclog::indent_field<' ', 2>> g_log;
 
 class Object {
 public:
@@ -47,11 +48,12 @@ void thread_test()
     // TODO I don't think this call does what it should do.
     //g_log.write("three numbers: %s %d %d %s\n", 66, 3.0, obj);
 
-    g_log.info("three numbers: %s %d %d %s\n", 'B', 66, 3.0, obj);
+    g_log.write("three numbers: %s %d %d %s\n", 'B', 66, 3.0, obj);
+    asynclog::scoped_indent indent;
     usleep(1000);
-    g_log.warn("three numbers: %s %d %d %s\n", 'B', 66, 3.0, obj);
+    g_log.write("three numbers: %s %d %d %s\n", 'B', 66, 3.0, obj);
     usleep(1000);
-    g_log.err("three numbers: %s %d %d %s\n", 'B', 66, 3.0, obj);
+    g_log.write("three numbers: %s %d %d %s\n", 'B', 66, 3.0, obj);
 }
 
 int main()

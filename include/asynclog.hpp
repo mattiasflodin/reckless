@@ -70,31 +70,118 @@ public:
     }
 };
 
-class timestamp_formatter {
+class timestamp_field {
 public:
-    template <typename... Args>
-    static void format(output_buffer* pbuffer, timeval const& tv, 
-        char const* pformat, Args&&... args)
+    timestamp_field()
+    {
+        gettimeofday(&tv_, nullptr);
+    }
+
+    bool format(output_buffer* pbuffer)
     {
         // "YYYY-mm-dd HH:MM:SS.FFF " -> 24 chars
         // Need 25 chars since sprintf wants to add a NUL char.
         char* p = pbuffer->reserve(25);
         struct tm tm;
-        localtime_r(&tv.tv_sec, &tm);
+        localtime_r(&tv_.tv_sec, &tm);
         strftime(p, 26, "%Y-%m-%d %H:%M:%S.", &tm);
-        sprintf(p+21, "%3u ", static_cast<unsigned>(tv.tv_usec)/1000u);
+        sprintf(p+21, "%03u ", static_cast<unsigned>(tv_.tv_usec)/1000u);
         pbuffer->commit(24);
-        template_formatter::format(pbuffer, pformat, std::forward<Args>(args)...);
+
+        return true;
+    }
+
+private:
+    timeval tv_;
+};
+
+class scoped_indent
+{
+public:
+    scoped_indent()
+    {
+        ++level_;
+    }
+    ~scoped_indent()
+    {
+        --level_;
+    }
+
+    static unsigned level()
+    {
+        return level_;
+    }
+
+private:
+    static __thread unsigned level_;
+};
+
+class no_indent
+{
+public:
+    static void state()
+    {
+    }
+    static void apply(output_buffer* pbuffer)
+    {
     }
 };
 
-class timestamped_log : public basic_log {
+template <unsigned Multiplier, char Character>
+class indent
+{
 public:
-    timestamped_log()
+    static unsigned state()
+    {
+        return scoped_indent::level();
+    }
+    static void apply(output_buffer* pbuffer, unsigned indent)
+    {
+        auto n = Multiplier*indent;
+        char* p = pbuffer->reserve(n);
+        std::memset(p, Character, n);
+    }
+};
+
+template <class IndentPolicy, class... Fields>
+class policy_formatter {
+public:
+    template <typename IndentState, typename... Args>
+    static void format(output_buffer* pbuffer, Fields&&... fields,
+        IndentState indent, char const* pformat, Args&&... args)
+    {
+        format_fields(pbuffer, fields...);
+        IndentPolicy::apply(pbuffer, indent);
+        template_formatter::format(pbuffer, pformat, std::forward<Args>(args)...);
+    }
+
+private:
+    template <class Field, class... Remaining>
+    static void format_fields(output_buffer* pbuffer, Field&& field, Remaining&&... remaining)
+    {
+        if(field.format(pbuffer)) {
+            if(sizeof...(remaining) != 0) {
+                char* p = pbuffer->reserve(1);
+                *p = Separator;
+                pbuffer->commit(1);
+            }
+        }
+        format_fields(pbuffer, std::forward<Remaining>(remaining)...);
+    }
+    static void format_fields(output_buffer* pbuffer)
+    {
+    }
+};
+
+#if 0
+template <class IndentPolicy, class... HeaderFields>
+class policy_log : public SeverityPolicy<policy_formatter<IndentPolicy, HeaderFields...>> {
+public:
+    policy_log()
     {
     }
 
-    timestamped_log(writer* pwriter,
+    policy_log(writer* pwriter,
             std::size_t output_buffer_max_capacity = 0,
             std::size_t shared_input_queue_size = 0,
             std::size_t thread_input_buffer_size = 0,
@@ -108,38 +195,21 @@ public:
     }
 
     template <typename... Args>
-    void write(char const* fmt, Args&&... args)
+    void write(Args&&... args)
     {
-        timeval tv;
-        gettimeofday(&tv, nullptr);
-        basic_log::write<timestamp_formatter>(tv, fmt, std::forward<Args>(args)...);
-    }
-
-private:
-    int count_;
-};
-
-class severity_formatter {
-public:
-    template <typename... Args>
-    static void format(output_buffer* pbuffer, char severity, char const* pformat,
-             Args&&... args)
-    {
-        char* p = pbuffer->reserve(2);
-        p[0] = severity;
-        p[1] = ' ';
-        pbuffer->commit(2);
-        template_formatter::format(pbuffer, pformat, std::forward<Args>(args)...);
+        basic_log::write<policy_formatter<IndentPolicy, Fields...>>(HeaderFields()..., std::forward<Args>(args)...);
     }
 };
+#endif
 
-class severity_log : public basic_log {
+template <class IndentPolicy, class... HeaderFields>
+class severity_log : public SeverityPolicy<policy_formatter<IndentPolicy, HeaderFields...>> {
 public:
-    severity_log()
+    policy_log()
     {
     }
 
-    severity_log(writer* pwriter,
+    policy_log(writer* pwriter,
             std::size_t output_buffer_max_capacity = 0,
             std::size_t shared_input_queue_size = 0,
             std::size_t thread_input_buffer_size = 0,
@@ -153,66 +223,22 @@ public:
     }
 
     template <typename... Args>
-    void info(char const* fmt, Args&&... args)
+    void warn(Args&&... args)
     {
-        basic_log::write<severity_formatter>('I', fmt, std::forward<Args>(args)...);
-    }
-    template <typename... Args>
-    void warn(char const* fmt, Args&&... args)
-    {
-        basic_log::write<severity_formatter>('W', fmt, std::forward<Args>(args)...);
-    }
-    template <typename... Args>
-    void err(char const* fmt, Args&&... args)
-    {
-        basic_log::write<severity_formatter>('E', fmt, std::forward<Args>(args)...);
-    }
-};
-
-class silly_formatter {
-public:
-    template <typename... Args>
-    static void format(output_buffer* pbuffer, int count, char const* pformat,
-             Args&&... args)
-    {
-        // TODO invoke_custom_format should probably not be an implementation detail.
-        detail::invoke_custom_format(pbuffer, "d", count);
-        char* p = pbuffer->reserve(1);
-        *p = ' ';
-        pbuffer->commit(1);
-        template_formatter::format(pbuffer, pformat, std::forward<Args>(args)...);
-    }
-};
-
-class silly_log : public basic_log {
-public:
-    silly_log()
-    {
-    }
-
-    silly_log(writer* pwriter,
-            std::size_t output_buffer_max_capacity = 0,
-            std::size_t shared_input_queue_size = 0,
-            std::size_t thread_input_buffer_size = 0,
-            std::size_t input_frame_alignment = 0) :
-        basic_log(pwriter,
-                 input_frame_alignment,
-                 output_buffer_max_capacity,
-                 shared_input_queue_size,
-                 thread_input_buffer_size),
-        count_(0)
-    {
-    }
-
-    template <typename... Args>
-    void write(char const* fmt, Args&&... args)
-    {
-        basic_log::write<silly_formatter>(count_, fmt, std::forward<Args>(args)...);
-        ++count_;
+        basic_log::write<policy_formatter<IndentPolicy, Fields...>>(HeaderFields()..., std::forward<Args>(args)...);
     }
 
 private:
-    int count_;
+    template <class HeaderField>
+    HeaderField construct(char)
+    {
+         return HeaderField()
+    }
+    template <class HeaderField>
+    HeaderField construct(char severity)
+    {
+         return HeaderField(severity)
+    }
 };
 
 // TODO synchronous_channel for wrapping a channel and calling the formatter immediately
