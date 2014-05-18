@@ -5,9 +5,9 @@
 
 #include <unistd.h>
 
-//asynclog::header_log<' ', asynclog::indent_field<' ', 2>, asynclog::timestamp_field> g_log;
-//asynclog::severity_log<asynclog::indent<2>, ' ', asynclog::timestamp_field> g_log;
-asynclog::severity_log<asynclog::indent<2>, ' ', asynclog::severity_field, asynclog::timestamp_field, asynclog::severity_field> g_log;
+asynclog::severity_log<asynclog::indent<2>, ' ', asynclog::severity_field, asynclog::timestamp_field> g_log;
+//asynclog::simple_log g_log;
+//asynclog::policy_log<asynclog::indent<2>, ' ', asynclog::timestamp_field> g_log;
 
 class Object {
 public:
@@ -49,13 +49,15 @@ void thread_test()
     // TODO I don't think this call does what it should do.
     //g_log.write("three numbers: %s %d %d %s\n", 66, 3.0, obj);
 
-    g_log.warn("three numbers: %s %d %d %s\n", 'B', 66, 3.0, obj);
-    g_log.warn("three numbers: %s %d %d %s\n", 'B', 66, 3.0, obj);
+    g_log.debug("three numbers: %s %d %d %s\n", 'B', 66, 3.0, obj);
     asynclog::scoped_indent indent;
     usleep(1000);
+    g_log.info("three numbers: %s %d %d %s\n", 'B', 66, 3.0, obj);
+    usleep(1000);
+    asynclog::scoped_indent indent2;
     g_log.warn("three numbers: %s %d %d %s\n", 'B', 66, 3.0, obj);
     usleep(1000);
-    g_log.warn("three numbers: %s %d %d %s\n", 'B', 66, 3.0, obj);
+    g_log.error("three numbers: %s %d %d %s\n", 'B', 66, 3.0, obj);
 }
 
 int main()

@@ -46,32 +46,6 @@ private:
             char const* pformat);
 };
 
-class simple_log : public basic_log {
-public:
-    simple_log()
-    {
-    }
-
-    simple_log(writer* pwriter,
-            std::size_t output_buffer_max_capacity = 0,
-            std::size_t shared_input_queue_size = 0,
-            std::size_t thread_input_buffer_size = 0,
-            std::size_t input_frame_alignment = 0) :
-        basic_log(pwriter,
-                 output_buffer_max_capacity,
-                 shared_input_queue_size,
-                 thread_input_buffer_size,
-                 input_frame_alignment)
-    {
-    }
-
-    template <typename... Args>
-    void write(char const* fmt, Args&&... args)
-    {
-        basic_log::write<template_formatter>(fmt, std::forward<Args>(args)...);
-    }
-};
-
 class timestamp_field {
 public:
     timestamp_field()
@@ -177,35 +151,6 @@ private:
     }
 };
 
-#if 0
-template <class IndentPolicy, class... HeaderFields>
-class policy_log : public SeverityPolicy<policy_formatter<IndentPolicy, HeaderFields...>> {
-public:
-    policy_log()
-    {
-    }
-
-    policy_log(writer* pwriter,
-            std::size_t output_buffer_max_capacity = 0,
-            std::size_t shared_input_queue_size = 0,
-            std::size_t thread_input_buffer_size = 0,
-            std::size_t input_frame_alignment = 0) :
-        basic_log(pwriter,
-                 input_frame_alignment,
-                 output_buffer_max_capacity,
-                 shared_input_queue_size,
-                 thread_input_buffer_size)
-    {
-    }
-
-    template <typename... Args>
-    void write(Args&&... args)
-    {
-        basic_log::write<policy_formatter<IndentPolicy, Fields...>>(HeaderFields()..., std::forward<Args>(args)...);
-    }
-};
-#endif
-
 class severity_field {
 public:
     severity_field(char severity) : severity_(severity) {}
@@ -235,6 +180,37 @@ namespace detail {
     }
 }
 
+template <class IndentPolicy, char FieldSeparator = ' ', class... HeaderFields>
+class policy_log : public basic_log {
+public:
+    policy_log()
+    {
+    }
+
+    policy_log(writer* pwriter,
+            std::size_t output_buffer_max_capacity = 0,
+            std::size_t shared_input_queue_size = 0,
+            std::size_t thread_input_buffer_size = 0,
+            std::size_t input_frame_alignment = 0) :
+        basic_log(pwriter,
+                 input_frame_alignment,
+                 output_buffer_max_capacity,
+                 shared_input_queue_size,
+                 thread_input_buffer_size)
+    {
+    }
+
+    template <typename... Args>
+    void write(char const* fmt, Args&&... args)
+    {
+        basic_log::write<policy_formatter<IndentPolicy, FieldSeparator, HeaderFields...>>(
+                HeaderFields()...,
+                IndentPolicy(),
+                fmt,
+                std::forward<Args>(args)...);
+    }
+};
+
 template <class IndentPolicy, char FieldSeparator, class... HeaderFields>
 class severity_log : public basic_log {
 public:
@@ -256,16 +232,41 @@ public:
     }
 
     template <typename... Args>
-    void warn(Args&&... args)
+    void debug(char const* fmt, Args&&... args)
+    {
+        write('D', fmt, std::forward<Args>(args)...);
+    }
+    template <typename... Args>
+    void info(char const* fmt, Args&&... args)
+    {
+        write('I', fmt, std::forward<Args>(args)...);
+    }
+    template <typename... Args>
+    void warn(char const* fmt, Args&&... args)
+    {
+        write('W', fmt, std::forward<Args>(args)...);
+    }
+    template <typename... Args>
+    void error(char const* fmt, Args&&... args)
+    {
+        write('E', fmt, std::forward<Args>(args)...);
+    }
+
+private:
+    template <typename... Args>
+    void write(char severity, char const* fmt, Args&&... args)
     {
         basic_log::write<policy_formatter<IndentPolicy, FieldSeparator, HeaderFields...>>(
-                detail::construct_header_field<HeaderFields>('W')...,
+                detail::construct_header_field<HeaderFields>(severity)...,
                 IndentPolicy(),
+                fmt,
                 std::forward<Args>(args)...);
     }
 };
 
-// TODO synchronous_channel for wrapping a channel and calling the formatter immediately
+typedef policy_log<no_indent> simple_log;
+
+// TODO synchronous log for wrapping a channel and calling the formatter immediately. Or, just add a bool to basic_log?
 
 class file_writer : public writer {
 public:
