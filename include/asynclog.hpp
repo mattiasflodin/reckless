@@ -11,6 +11,8 @@
 
 #include <tuple>
 
+#include <cstring>
+
 namespace asynclog {
 
 // TODO some way of allocating a specific input buffer size for a thread that
@@ -119,39 +121,44 @@ private:
 class no_indent
 {
 public:
-    static void state()
+    no_indent()
     {
     }
-    static void apply(output_buffer* pbuffer)
+
+    void apply(output_buffer* pbuffer)
     {
     }
 };
 
-template <unsigned Multiplier, char Character>
+template <unsigned Multiplier, char Character = ' '>
 class indent
 {
 public:
-    static unsigned state()
+    indent() : level_(scoped_indent::level())
     {
-        return scoped_indent::level();
     }
-    static void apply(output_buffer* pbuffer, unsigned indent)
+
+    void apply(output_buffer* pbuffer)
     {
-        auto n = Multiplier*indent;
+        auto n = Multiplier*level_;
         char* p = pbuffer->reserve(n);
         std::memset(p, Character, n);
+        pbuffer->commit(n);
     }
+
+private:
+    unsigned level_;
 };
 
-template <class IndentPolicy, class... Fields>
+template <class IndentPolicy, char Separator, class... Fields>
 class policy_formatter {
 public:
-    template <typename IndentState, typename... Args>
+    template <typename... Args>
     static void format(output_buffer* pbuffer, Fields&&... fields,
-        IndentState indent, char const* pformat, Args&&... args)
+        IndentPolicy indent, char const* pformat, Args&&... args)
     {
         format_fields(pbuffer, fields...);
-        IndentPolicy::apply(pbuffer, indent);
+        indent.apply(pbuffer);
         template_formatter::format(pbuffer, pformat, std::forward<Args>(args)...);
     }
 
@@ -159,13 +166,10 @@ private:
     template <class Field, class... Remaining>
     static void format_fields(output_buffer* pbuffer, Field&& field, Remaining&&... remaining)
     {
-        if(field.format(pbuffer)) {
-            if(sizeof...(remaining) != 0) {
-                char* p = pbuffer->reserve(1);
-                *p = Separator;
-                pbuffer->commit(1);
-            }
-        }
+        field.format(pbuffer);
+        char* p = pbuffer->reserve(1);
+        *p = Separator;
+        pbuffer->commit(1);
         format_fields(pbuffer, std::forward<Remaining>(remaining)...);
     }
     static void format_fields(output_buffer* pbuffer)
@@ -202,14 +206,43 @@ public:
 };
 #endif
 
-template <class IndentPolicy, class... HeaderFields>
-class severity_log : public SeverityPolicy<policy_formatter<IndentPolicy, HeaderFields...>> {
+class severity_field {
 public:
-    policy_log()
+    severity_field(char severity) : severity_(severity) {}
+
+    void format(output_buffer* poutput_buffer) const
+    {
+        char* p = poutput_buffer->reserve(1);
+        *p = severity_;
+        poutput_buffer->commit(1);
+    }
+
+private:
+    char severity_;
+};
+
+namespace detail {
+    template <class HeaderField>
+    HeaderField construct_header_field(char)
+    {
+         return HeaderField();
+    }
+
+    template <>
+    inline severity_field construct_header_field<severity_field>(char severity)
+    {
+         return severity_field(severity);
+    }
+}
+
+template <class IndentPolicy, char FieldSeparator, class... HeaderFields>
+class severity_log : public basic_log {
+public:
+    severity_log()
     {
     }
 
-    policy_log(writer* pwriter,
+    severity_log(writer* pwriter,
             std::size_t output_buffer_max_capacity = 0,
             std::size_t shared_input_queue_size = 0,
             std::size_t thread_input_buffer_size = 0,
@@ -225,19 +258,10 @@ public:
     template <typename... Args>
     void warn(Args&&... args)
     {
-        basic_log::write<policy_formatter<IndentPolicy, Fields...>>(HeaderFields()..., std::forward<Args>(args)...);
-    }
-
-private:
-    template <class HeaderField>
-    HeaderField construct(char)
-    {
-         return HeaderField()
-    }
-    template <class HeaderField>
-    HeaderField construct(char severity)
-    {
-         return HeaderField(severity)
+        basic_log::write<policy_formatter<IndentPolicy, FieldSeparator, HeaderFields...>>(
+                detail::construct_header_field<HeaderFields>('W')...,
+                IndentPolicy(),
+                std::forward<Args>(args)...);
     }
 };
 

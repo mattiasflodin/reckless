@@ -34,6 +34,12 @@ public:
             std::size_t input_frame_alignment = 0);
     virtual void close();
 
+    bool is_open()
+    {
+        return output_thread_.joinable();
+    }
+
+protected:
     template <class Formatter, typename... Args>
     void write(Args&&... args)
     {
@@ -54,11 +60,6 @@ public:
         new (pframe + args_offset) args_t(std::forward<Args>(args)...);
 
         queue_commit_extent({pbuffer, pbuffer->input_end()});
-    }
-
-    bool is_open()
-    {
-        return output_thread_.joinable();
     }
 
 private:
