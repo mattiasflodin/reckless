@@ -1,4 +1,5 @@
 #include "asynclog.hpp"
+#include "itoa.hpp"
 
 #include <cstdio>
 #include <cstring>
@@ -7,16 +8,28 @@
 namespace asynclog {
 namespace {
     template <typename T>
+    char const* generic_format_uint(output_buffer* pbuffer, char const*& pformat, T v)
+    {
+        char f = *pformat;
+        if(f == 'd') {
+            detail::utoa_base10(pbuffer, v);
+            return pformat + 1;
+        } else if(f == 'x') {
+            // FIXME
+            return nullptr;
+        } else if(f == 'b') {
+            // FIXME
+            return nullptr;
+        } else {
+            return nullptr;
+        }
+    }
+    template <typename T>
     char const* generic_format_int(output_buffer* pbuffer, char const*& pformat, T v)
     {
         char f = *pformat;
         if(f == 'd') {
-            std::ostringstream ostr;
-            ostr << v;
-            std::string const& s = ostr.str();
-            char* p = pbuffer->reserve(s.size());
-            std::memcpy(p, s.data(), s.size());
-            pbuffer->commit(s.size());
+            detail::itoa_base10(pbuffer, v);
             return pformat + 1;
         } else if(f == 'x') {
             // FIXME
