@@ -21,6 +21,7 @@ def build(ctx):
     ctx.stlib(source='performance.cpp', target='performance')
     ctx.program(source='main.cpp', target='test',
             use='asynclog')
+    ctx.program(source='itoatest.cpp', target='itoa')
     ctx.program(source='measure_simple_call_burst.cpp', target='measure_simple_call_burst',
         use='asynclog performance')
     ctx.program(source='measure_periodic_calls.cpp', target='measure_periodic_calls',
