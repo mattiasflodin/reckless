@@ -42,16 +42,6 @@ namespace {
         }
     }
 
-    int typesafe_sprintf(char* str, double v)
-    {
-        return std::sprintf(str, "%f", v);
-    }
-
-    int typesafe_sprintf(char* str, long double v)
-    {
-        return std::sprintf(str, "%Lf", v);
-    }
-
     template <typename T>
     char const* generic_format_float(output_buffer* pbuffer, char const* pformat, T v)
     {
@@ -59,16 +49,7 @@ namespace {
         if(f != 'd')
             return nullptr;
 
-        T v_for_counting_digits = std::fabs(v);
-        if(v_for_counting_digits < 1.0)
-            v_for_counting_digits = static_cast<T>(1.0);
-        std::size_t digits = static_cast<std::size_t>(std::log10(v_for_counting_digits)) + 1;
-        // %f without precision modifier gives us 6 digits after the decimal point.
-        // The format is [-]ddd.dddddd (minimum 9 chars). We can also get e.g.
-        // "-infinity" but that won't be more chars than the digits.
-        char* p = pbuffer->reserve(1+digits+1+6+1);
-        int written = typesafe_sprintf(p, v);
-        pbuffer->commit(written);
+        detail::ftoa_base10(pbuffer, v, 6u);
         return pformat + 1;
     }
 

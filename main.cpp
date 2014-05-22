@@ -49,10 +49,18 @@ void thread_test()
     // TODO I don't think this call does what it should do.
     //g_log.write("three numbers: %s %d %d %s\n", 66, 3.0, obj);
 
-    g_log.debug("three numbers: %s %d %d %s\n", 'B', 67, 3.0, obj);
+    g_log.debug("three numbers: %s %d %d %s\n", 'B', 67, 0.000123, obj);
+    g_log.debug("three numbers: %s %d %d %s\n", 'B', 67, 1.000123, obj);
+    g_log.debug("three numbers: %s %d %d %s\n", 'B', 67, 10.000123, obj);
+    g_log.debug("three numbers: %s %d %d %s\n", 'B', 67, 99.000123, obj);
+    g_log.debug("three numbers: %s %d %d %s\n", 'B', 67, 100.000123, obj);
+    g_log.debug("three numbers: %s %d %d %s\n", 'B', 67, 999.000123, obj);
+    g_log.debug("three numbers: %s %d %d %s\n", 'B', 67, 1000.000123, obj);
+    g_log.debug("three numbers: %s %d %d %s\n", 'B', 67, 10000.000123, obj);
+    g_log.debug("three numbers: %s %d %d %s\n", 'B', 67, 100000.000123, obj);
     asynclog::scoped_indent indent;
     usleep(1000);
-    g_log.info("three numbers: %s %d %d %s\n", 'B', 4567, 3.0, obj);
+    g_log.info("three numbers: %s %d %d %s\n", 'B', 4567, 4294967296.0, obj);
     usleep(1000);
     asynclog::scoped_indent indent2;
     g_log.warn("three numbers: %s %d %d %s\n", 'B', 234567, 3.0, obj);

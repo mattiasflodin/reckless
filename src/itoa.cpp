@@ -3,6 +3,7 @@
 #include "asynclog/detail/utility.hpp"
 
 #include <type_traits>  // is_unsigned
+#include <cmath>        // log10
 
 namespace asynclog {
 namespace detail {
@@ -33,7 +34,7 @@ inline void prefetch_digits()
 }
 
 template <typename Unsigned>
-void utoa_generic_base10(char* str, unsigned pos, Unsigned value,
+unsigned utoa_generic_base10(char* str, unsigned pos, Unsigned value,
         typename std::enable_if<std::is_unsigned<Unsigned>::value>::type* = 0)
 {
     while(value >= 100) {
@@ -47,14 +48,17 @@ void utoa_generic_base10(char* str, unsigned pos, Unsigned value,
         pos -= 2;
     }
     if(value < 10) {
-        str[pos-1] = '0' + static_cast<unsigned char>(value);
+        --pos;
+        str[pos] = '0' + static_cast<unsigned char>(value);
     } else {
         std::size_t offset = 2*value;
         char d1 = decimal_digits[offset];
         char d2 = decimal_digits[offset+1];
-        str[pos-1] = d2;
-        str[pos-2] = d1;
+        pos -= 2;
+        str[pos+1] = d2;
+        str[pos] = d1;
     }
+    return pos;
 }
 
 unsigned log10(std::uint32_t x)
@@ -142,6 +146,7 @@ unsigned log10(std::uint32_t x)
 
 }   // anonymous namespace
 
+// TODO define these for more integer sizes
 void utoa_base10(output_buffer* pbuffer, unsigned int value)
 {
     prefetch_digits();
@@ -164,6 +169,91 @@ void itoa_base10(output_buffer* pbuffer, int value)
     } else {
         utoa_base10(pbuffer, static_cast<unsigned int>(value));
     }
+}
+
+void ftoa_whole(char* str, unsigned pos, double value)
+{
+    static double const chunk_factor = 1000000000;
+    while(value >= chunk_factor)
+    {
+        double chunk = std::fmod(value, chunk_factor);
+        value /= chunk_factor;
+
+        unsigned ichunk = static_cast<unsigned>( chunk );
+        unsigned newpos =  pos - 9;
+        pos = utoa_generic_base10(str, pos, ichunk);
+        while(pos != newpos)
+        {
+            --pos;
+            str[pos] = '0';
+        }
+    }
+
+
+    unsigned ivalue = static_cast<unsigned>( value );
+    utoa_generic_base10(str, pos, ivalue);
+}
+
+static double const exponent_factor = 1.0/log2(10.0);
+
+unsigned count_digits(double whole_value)
+{
+    double lb = logb(10.0);
+    lb = 1.0/lb;
+    double exponent = logb(whole_value);
+    exponent *= exponent_factor;
+    return static_cast<unsigned>(exponent)+1;
+}
+
+void ftoa_base10(output_buffer* pbuffer, double value, unsigned precision)
+{
+    double whole;
+    double fraction = std::modf(value, &whole);
+    unsigned size = count_digits(whole);
+    char* p = pbuffer->reserve(size);
+    ftoa_whole(p, size, whole);
+}
+
+void ftoa_base10_(output_buffer* pbuffer, double value, unsigned precision)
+{
+    bool sign = false;
+    if( value < 0 ) {
+        sign = true;
+        value = -value;
+    }
+
+    unsigned ivalue = static_cast<unsigned>( value );
+    double fraction = value - ivalue;
+    static double const factors[] = {
+        1,
+        10,
+        100,
+        1000,
+        10000,
+        100000,
+        1000000,
+        10000000,
+        100000000,
+        1000000000
+    };
+    fraction *= factors[precision];
+    unsigned ifraction = static_cast<unsigned>(fraction);
+
+    unsigned integer_size = log10(value);
+    unsigned sign_offset = sign? 1 : 0;
+    unsigned size = sign_offset + integer_size + 1 + precision;
+    char* p = pbuffer->reserve(size);
+    unsigned fraction_pos = utoa_generic_base10(p, size, ifraction);
+    while(fraction_pos != sign_offset + integer_size + 1)
+    {
+        --fraction_pos;
+        p[fraction_pos] = '0';
+    }
+    p[sign_offset + integer_size] = '.';
+    utoa_generic_base10(p, sign_offset + integer_size, ivalue);
+    if(sign)
+        *p = '-';
+    pbuffer->commit(size);
 }
 
 }   // namespace detail
