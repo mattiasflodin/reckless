@@ -1,6 +1,7 @@
 #include <cmath>
 #include <cstdint>
 #include <iostream>
+#include <cassert>
 
 // Situations:
 // 
@@ -24,7 +25,6 @@
 //   sig > power
 //   value >= 1.0
 
-// Returns x such that value * pow(10, -x) is in the range [1.0, 10.0)
 double exp10(unsigned exponent)
 {
     if(exponent == 0)
@@ -35,28 +35,44 @@ double exp10(unsigned exponent)
     return x;
 }
 
-std::uint64_t descale(double value, unsigned sig)
+int descale(double value, unsigned sig, std::uint64_t& ivalue)
 {
+    assert(value >= 0.0);
+
     int exponent = std::ilogb(value);
-    exponent = exponent/3 - 1 - sig;
+    exponent = exponent/3 - 1;
+
+    // 1.234 with sig = 4 needs to be multiplied by 1000 or 1*10^3 to get 1234.
+    // In other words we need to subtract one from sig to get the factor.
+    int rshift = exponent - (sig-1);
 
     double power;
     double descaled_value;
-    if(exponent >= 0) {
-        power = exp10(static_cast<unsigned>(exponent));
+    if(rshift >= 0) {
+        power = exp10(static_cast<unsigned>(rshift));
         descaled_value = value/power;
     } else {
-        power = exp10(static_cast<unsigned>(-exponent));
+        power = exp10(static_cast<unsigned>(-rshift));
         descaled_value = value*power;
     }
 
+    double p2;
+    double v2;
+    if(exponent >= 0) {
+        p2 = exp10(static_cast<unsigned>(exponent));
+        v2 = value/p2;
+    } else {
+        p2 = exp10(static_cast<unsigned>(-exponent));
+        v2 = value*p2;
+    }
+
     unsigned sig_power = exp10(sig);
-    std::uint64_t ivalue = static_cast<std::uint64_t>(descaled_value);
+    ivalue = static_cast<std::uint64_t>(descaled_value);
     while(ivalue >= sig_power) {
         ivalue /= 10;
-        exponent -= 1;
+        exponent += 1;
     }
-    return ivalue;
+    return exponent;
 }
 
 //int magnitude(double value)
@@ -139,10 +155,37 @@ void foo_old(double value, unsigned significant_digits, char* str)
 
 int main()
 {
-    descale(0.0012345678, 6);
-    descale(1.0, 6);
-    descale(10.0, 6);
-    descale(123.0, 6);
+    assert(-0.0 < 0.0);
+    std::uint64_t iv;
+    struct testspec {
+        double value;
+        int exponent;
+        std::uintptr_t ivalue;
+    };
+        
+    testspec const tests[] = {
+        {0.0012345678, -3, 123456},
+        {1.0, 0, 100000},
+        {10.0, 1, 100000},
+        {123.0, 2, 123000},
+        {123456, 5, 123456},
+        {12345678, 7, 123456},
+        {12345678901234567890.0, 19, 123456}
+    };
+    for(auto test : tests) {
+        std::uint64_t ivalue;
+        int exponent = descale(test.value, 6, ivalue);
+        if(exponent != test.exponent || ivalue != test.ivalue)
+            std::cout << '!';
+        else
+            std::cout << ' ';
+        std::cout << '\t' << test.value << '\t' << "-> " << exponent << ' ' << ivalue << std::endl;
+    }
+
+    assert( 3 == descale(0.0012345678, 6, iv) );
+    descale(1.0, 6, iv);
+    descale(10.0, 6, iv);
+    descale(123.0, 6, iv);
     //foo(1234567800000000.0, 6, buf);
     //foo(0.01234567800000000, 6, buf);
     //foo(0.0012345678, 6);
