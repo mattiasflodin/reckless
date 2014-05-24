@@ -25,40 +25,65 @@
 //   value >= 1.0
 
 // Returns x such that value * pow(10, -x) is in the range [1.0, 10.0)
-unsigned ipow(unsigned exponent)
+double exp10(unsigned exponent)
 {
     if(exponent == 0)
         return 1;
-    unsigned x = 1;
+    double x = 1;
     for(unsigned i=0; i!=exponent; ++i)
         x *= 10;
     return x;
 }
-int magnitude(double value)
+
+std::uint64_t descale(double value, unsigned sig)
 {
-    std::cout << value << '\t';
     int exponent = std::ilogb(value);
-    exponent /= 3;
-    std::cout << exponent << '\t';
-    double nvalue = exponent >= 0? value*ipow(exponent) : value/ipow(-exponent);
-    std::cout << nvalue << '\t';
-    if(nvalue < 1.0) {
-        std::cout << 'S';
-        nvalue *= 10;
-        exponent -= 1;
-    } else if(nvalue >= 10.0) {
-        nvalue /= 10;
-        std::cout << 'S';
-        exponent += 1;
+    exponent = exponent/3 - 1 - sig;
+
+    double power;
+    double descaled_value;
+    if(exponent >= 0) {
+        power = exp10(static_cast<unsigned>(exponent));
+        descaled_value = value/power;
     } else {
-        std::cout << ' ';
+        power = exp10(static_cast<unsigned>(-exponent));
+        descaled_value = value*power;
     }
 
-    std::cout << '\t' << nvalue;
-    double vvalue = value*pow(10, -exponent);
-    std::cout << '\t' << " -> " << exponent << ' ' << vvalue << std::endl;
-    return exponent;
+    unsigned sig_power = exp10(sig);
+    std::uint64_t ivalue = static_cast<std::uint64_t>(descaled_value);
+    while(ivalue >= sig_power) {
+        ivalue /= 10;
+        exponent -= 1;
+    }
+    return ivalue;
 }
+
+//int magnitude(double value)
+//{
+//    std::cout << value << '\t';
+//    int exponent = std::ilogb(value);
+//    exponent /= 3;
+//    std::cout << exponent << '\t';
+//    double nvalue = exponent >= 0? value*exp10(exponent) : value/exp10(-exponent);
+//    std::cout << nvalue << '\t';
+//    if(nvalue < 1.0) {
+//        std::cout << 'S';
+//        nvalue *= 10;
+//        exponent -= 1;
+//    } else if(nvalue >= 10.0) {
+//        nvalue /= 10;
+//        std::cout << 'S';
+//        exponent += 1;
+//    } else {
+//        std::cout << ' ';
+//    }
+//
+//    std::cout << '\t' << nvalue;
+//    double vvalue = value*pow(10, -exponent);
+//    std::cout << '\t' << " -> " << exponent << ' ' << vvalue << std::endl;
+//    return exponent;
+//}
 
 void foo_fraction(double value, unsigned sig)
 {
@@ -114,20 +139,10 @@ void foo_old(double value, unsigned significant_digits, char* str)
 
 int main()
 {
-    char buf[20];
-    magnitude(8);
-    magnitude(9);
-    magnitude(12);
-    magnitude(15.999999999);
-    magnitude(16);
-    magnitude(0.0010000000);
-    magnitude(0.0012345678);
-    magnitude(0.0050000000);
-    magnitude(0.0099999999);
-    magnitude(0.0099999999999999999999999999999);
-    magnitude(0.0000000001);
-    magnitude(0.0000000005);
-    magnitude(0.0000000009);
+    descale(0.0012345678, 6);
+    descale(1.0, 6);
+    descale(10.0, 6);
+    descale(123.0, 6);
     //foo(1234567800000000.0, 6, buf);
     //foo(0.01234567800000000, 6, buf);
     //foo(0.0012345678, 6);
