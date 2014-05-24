@@ -25,7 +25,7 @@
 //   sig > power
 //   value >= 1.0
 
-double exp10(unsigned exponent)
+/*double exp10(unsigned exponent)
 {
     if(exponent == 0)
         return 1;
@@ -33,6 +33,30 @@ double exp10(unsigned exponent)
     for(unsigned i=0; i!=exponent; ++i)
         x *= 10;
     return x;
+}*/
+
+double my_exp10(unsigned exponent)
+{
+    static double lut[] = {
+        1.0,        // 0
+        10.0,       // 1
+        100.0,      // 2
+        1000.0,     // 3   
+        10000.0,    // 4
+        100000.0,   // 5
+        1000000.0,  // 6
+        10000000.0  // 7
+    };
+
+    if(exponent < 8) {
+        return lut[exponent];
+    } else if(exponent % 2 == 0) {
+        double x = my_exp10(exponent/2);
+        return x*x;
+    } else {
+        double x = my_exp10((exponent-1)/2);
+        return 10.0*x*x;
+    }
 }
 
 int descale(double value, unsigned sig, std::uint64_t& ivalue)
@@ -40,7 +64,7 @@ int descale(double value, unsigned sig, std::uint64_t& ivalue)
     assert(value >= 0.0);
 
     int exponent = std::ilogb(value);
-    exponent = exponent/3 - 1;
+    exponent = exponent*301/1000;   // approximation of log(2)/log(10)
 
     // 1.234 with sig = 4 needs to be multiplied by 1000 or 1*10^3 to get 1234.
     // In other words we need to subtract one from sig to get the factor.
@@ -48,21 +72,23 @@ int descale(double value, unsigned sig, std::uint64_t& ivalue)
 
     double power;
     double descaled_value;
+    //power = exp10(-rshift);
+    //descaled_value = value*power;
     if(rshift >= 0) {
-        power = exp10(static_cast<unsigned>(rshift));
+        power = my_exp10(static_cast<unsigned>(rshift));
         descaled_value = value/power;
     } else {
-        power = exp10(static_cast<unsigned>(-rshift));
+        power = my_exp10(static_cast<unsigned>(-rshift));
         descaled_value = value*power;
     }
 
     double p2;
     double v2;
     if(exponent >= 0) {
-        p2 = exp10(static_cast<unsigned>(exponent));
+        p2 = my_exp10(static_cast<unsigned>(exponent));
         v2 = value/p2;
     } else {
-        p2 = exp10(static_cast<unsigned>(-exponent));
+        p2 = my_exp10(static_cast<unsigned>(-exponent));
         v2 = value*p2;
     }
 
@@ -170,7 +196,8 @@ int main()
         {123.0, 2, 123000},
         {123456, 5, 123456},
         {12345678, 7, 123456},
-        {12345678901234567890.0, 19, 123456}
+        {12345678901234567890.0, 19, 123456},
+        {1.23456789e300, 300, 123456}
     };
     for(auto test : tests) {
         std::uint64_t ivalue;
