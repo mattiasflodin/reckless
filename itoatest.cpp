@@ -3,6 +3,8 @@
 #include <iostream>
 #include <cassert>
 
+#include <sstream>
+
 // Situations:
 // 
 //   0.zzzzxxxxx
@@ -35,35 +37,64 @@
     return x;
 }*/
 
-double my_exp10(unsigned exponent)
+double iexp10(unsigned exponent)
 {
-    static double lut[] = {
-        1.0,        // 0
-        10.0,       // 1
-        100.0,      // 2
-        1000.0,     // 3   
-        10000.0,    // 4
-        100000.0,   // 5
-        1000000.0,  // 6
-        10000000.0  // 7
+    static double const lut1[] = {
+        1e0,
+        1e1,
+        1e2,
+        1e3,
+        1e4,
+        1e5,
+        1e6,
+        1e7,
+    };
+    static double const lut2[] = {
+        1e32,
+        1e64,
+        1e96,
+        1e128,
+        1e160,
+        1e192,
+        1e224,
+        1e256
     };
 
     if(exponent < 8) {
-        return lut[exponent];
+        return lut1[exponent];
+    } else if(exponent % 32 == 0) {
+        return lut2[exponent/32 - 1];
     } else if(exponent % 2 == 0) {
-        double x = my_exp10(exponent/2);
+        double x = iexp10(exponent/2);
         return x*x;
     } else {
-        double x = my_exp10((exponent-1)/2);
+        double x = iexp10((exponent-1)/2);
         return 10.0*x*x;
     }
+}
+
+//double naive_ilogb(double v)
+//{
+//    asm("fxtract" : "=t
+//}
+
+// probably faster to do this with fxtract, gotta figure out how to do the
+// inline asm for it.
+int naive_ilogb(double v)
+{
+    std::uint16_t const* pv = reinterpret_cast<std::uint16_t const*>(&v);
+    // Highest 16 bits is seeeeeee eeeemmmm. We want the e bit which is the
+    // exponent.
+    unsigned exponent = pv[3];
+    exponent = (exponent >> 4) & 0x7ff;
+    return static_cast<int>(exponent) - 1023;
 }
 
 int descale(double value, unsigned sig, std::uint64_t& ivalue)
 {
     assert(value >= 0.0);
 
-    int exponent = std::ilogb(value);
+    int exponent = naive_ilogb(value);
     exponent = exponent*301/1000;   // approximation of log(2)/log(10)
 
     // 1.234 with sig = 4 needs to be multiplied by 1000 or 1*10^3 to get 1234.
@@ -72,28 +103,22 @@ int descale(double value, unsigned sig, std::uint64_t& ivalue)
 
     double power;
     double descaled_value;
-    //power = exp10(-rshift);
-    //descaled_value = value*power;
     if(rshift >= 0) {
-        power = my_exp10(static_cast<unsigned>(rshift));
+        power = iexp10(static_cast<unsigned>(rshift));
         descaled_value = value/power;
     } else {
-        power = my_exp10(static_cast<unsigned>(-rshift));
+        power = iexp10(static_cast<unsigned>(-rshift));
         descaled_value = value*power;
-    }
-
-    double p2;
-    double v2;
-    if(exponent >= 0) {
-        p2 = my_exp10(static_cast<unsigned>(exponent));
-        v2 = value/p2;
-    } else {
-        p2 = my_exp10(static_cast<unsigned>(-exponent));
-        v2 = value*p2;
     }
 
     unsigned sig_power = exp10(sig);
     ivalue = static_cast<std::uint64_t>(descaled_value);
+
+    // 123.45 -> 123
+    // 123.45 -> 123.5 -> 124
+    
+    // TODO the /10 isn't good enough; we need proper rounding. Also can't just use static_cast above.
+
     while(ivalue >= sig_power) {
         ivalue /= 10;
         exponent += 1;
@@ -101,31 +126,38 @@ int descale(double value, unsigned sig, std::uint64_t& ivalue)
     return exponent;
 }
 
-//int magnitude(double value)
-//{
-//    std::cout << value << '\t';
-//    int exponent = std::ilogb(value);
-//    exponent /= 3;
-//    std::cout << exponent << '\t';
-//    double nvalue = exponent >= 0? value*exp10(exponent) : value/exp10(-exponent);
-//    std::cout << nvalue << '\t';
-//    if(nvalue < 1.0) {
-//        std::cout << 'S';
-//        nvalue *= 10;
-//        exponent -= 1;
-//    } else if(nvalue >= 10.0) {
-//        nvalue /= 10;
-//        std::cout << 'S';
-//        exponent += 1;
-//    } else {
-//        std::cout << ' ';
-//    }
-//
-//    std::cout << '\t' << nvalue;
-//    double vvalue = value*pow(10, -exponent);
-//    std::cout << '\t' << " -> " << exponent << ' ' << vvalue << std::endl;
-//    return exponent;
-//}
+std::string ftoa(double value)
+{
+    unsigned const sig = 6;
+    std::ostringstream ostr;
+    std::uint64_t ivalue;
+    int exponent = descale(value, sig, ivalue);
+    if(exponent < 0) {
+        ostr << "0.";
+        for(int i=0; i!=-(exponent+1); ++i)
+            ostr << '0';
+        ostr << ivalue;
+    } else if(static_cast<unsigned>(exponent+1) >= sig) {
+        ostr << ivalue;
+        for(int i=sig; i!=exponent+1; ++i)
+            ostr << '0';
+    } else {
+        unsigned before_dot = static_cast<unsigned>(exponent)+1;
+        unsigned after_dot = sig - before_dot;
+        std::string s(sig + 1, '.');
+        for(unsigned i=0; i!=after_dot; ++i) {
+            s[sig - i] = '0' + static_cast<char>(ivalue % 10);
+            ivalue /= 10;
+        }
+        s[before_dot] = '.';
+        for(unsigned i=before_dot; i!=0; --i) {
+            s[i-1] = '0' + static_cast<char>(ivalue % 10);
+            ivalue /= 10;
+        }
+        ostr << s;
+    }
+    return ostr.str();
+}
 
 void foo_fraction(double value, unsigned sig)
 {
@@ -181,6 +213,7 @@ void foo_old(double value, unsigned significant_digits, char* str)
 
 int main()
 {
+#if 0
     assert(-0.0 < 0.0);
     std::uint64_t iv;
     struct testspec {
@@ -203,10 +236,10 @@ int main()
         std::uint64_t ivalue;
         int exponent = descale(test.value, 6, ivalue);
         if(exponent != test.exponent || ivalue != test.ivalue)
-            std::cout << '!';
+            std::cout << "! ";
         else
-            std::cout << ' ';
-        std::cout << '\t' << test.value << '\t' << "-> " << exponent << ' ' << ivalue << std::endl;
+            std::cout << "  ";
+        std::cout << test.value << '\t' << "-> " << exponent << ' ' << ivalue << std::endl;
     }
 
     assert( 3 == descale(0.0012345678, 6, iv) );
@@ -216,5 +249,19 @@ int main()
     //foo(1234567800000000.0, 6, buf);
     //foo(0.01234567800000000, 6, buf);
     //foo(0.0012345678, 6);
+#endif
+    static double const tests[] = {
+        0.0012345678,
+        1.0,
+        10.0,
+        123.0,
+        123456,
+        12345678,
+        12345678901234567890.0
+    };
+    for(double v : tests) {
+        std::cout << v << '\t' << ftoa(v) << std::endl;
+    }
+
     return 0;
 }
