@@ -157,7 +157,7 @@ int descale(double value, unsigned sig, std::uint64_t& ivalue)
     assert(value >= 0.0);
 
     int exponent = naive_ilogb(value);
-    exponent = exponent*301/1000+1;   // approximation of log(2)/log(10)
+    exponent = exponent*30103/100000;   // approximation of log(2)/log(10)
 
     // 1.234 with sig = 4 needs to be multiplied by 1000 or 1*10^3 to get 1234.
     // In other words we need to subtract one from sig to get the factor.
