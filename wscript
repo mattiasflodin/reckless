@@ -11,7 +11,7 @@ def configure(ctx):
     #ctx.env.append_value('CXXFLAGS', ['-fprofile-arcs', '-ftest-coverage'])
     ctx.env.append_value('LINKFLAGS', ['-g', '-pthread'])
     #ctx.env.append_value('LINKFLAGS', ['-fprofile-arcs'])
-    ctx.env.append_value('DEFINES', ['NDEBUG'])
+    #ctx.env.append_value('DEFINES', ['NDEBUG'])
     ctx.env.append_value('LIB', ['rt'])
 
 def build(ctx):

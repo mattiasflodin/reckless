@@ -90,8 +90,70 @@ int naive_ilogb(double v)
     return static_cast<int>(exponent) - 1023;
 }
 
+std::uint64_t const sig_power_lut[] = {
+    1,  // 0
+    10,  // 1
+    100,  // 2
+    1000,  // 3
+    10000,  // 4
+    100000,  // 5
+    1000000,  // 6
+    10000000,  // 7
+    100000000,  // 8
+    1000000000,  // 9
+    10000000000,  // 10
+    100000000000,  // 11
+    1000000000000,  // 12
+    10000000000000,  // 13
+    100000000000000,  // 14
+    1000000000000000,  // 15
+    10000000000000000,  // 16
+    100000000000000000   // 17
+};
+
+// m*2^e / 10^300
+// 10^300=2^300*5^300
+// m*2^e/2^300 = m*2^(e-300)/5^300
+// 
+// log2(5^300) = 300 log(5)/log(2) = 696
+// We can shift away the 696 aswell. Will get something in [1,2).
+// Then we can adjust by log(5)/log(2) right? So...
+// 
+// 1.23456e300 / 1e300 = 1.23456e300/(2^300*5^300)
+// With x = 1.23456e300/2^300:
+// x/5^300 = log(2)/log(5) * x/2^696 *BEEP wrong*
+// 
+// On one side we have
+// 1.23456*5^300 / 5^300
+// On the other side we have
+// 1.23456*5^300 / 2^696
+// What factor do we need to add to the right side so that it will become equal
+// to the left side?
+// (1.23456*5^300 / 2^696) * 1/(5^300/2^696)
+// (1.23456*5^300 / 2^696) * (2^696/5^300)
+// 
+// Not sure we need the split-up of 10^x into 2^x*5^x? What if we just try:
+// 1.23456e300 / 2^996 * (2^996/10^300)
+// We can compute 1.23456e300 / 2^996 exactly. Now the problem becomes how well
+// we can compute the factor 2^996/10^300.
+//
+// 2^996/10^300 = 5^-300 * 2^(996 - 300)
+// 
+
+int descale2(double value, unsigned sig, std::uint64_t& ivalue)
+{
+    int exponent2 = naive_ilogb(value);
+    int exponent10 = exponent2*301/1000;   // approximation of log(2)/log(10)
+    double ref = iexp10(exponent10);
+    
+    double normalized = std::scalbn(value, -exponent2);
+    normalized *= ref/std::scalbn(1.0, exponent2);
+    return 0;
+}
+
 int descale(double value, unsigned sig, std::uint64_t& ivalue)
 {
+    assert(sig <= 17);
     assert(value >= 0.0);
 
     int exponent = naive_ilogb(value);
@@ -105,30 +167,39 @@ int descale(double value, unsigned sig, std::uint64_t& ivalue)
     double descaled_value;
     if(rshift >= 0) {
         power = iexp10(static_cast<unsigned>(rshift));
+        power = std::pow(10.0, rshift);
         descaled_value = value/power;
     } else {
         power = iexp10(static_cast<unsigned>(-rshift));
         descaled_value = value*power;
     }
 
-    unsigned sig_power = exp10(sig);
+    std::uint64_t sig_power = sig_power_lut[sig];
     ivalue = static_cast<std::uint64_t>(descaled_value);
+    if( ivalue < sig_power) {
+        ivalue = std::lrint(descaled_value);
+        return exponent;
+    }
 
     // 123.45 -> 123
     // 123.45 -> 123.5 -> 124
     
     // TODO the /10 isn't good enough; we need proper rounding. Also can't just use static_cast above.
 
+    std::uint64_t previous_ivalue = ivalue;
+    int count = 0;
     while(ivalue >= sig_power) {
         ivalue /= 10;
         exponent += 1;
+        ++count;
     }
+    assert(count == 1);
+    ivalue += (previous_ivalue % 10) >= 5;
     return exponent;
 }
 
-std::string ftoa(double value)
+std::string ftoa(double value, unsigned sig)
 {
-    unsigned const sig = 6;
     std::ostringstream ostr;
     std::uint64_t ivalue;
     int exponent = descale(value, sig, ivalue);
@@ -213,6 +284,8 @@ void foo_old(double value, unsigned significant_digits, char* str)
 
 int main()
 {
+    std::uint64_t ivalue;
+    descale2(1.23456789e300, 6, ivalue);
 #if 0
     assert(-0.0 < 0.0);
     std::uint64_t iv;
@@ -250,6 +323,7 @@ int main()
     //foo(0.01234567800000000, 6, buf);
     //foo(0.0012345678, 6);
 #endif
+#if 0
     static double const tests[] = {
         0.0012345678,
         1.0,
@@ -257,11 +331,13 @@ int main()
         123.0,
         123456,
         12345678,
-        12345678901234567890.0
+        12345678901234567890.0,
+        1.23456789e300
     };
     for(double v : tests) {
-        std::cout << v << '\t' << ftoa(v) << std::endl;
+        std::cout << v << '\t' << ftoa(v, 17) << std::endl;
     }
+#endif
 
     return 0;
 }
