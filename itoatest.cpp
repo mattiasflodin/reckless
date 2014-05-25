@@ -157,7 +157,7 @@ int descale(double value, unsigned sig, std::uint64_t& ivalue)
     assert(value >= 0.0);
 
     int exponent = naive_ilogb(value);
-    exponent = exponent*301/1000;   // approximation of log(2)/log(10)
+    exponent = exponent*301/1000+1;   // approximation of log(2)/log(10)
 
     // 1.234 with sig = 4 needs to be multiplied by 1000 or 1*10^3 to get 1234.
     // In other words we need to subtract one from sig to get the factor.
@@ -165,9 +165,10 @@ int descale(double value, unsigned sig, std::uint64_t& ivalue)
 
     double power;
     double descaled_value;
+    //power = std::pow(10.0, -rshift);
+    //descaled_value = value*power;
     if(rshift >= 0) {
         power = iexp10(static_cast<unsigned>(rshift));
-        power = std::pow(10.0, rshift);
         descaled_value = value/power;
     } else {
         power = iexp10(static_cast<unsigned>(-rshift));
@@ -323,7 +324,7 @@ int main()
     //foo(0.01234567800000000, 6, buf);
     //foo(0.0012345678, 6);
 #endif
-#if 0
+#if 1
     static double const tests[] = {
         0.0012345678,
         1.0,
@@ -332,10 +333,13 @@ int main()
         123456,
         12345678,
         12345678901234567890.0,
-        1.23456789e300
+        1.23456789e300,
+        1.2345678901234567,
+        1.2345678901234567e308,
+        1.7976931348623157e308
     };
     for(double v : tests) {
-        std::cout << v << '\t' << ftoa(v, 17) << std::endl;
+        std::cout << v << '\t' << ftoa(v, 16) << std::endl;
     }
 #endif
 
