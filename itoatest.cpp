@@ -157,16 +157,32 @@ int descale(double value, unsigned sig, std::uint64_t& ivalue)
     assert(value >= 0.0);
 
     // IEEE floats are represented as value = m * 2^e which makes it easy for
-    // us to extract m and e in base 2, with 1 <= m < 2. We wish instead to
-    // obtain n and e in
+    // us to extract m and e in base 2, with 1 <= m < 2 and e being an integer.
+    // We wish instead to obtain a similar representation n and w such that
     //
-    //  n * 10^w = m * 2^e, where 1 <= n < 10.
+    //  n * 10^w = value, where 1 <= n < 10. and w is an integer.
     // 
+    // To satisfy the constraints for n and w, we need
+    //
+    //  w = floor(log10(value)) = floor(log10(m * 2^e)) = floor(log10(m) + log10(2^e)) =
+    //    = floor(log10(m)) + floor(log10(2^e)) =
+    //    = floor(log10(m)) + floor(C*e), with C=log(2)/log(10).
+    //
+    // Because 1 <= m < 2, floor(log10(m)) always equals 0 giving us
+    //
+    //  w = floor(C*e).
+    //  
     // Solving for n we get
     //
-    //  n = (m * 2^e) / 10^w
+    //  n = (m * 2^e) / 10^w.
     //  
-    // Because 1 <= n < 10, we know that w = log10(value) = log10(
+    // If we rewrite 10^w as an exponent of 2 we get
+    //  
+    //  n = (m * 2^e) / 2^(D*w)  [D = log(10)/log(2)]
+    //  
+    //  n = (m * 2^e) / 2^(D*w)
+    //  n = (m * 2^e) / 2^(B + R)  [B = floor(D*w), R = D*w - B]
+    //  n = (m * 2^(e-B)) / 2^R
     // 
     // To obtain n we need to divide value by
     // 
@@ -179,13 +195,24 @@ int descale(double value, unsigned sig, std::uint64_t& ivalue)
     // 
     // However, we need to compute  We want to compute log10(e) so that we 
     // value = m * 10^(C*e)  (with C=log(2)/log(10))
-    int exponent = naive_ilogb(value);
-    if(exponent<0) {
-        exponent = (exponent*30103 - 30102)/100000;
-    } else {
-        exponent += 1;
-        exponent = (exponent*30103 + 30102)/100000;
-    }
+
+    int e2i;
+    double m2 = std::frexp(value, &e2i);
+    m2 *= 2;
+    e2i -= 1;
+    double e2 = e2i;
+    //int e2 = naive_ilogb(value);
+    static double const D = 3.3219280948873623;  // log(10)/log(2)
+    static double const C = 0.30102999566398120; // log(2)/log(10)
+    double e10 = floor((e2+1)*C) - 5;
+    double B;
+    double R = std::modf(D*e10, &B);
+
+    double descaled = std::scalbn(m2, e2 - B);
+    descaled *= std::exp2(-R);
+    return 0;
+
+
 
     // 30103/100000 is an approximation of log(2)/log(10).
     //if(exponent<0) {
@@ -199,7 +226,7 @@ int descale(double value, unsigned sig, std::uint64_t& ivalue)
     // 1.234 with sig = 4 needs to be multiplied by 1000 or 1*10^3 to get 1234.
     // In other words we need to subtract one from sig to get the factor.
     //int rshift = exponent - (sig-1);
-
+#if 0
     int lshift = 1-exponent;
     double power;
     double descaled_value;
@@ -235,6 +262,7 @@ int descale(double value, unsigned sig, std::uint64_t& ivalue)
     assert(count == 1);
     ivalue += (previous_ivalue % 10) >= 5;
     return exponent;
+#endif
 }
 
 std::string ftoa(double value, unsigned sig)
