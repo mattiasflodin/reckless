@@ -156,18 +156,54 @@ int descale(double value, unsigned sig, std::uint64_t& ivalue)
     assert(sig <= 17);
     assert(value >= 0.0);
 
+    // IEEE floats are represented as value = m * 2^e which makes it easy for
+    // us to extract m and e in base 2, with 1 <= m < 2. We wish instead to
+    // obtain n and e in
+    //
+    //  n * 10^w = m * 2^e, where 1 <= n < 10.
+    // 
+    // Solving for n we get
+    //
+    //  n = (m * 2^e) / 10^w
+    //  
+    // Because 1 <= n < 10, we know that w = log10(value) = log10(
+    // 
+    // To obtain n we need to divide value by
+    // 
+    // rshift = log10(value) = log10(m * 2^e) = log10(m) + log10(2^e).
+    // 
+    // log10(m) will be at most approximately 0.3013. This means that 
+    // 
+    // We can convert the base 2 exponent to a base 10 exponent by multiplying
+    // by log(2)/log(10). However, we really want log10(
+    // 
+    // However, we need to compute  We want to compute log10(e) so that we 
+    // value = m * 10^(C*e)  (with C=log(2)/log(10))
     int exponent = naive_ilogb(value);
-    //exponent += exponent<0? -1 : 1;
-    exponent += 1;
-    exponent = (exponent*30103 + 30102)/100000;   // approximation of log(2)/log(10)
+    if(exponent<0) {
+        exponent = (exponent*30103 - 30102)/100000;
+    } else {
+        exponent += 1;
+        exponent = (exponent*30103 + 30102)/100000;
+    }
+
+    // 30103/100000 is an approximation of log(2)/log(10).
+    //if(exponent<0) {
+    //    exponent -= 1;
+    //    exponent = (exponent*30103 - 30102)/100000; 
+    //} else {
+    //    exponent -= 1;
+    //    exponent = (exponent*30103 + 30102)/100000;
+    //}
 
     // 1.234 with sig = 4 needs to be multiplied by 1000 or 1*10^3 to get 1234.
     // In other words we need to subtract one from sig to get the factor.
-    int rshift = exponent - (sig-1);
+    //int rshift = exponent - (sig-1);
 
+    int lshift = 1-exponent;
     double power;
     double descaled_value;
-    power = std::pow(10.0, -rshift);
+    power = std::pow(10.0, lshift);
     descaled_value = value*power;
     //if(rshift >= 0) {
     //    power = iexp10(static_cast<unsigned>(rshift));
