@@ -4,6 +4,7 @@
 #include <cassert>
 
 #include <sstream>
+#include <random>
 
 // Situations:
 // 
@@ -151,6 +152,138 @@ int descale2(double value, unsigned sig, std::uint64_t& ivalue)
     return 0;
 }
 
+int descale_exp2(double value, unsigned sig, std::uint64_t& ivalue)
+{
+    // IEEE floats are represented as value = m * 2^e which makes it easy for
+    // us to extract m and e in base 2, with 1 <= m < 2 and e being an integer.
+    // We wish instead to obtain a similar representation n and w such that
+    //
+    //  n * 10^w = value, where 1 <= n < 10. and w is an integer.
+    // 
+    // To satisfy the constraints for n and w, we need
+    //
+    //  w = floor(log10(value)) = floor(log10(m * 2^e)) = floor(log10(m) + log10(2^e)) =
+    //    = floor(log10(m)) + floor(log10(2^e)) =
+    //    = floor(log10(m)) + floor(C*e), with C=log(2)/log(10).
+    //
+    // Because 1 <= m < 2, floor(log10(m)) always equals 0 giving us
+    //
+    //  w = floor(C*e).
+    //  
+    // Solving for n we get
+    //
+    //  n = (m * 2^e) / 10^w.
+    //  
+    // If we rewrite 10^w as an exponent of 2 we get
+    //  
+    //  n = (m * 2^e) / 2^(D*w)  [D = log(10)/log(2)]
+    //  
+    //  n = (m * 2^e) / 2^(D*w)
+    //  n = (m * 2^e) / 2^(B + R)  [B = floor(D*w), R = D*w - B]
+    //  n = (m * 2^(e-B)) / 2^R
+
+    double e2 = __builtin_logb(value);
+    static double const D = 3.32192809488736235;  // log(10)/log(2)
+    static double const C = 0.301029995663981195; // log(2)/log(10)
+    double e10 = __builtin_ceil(C*e2) - sig;
+
+    double B = D*e10;
+    double descaled = value*__builtin_exp2(-B);
+    ivalue = __builtin_lrint( descaled );
+    return 0;
+}
+
+int descale_pow10(double value, unsigned sig, std::uint64_t& ivalue)
+{
+    // IEEE floats are represented as value = m * 2^e which makes it easy for
+    // us to extract m and e in base 2, with 1 <= m < 2 and e being an integer.
+    // We wish instead to obtain a similar representation n and w such that
+    //
+    //  n * 10^w = value, where 1 <= n < 10. and w is an integer.
+    // 
+    // To satisfy the constraints for n and w, we need
+    //
+    //  w = floor(log10(value)) = floor(log10(m * 2^e)) = floor(log10(m) + log10(2^e)) =
+    //    = floor(log10(m)) + floor(log10(2^e)) =
+    //    = floor(log10(m)) + floor(C*e), with C=log(2)/log(10).
+    //
+    // Because 1 <= m < 2, floor(log10(m)) always equals 0 giving us
+    //
+    //  w = floor(C*e).
+    //  
+    // Solving for n we get
+    //
+    //  n = (m * 2^e) / 10^w.
+    //  
+    // If we rewrite 10^w as an exponent of 2 we get
+    //  
+    //  n = (m * 2^e) / 2^(D*w)  [D = log(10)/log(2)]
+    //  
+    //  n = (m * 2^e) / 2^(D*w)
+    //  n = (m * 2^e) / 2^(B + R)  [B = floor(D*w), R = D*w - B]
+    //  n = (m * 2^(e-B)) / 2^R
+    // 
+    // To obtain n we need to divide value by
+    // 
+    // rshift = log10(value) = log10(m * 2^e) = log10(m) + log10(2^e).
+    // 
+    // log10(m) will be at most approximately 0.3013. This means that 
+    // 
+    // We can convert the base 2 exponent to a base 10 exponent by multiplying
+    // by log(2)/log(10). However, we really want log10(
+    // 
+    // However, we need to compute  We want to compute log10(e) so that we 
+    // value = m * 10^(C*e)  (with C=log(2)/log(10))
+
+    // C*log2(m) + C*log2(2^e) =
+    // C*log2(m) + C*e
+    double e2 = naive_ilogb(value);
+    static double const C = 0.301029995663981195; // log(2)/log(10)
+    double e10 = __builtin_ceil(C*e2);
+    double descaled = value * __builtin_pow(10.0, -e10 + (sig - 1));
+    ivalue = __builtin_lrint( descaled );
+
+    auto power = sig_power_lut[sig];
+    assert(ivalue >= power/10 && ivalue < power );
+    return static_cast<int>(e10);
+}
+
+int descale_pow2(double value, unsigned sig, std::uint64_t& ivalue)
+{
+    double e2 = naive_ilogb(value);
+    static double const D = 3.32192809488736235;  // log(10)/log(2)
+    static double const C = 0.301029995663981195; // log(2)/log(10)
+    double e10 = __builtin_ceil(C*e2);
+    double descaled = value * __builtin_pow(2.0, -D*(e10 + (sig - 1)));
+    ivalue = __builtin_lrint( descaled );
+    return static_cast<int>(e10);
+}
+
+int descale_exp10(double value, unsigned sig, std::uint64_t& ivalue)
+{
+    double e2 = __builtin_logb(value);
+    static double const C = 0.301029995663981195; // log(2)/log(10)
+    double e10 = __builtin_ceil(C*e2);
+    double descaled = value * __builtin_exp10(-e10);
+    ivalue = __builtin_lrint( descaled );
+    return 0;
+}
+
+int descale_exp2_2(double value, unsigned sig, std::uint64_t& ivalue)
+{
+    double e2 = __builtin_logb(value);
+    static double const D = 3.32192809488736235;  // log(10)/log(2)
+    static double const C = 0.301029995663981195; // log(2)/log(10)
+    double e10 = __builtin_ceil(C*e2);
+
+    double B;
+    double R = __builtin_modf(D*e10, &B);
+    double descaled = __builtin_scalbn(value, -B)*__builtin_exp2(-R);
+    ivalue = __builtin_lrint( descaled );
+    return 0;
+}
+
+
 int descale(double value, unsigned sig, std::uint64_t& ivalue)
 {
     assert(sig <= 17);
@@ -196,20 +329,24 @@ int descale(double value, unsigned sig, std::uint64_t& ivalue)
     // However, we need to compute  We want to compute log10(e) so that we 
     // value = m * 10^(C*e)  (with C=log(2)/log(10))
 
-    int e2i;
-    double m2 = std::frexp(value, &e2i);
-    m2 *= 2;
-    e2i -= 1;
-    double e2 = e2i;
-    //int e2 = naive_ilogb(value);
-    static double const D = 3.3219280948873623;  // log(10)/log(2)
-    static double const C = 0.30102999566398120; // log(2)/log(10)
-    double e10 = floor((e2+1)*C) - 5;
-    double B;
-    double R = std::modf(D*e10, &B);
+    // C*log2(m) + C*log2(2^e) =
+    // C*log2(m) + C*e
 
-    double descaled = std::scalbn(m2, e2 - B);
-    descaled *= std::exp2(-R);
+    //int e2i;
+    //double m2 = __builtin_significand(value);
+    double e2 = __builtin_logb(value);
+    //double m2 = __builtin_frexp(value, &e2i);
+    //m2 *= 2;
+    //e2i -= 1;
+    //double e2 = e2i;
+    //int e2 = naive_ilogb(value);
+    static double const D = 3.32192809488736235;  // log(10)/log(2)
+    static double const C = 0.301029995663981195; // log(2)/log(10)
+    double e10 = __builtin_ceil(C*e2) - 15;
+
+    // B = 6.643856189774724695740638858978780351729662786049161224109512791631869553217250431700279486718740310
+    double B = D*e10;
+    double descaled = value*__builtin_exp2(-B);
     return 0;
 
 
@@ -269,7 +406,7 @@ std::string ftoa(double value, unsigned sig)
 {
     std::ostringstream ostr;
     std::uint64_t ivalue;
-    int exponent = descale(value, sig, ivalue);
+    int exponent = descale_pow10(value, sig, ivalue);
     if(exponent < 0) {
         ostr << "0.";
         for(int i=0; i!=-(exponent+1); ++i)
@@ -402,10 +539,18 @@ int main()
         1.23456789e300,
         1.2345678901234567,
         1.2345678901234567e308,
+        1.7976931348623157e308,
         1.7976931348623158e308
     };
     for(double v : tests) {
         std::cout << v << '\t' << ftoa(v, 17) << std::endl;
+    }
+
+    std::mt19937_64 rng;
+    for(int i=0; i!=100000; ++i) {
+        double v = rng();
+        std::cout << v << std::endl;
+        descale_pow10(v, 17, ivalue);
     }
 #endif
 
