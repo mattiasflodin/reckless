@@ -246,7 +246,9 @@ int descale_pow10(double value, unsigned sig, std::uint64_t& ivalue)
         e10 = static_cast<int>(std::floor(C*(e2)));
     else
         e10 = static_cast<int>(C*(e2));
-    double descaled = value * __builtin_pow(10.0, -e10 + static_cast<int>(sig - 1));
+    //double descaled = value * __builtin_pow(10.0, -e10 + static_cast<int>(sig - 1));
+    double descaled = value * __builtin_pow(10.0, -e10);
+    descaled *= __builtin_pow(10.0, sig - 1);
     ivalue = __builtin_lrint(descaled);
 
     auto power = sig_power_lut[sig];
@@ -259,6 +261,34 @@ int descale_pow10(double value, unsigned sig, std::uint64_t& ivalue)
     assert(ivalue >= power/10 && ivalue < power );
     return static_cast<int>(e10);
 }
+
+int descale_pow5(double value, unsigned sig, std::uint64_t& ivalue)
+{
+    auto e2 = naive_ilogb(value);
+    static double const C = 0.301029995663981195; // log(2)/log(10)
+    e2 -= 1;
+    int e10;
+    if(e2 < 0)
+        e10 = static_cast<int>(C*e2 - 0.5);
+    else
+        e10 = static_cast<int>(C*e2);
+    int shift = -e10 + static_cast<int>(sig - 1);
+    double descaled_old = value*__builtin_pow(10.0, shift);
+    double descaled = __builtin_scalbn(value, shift);
+    descaled *= __builtin_pow(5.0, shift);
+    ivalue = __builtin_lrint(descaled);
+
+    auto power = sig_power_lut[sig];
+    while(ivalue >= power)
+    {
+        descaled /= 10.0;
+        ivalue = __builtin_lrint(descaled);
+        e10 += 1;
+    }
+    assert(ivalue >= power/10 && ivalue < power );
+    return static_cast<int>(e10);
+}
+
 
 int descale_pow2(double value, unsigned sig, std::uint64_t& ivalue)
 {
@@ -554,8 +584,11 @@ int main()
             continue;
         bits &= (std::uint64_t(1)<<63)-1;
         double v = reinterpret_cast<double&>(bits);
-        std::cout << v << std::endl;
-        descale_pow10(v, 17, ivalue);
+        std::cout << v << ' ';
+        std::cout << bits << std::endl;
+        if(bits == 357325158044234440u)
+            asm("int $3;");
+        descale_pow5(v, 17, ivalue);
     }
 
     return 0;
