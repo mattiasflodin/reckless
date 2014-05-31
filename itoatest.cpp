@@ -1,10 +1,12 @@
 #include <cmath>
 #include <cstdint>
 #include <iostream>
+#include <iomanip>
 #include <cassert>
 
 #include <sstream>
 #include <random>
+
 
 // Situations:
 // 
@@ -266,14 +268,25 @@ int descale_pow5(double value, unsigned sig, std::uint64_t& ivalue)
 {
     auto e2 = naive_ilogb(value);
     static double const C = 0.301029995663981195; // log(2)/log(10)
-    e2 -= 1;
     int e10;
+    // 1.0*2^-10
+    // 1.9999*2^-10 ~= 2*2^-10 = 1.0*2^-9
+    // Increasing x means increasing exponent.
+    //
+    // x=9.0256105364686323*10^-285
+    // log2(x) = 943.58...
+    // mantissa = 1.3421..., exponent = -944
+    // Increasing mantissa eventually leads to higher value for e10.
+    // e10 = -944*log(2)/log(10) = -284.17...
+    // e10 = -945*log(2)/log(10) = -284.47...
+    // We need to truncate -284.47 downwards, to 285. But cast to int truncates
+    // upwards.
+    e2 -= 1;
     if(e2 < 0)
-        e10 = static_cast<int>(C*e2 - 0.5);
+        e10 = static_cast<int>(C*e2) - 1;
     else
         e10 = static_cast<int>(C*e2);
     int shift = -e10 + static_cast<int>(sig - 1);
-    double descaled_old = value*__builtin_pow(10.0, shift);
     double descaled = __builtin_scalbn(value, shift);
     descaled *= __builtin_pow(5.0, shift);
     ivalue = __builtin_lrint(descaled);
@@ -577,17 +590,18 @@ int main()
 #endif
 
     std::mt19937_64 rng;
-    for(int i=0; i!=100000; ++i) {
+    for(int i=0; i!=1000000; ++i) {
         std::uint64_t bits = rng();
+        bits &= (std::uint64_t(1)<<63)-1;
         int exponent = static_cast<unsigned>(bits >> 52);
         if(exponent == 0 || exponent == 2047)
             continue;
-        bits &= (std::uint64_t(1)<<63)-1;
         double v = reinterpret_cast<double&>(bits);
-        std::cout << v << ' ';
+        std::cout << bits << " * 2^" << exponent << ' ';
+        std::cout << std::setprecision(17) << v << ' ';
         std::cout << bits << std::endl;
-        if(bits == 357325158044234440u)
-            asm("int $3;");
+        //if(bits == 357325158044234440u)
+        //    asm("int $3;");
         descale_pow5(v, 17, ivalue);
     }
 
