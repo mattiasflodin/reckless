@@ -193,6 +193,7 @@ int descale_exp2(double value, unsigned sig, std::uint64_t& ivalue)
     return 0;
 }
 
+int descale_pow10(double value, unsigned sig, std::uint64_t& ivalue) __attribute__((optimize("-ffast-math")));
 int descale_pow10(double value, unsigned sig, std::uint64_t& ivalue)
 {
     // IEEE floats are represented as value = m * 2^e which makes it easy for
@@ -237,13 +238,24 @@ int descale_pow10(double value, unsigned sig, std::uint64_t& ivalue)
 
     // C*log2(m) + C*log2(2^e) =
     // C*log2(m) + C*e
-    double e2 = naive_ilogb(value);
+    auto e2 = naive_ilogb(value);
     static double const C = 0.301029995663981195; // log(2)/log(10)
-    double e10 = __builtin_ceil(C*e2);
-    double descaled = value * __builtin_pow(10.0, -e10 + (sig - 1));
-    ivalue = __builtin_lrint( descaled );
+    e2 -= 1;
+    int e10;
+    if(e2 < 0)
+        e10 = static_cast<int>(std::floor(C*(e2)));
+    else
+        e10 = static_cast<int>(C*(e2));
+    double descaled = value * __builtin_pow(10.0, -e10 + static_cast<int>(sig - 1));
+    ivalue = __builtin_lrint(descaled);
 
     auto power = sig_power_lut[sig];
+    while(ivalue >= power)
+    {
+        descaled /= 10.0;
+        ivalue = __builtin_lrint(descaled);
+        e10 += 1;
+    }
     assert(ivalue >= power/10 && ivalue < power );
     return static_cast<int>(e10);
 }
@@ -345,8 +357,8 @@ int descale(double value, unsigned sig, std::uint64_t& ivalue)
     double e10 = __builtin_ceil(C*e2) - 15;
 
     // B = 6.643856189774724695740638858978780351729662786049161224109512791631869553217250431700279486718740310
-    double B = D*e10;
-    double descaled = value*__builtin_exp2(-B);
+    //double B = D*e10;
+    //double descaled = value*__builtin_exp2(-B);
     return 0;
 
 
@@ -434,20 +446,6 @@ std::string ftoa(double value, unsigned sig)
     return ostr.str();
 }
 
-void foo_fraction(double value, unsigned sig)
-{
-    double log10 = std::log10(value);
-    double power = std::floor(log10);
-    int ipower = static_cast<int>(power);
-    return;
-}
-
-void foo(double value, unsigned sig)
-{
-    if(value<1.0)
-        foo_fraction(value, sig);
-}
-
 void foo_old(double value, unsigned significant_digits, char* str)
 {
     // double has 53 bits of mantissa, i.e. 53 significant digits. In decimal,
@@ -527,7 +525,7 @@ int main()
     //foo(0.01234567800000000, 6, buf);
     //foo(0.0012345678, 6);
 #endif
-#if 1
+#if 0
     static double const tests[] = {
         0.0012345678,
         1.0,
@@ -542,17 +540,23 @@ int main()
         1.7976931348623157e308,
         1.7976931348623158e308
     };
+
     for(double v : tests) {
         std::cout << v << '\t' << ftoa(v, 17) << std::endl;
     }
+#endif
 
     std::mt19937_64 rng;
     for(int i=0; i!=100000; ++i) {
-        double v = rng();
+        std::uint64_t bits = rng();
+        int exponent = static_cast<unsigned>(bits >> 52);
+        if(exponent == 0 || exponent == 2047)
+            continue;
+        bits &= (std::uint64_t(1)<<63)-1;
+        double v = reinterpret_cast<double&>(bits);
         std::cout << v << std::endl;
         descale_pow10(v, 17, ivalue);
     }
-#endif
 
     return 0;
 }
