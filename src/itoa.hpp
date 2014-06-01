@@ -10,7 +10,7 @@ namespace detail {
 void utoa_base10(output_buffer* pbuffer, unsigned int value);
 void itoa_base10(output_buffer* pbuffer, int value);
 
-void ftoa_base10(output_buffer* pbuffer, double value, unsigned precision);
+void ftoa_base10_natural(output_buffer* pbuffer, double value, unsigned significant_digits);
 
 }   // namespace detail
 }   // namespace asynclog

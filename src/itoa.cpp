@@ -4,6 +4,8 @@
 
 #include <type_traits>  // is_unsigned
 #include <cmath>        // log10
+#include <cassert>
+#include <cstring>      // memset
 
 namespace asynclog {
 namespace detail {
@@ -34,9 +36,11 @@ inline void prefetch_digits()
 }
 
 template <typename Unsigned>
-unsigned utoa_generic_base10(char* str, unsigned pos, Unsigned value,
-        typename std::enable_if<std::is_unsigned<Unsigned>::value>::type* = 0)
+typename std::enable_if<std::is_unsigned<Unsigned>::value, unsigned>::type
+utoa_generic_base10(char* str, unsigned pos, Unsigned value)
 {
+    // FIXME is this right? What if value /= 100 yields 0 here? Do we get an
+    // additional unnecessary 0?
     while(value >= 100) {
         Unsigned remainder = value % 100;
         value /= 100;
@@ -59,6 +63,28 @@ unsigned utoa_generic_base10(char* str, unsigned pos, Unsigned value,
         str[pos] = d1;
     }
     return pos;
+}
+
+template <typename Unsigned>
+typename std::enable_if<std::is_unsigned<Unsigned>::value, Unsigned>::type
+utoa_generic_base10(char* str, unsigned pos, Unsigned value, unsigned digits)
+{
+    while(digits >= 2) {
+        Unsigned remainder = value % 100;
+        value /= 100;
+        std::size_t offset = 2*static_cast<std::size_t>(remainder);
+        char d1 = decimal_digits[offset];
+        char d2 = decimal_digits[offset+1];
+        str[pos-1] = d2;
+        str[pos-2] = d1;
+        pos -= 2;
+        digits -= 2;
+    }
+    if(digits == 1) {
+        --pos;
+        str[pos] = '0' + static_cast<unsigned char>(value);
+    }
+    return value;
 }
 
 unsigned log10(std::uint32_t x)
@@ -144,6 +170,84 @@ unsigned log10(std::uint32_t x)
     }
 }
 
+// TODO probably faster to do this with fxtract, gotta figure out how to do the
+// inline asm for it.
+int naive_ilogb(double v)
+{
+    std::uint16_t const* pv = reinterpret_cast<std::uint16_t const*>(&v);
+    // Highest 16 bits is seeeeeee eeeemmmm. We want the e part which is the
+    // exponent.
+    unsigned exponent = pv[3];
+    exponent = (exponent >> 4) & 0x7ff;
+    return static_cast<int>(exponent) - 1023;
+}
+
+inline std::uint_fast64_t u64_rint(double value)
+{
+    if(std::is_convertible<std::uint64_t, long>::value)
+        return static_cast<std::uint_fast64_t>(std::lrint(value));
+    else
+        return static_cast<std::uint_fast64_t>(std::llrint(value));
+}
+
+int descale_pow5(double value, unsigned significant_digits, std::uint_fast64_t& ivalue)
+{
+    static std::uint64_t const sig_power_lut[] = {
+        1,  // 0
+        10,  // 1
+        100,  // 2
+        1000,  // 3
+        10000,  // 4
+        100000,  // 5
+        1000000,  // 6
+        10000000,  // 7
+        100000000,  // 8
+        1000000000,  // 9
+        10000000000,  // 10
+        100000000000,  // 11
+        1000000000000,  // 12
+        10000000000000,  // 13
+        100000000000000,  // 14
+        1000000000000000,  // 15
+        10000000000000000,  // 16
+        100000000000000000   // 17
+    };
+    auto e2 = naive_ilogb(value);
+    static double const C = 0.301029995663981195; // log(2)/log(10)
+    int e10;
+    // 1.0*2^-10
+    // 1.9999*2^-10 ~= 2*2^-10 = 1.0*2^-9
+    // Increasing x means increasing exponent.
+    //
+    // x=9.0256105364686323*10^-285
+    // log2(x) = 943.58...
+    // mantissa = 1.3421..., exponent = -944
+    // Increasing mantissa eventually leads to higher value for e10.
+    // e10 = -944*log(2)/log(10) = -284.17...
+    // e10 = -945*log(2)/log(10) = -284.47...
+    // We need to truncate -284.47 downwards, to 285. But cast to int truncates
+    // upwards.
+    e2 -= 1;
+    if(e2 < 0)
+        e10 = static_cast<int>(C*e2) - 1;
+    else
+        e10 = static_cast<int>(C*e2);
+    int shift = -e10 + static_cast<int>(significant_digits - 1);
+    double descaled = std::scalbn(value, shift);
+    descaled *= std::pow(5.0, shift);
+    ivalue = u64_rint(descaled);
+
+    auto power = sig_power_lut[significant_digits];
+    while(ivalue >= power)
+    {
+        descaled /= 10.0;
+        ivalue = u64_rint(descaled);
+        e10 += 1;
+    }
+    assert(ivalue >= power/10 && ivalue < power);
+    return static_cast<int>(e10);
+}
+
 }   // anonymous namespace
 
 // TODO define these for more integer sizes
@@ -171,89 +275,36 @@ void itoa_base10(output_buffer* pbuffer, int value)
     }
 }
 
-void ftoa_whole(char* str, unsigned pos, double value)
+void ftoa_base10_natural(output_buffer* pbuffer, double value, unsigned significant_digits)
 {
-    static double const chunk_factor = 1000000000;
-    while(value >= chunk_factor)
-    {
-        double chunk = std::fmod(value, chunk_factor);
-        value /= chunk_factor;
+    std::uint_fast64_t ivalue;
+    int exponent = descale_pow5(value, significant_digits, ivalue);
 
-        unsigned ichunk = static_cast<unsigned>( chunk );
-        unsigned newpos =  pos - 9;
-        pos = utoa_generic_base10(str, pos, ichunk);
-        while(pos != newpos)
-        {
-            --pos;
-            str[pos] = '0';
-        }
+    if(exponent < 0) {
+        unsigned zeroes = static_cast<unsigned>(-exponent + 1);
+        unsigned size = 2 + zeroes + significant_digits;
+        char* str = pbuffer->reserve(size);
+        utoa_generic_base10(str, size, ivalue);
+        std::memset(str+2, '0', zeroes);
+        str[1] = '.';
+        str[0] = '0';
+        pbuffer->commit(size);
+    } else if(static_cast<unsigned>(exponent+1) >= significant_digits) {
+        unsigned zeroes = exponent+1;
+        unsigned size = zeroes + significant_digits;
+        char* str = pbuffer->reserve(size);
+        utoa_generic_base10(str, size, ivalue);
+        std::memset(str, '0', zeroes);
+        pbuffer->commit(size);
+    } else {
+        unsigned before_dot = static_cast<unsigned>(exponent)+1;
+        unsigned after_dot = significant_digits - before_dot;
+        unsigned size = before_dot + 1 + after_dot;
+        char* str = pbuffer->reserve(size);
+        ivalue = utoa_generic_base10(str, size, ivalue, after_dot);
+        str[before_dot] = '.';
+        utoa_generic_base10(str, before_dot, ivalue);
     }
-
-
-    unsigned ivalue = static_cast<unsigned>( value );
-    utoa_generic_base10(str, pos, ivalue);
-}
-
-static double const exponent_factor = 1.0/log2(10.0);
-
-unsigned count_digits(double whole_value)
-{
-    double lb = logb(10.0);
-    lb = 1.0/lb;
-    double exponent = logb(whole_value);
-    exponent *= exponent_factor;
-    return static_cast<unsigned>(exponent)+1;
-}
-
-void ftoa_base10(output_buffer* pbuffer, double value, unsigned precision)
-{
-    double whole;
-    double fraction = std::modf(value, &whole);
-    unsigned size = count_digits(whole);
-    char* p = pbuffer->reserve(size);
-    ftoa_whole(p, size, whole);
-}
-
-void ftoa_base10_(output_buffer* pbuffer, double value, unsigned precision)
-{
-    bool sign = false;
-    if( value < 0 ) {
-        sign = true;
-        value = -value;
-    }
-
-    unsigned ivalue = static_cast<unsigned>( value );
-    double fraction = value - ivalue;
-    static double const factors[] = {
-        1,
-        10,
-        100,
-        1000,
-        10000,
-        100000,
-        1000000,
-        10000000,
-        100000000,
-        1000000000
-    };
-    fraction *= factors[precision];
-    unsigned ifraction = static_cast<unsigned>(fraction);
-
-    unsigned integer_size = log10(value);
-    unsigned sign_offset = sign? 1 : 0;
-    unsigned size = sign_offset + integer_size + 1 + precision;
-    char* p = pbuffer->reserve(size);
-    unsigned fraction_pos = utoa_generic_base10(p, size, ifraction);
-    while(fraction_pos != sign_offset + integer_size + 1)
-    {
-        --fraction_pos;
-        p[fraction_pos] = '0';
-    }
-    p[sign_offset + integer_size] = '.';
-    utoa_generic_base10(p, sign_offset + integer_size, ivalue);
-    if(sign)
-        *p = '-';
-    pbuffer->commit(size);
 }
 
 }   // namespace detail
