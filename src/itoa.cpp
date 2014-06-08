@@ -311,90 +311,16 @@ void ftoa_base10_natural(output_buffer* pbuffer, double value, unsigned signific
 }   // namespace asynclog
 
 #ifdef UNIT_TEST
+#include "unit_test.hpp"
 
-#define TEST(name) {&name, ##name}
-
-namespace unit_test {
-
-class test_suite;
-void register_test_suite(test_suite* ptest_suite)
+void test_ftoa()
 {
+    TEST(1 == 2);
 }
 
-struct no_context;
-
-template <typename Context>
-class test {
-public:
-    test(void (Context::*ptest_function)()) :
-        ptest_function_(pf)
-    {
-    }
-    void operator()(Context& ctx)
-    {
-        (ctx.*ptest_function_)();
-    }
-
-private:
-    void (Context::*ptest_function)();
+unit_test::suite<> tests = {
+    TESTCASE(test_ftoa)
 };
 
-template <>
-class test<no_context> {
-public:
-    test(void (*ptest_function)()) :
-        ptest_function_(pf)
-    {
-    }
-    void operator()(no_context&)
-    {
-        (*ptest_function_)();
-    }
-
-private:
-    void (Context::*ptest_function)();
-};
-
-template <typename Context>
-class test_suite {
-public:
-    test_suite(std::initializer_list<test<Context>> tests) :
-        tests_(tests),
-        succeeded_(0)
-    {
-    }
-
-    void operator()()
-    {
-        Context c;
-        for(test& t : tests_) {
-            try {
-                t(c);
-            } catch(std::exception&) {
-                continue;
-            }
-            ++succeeded_;
-        }
-    }
-};
-
-}   // namespace unit_test
-
-#define TEST_SUITE(name)
-extern Test test_suite ## name [];
-Test test_suite ## name [] =
-
-
-
-template <typename Context, std::size_t Number>
-void test(Context& context);
-
-template <std::size_t Number>
-void test();
-
-template <>
-void test<0>()
-{
-}
-
+UNIT_TEST_MAIN();
 #endif

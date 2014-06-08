@@ -17,14 +17,16 @@ def configure(ctx):
 def build(ctx):
     # To see annotated assembly:
     # -std=c++11 -g -pthread -O3 -march=native -Wa,-adhln=main.s -masm=intel -fverbose-asm -c main.cpp
-    ctx.stlib(source='src/asynclog.cpp src/output_buffer.cpp src/file_writer.cpp src/template_formatter.cpp src/input.cpp src/basic_log.cpp src/itoa.cpp', target='asynclog')
+    ctx.stlib(source='src/asynclog.cpp src/output_buffer.cpp src/file_writer.cpp src/template_formatter.cpp src/input.cpp src/basic_log.cpp src/itoa.cpp src/utility.cpp', target='asynclog')
     ctx.stlib(source='performance.cpp', target='performance')
     ctx.program(source='main.cpp', target='test',
             use='asynclog')
-    ctx.program(source='itoatest.cpp', target='itoa')
+    #ctx.program(source='itoatest.cpp', target='itoa')
     ctx.program(source='measure_simple_call_burst.cpp', target='measure_simple_call_burst',
         use='asynclog performance')
     ctx.program(source='measure_periodic_calls.cpp', target='measure_periodic_calls',
         use='asynclog performance')
     ctx.program(source='measure_write_files.cpp', target='measure_write_files',
         use='asynclog performance')
+
+    ctx.program(source='src/itoa.cpp src/utility.cpp src/output_buffer.cpp', defines=['UNIT_TEST'], target='itoa_test')
