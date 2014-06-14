@@ -14,6 +14,7 @@ public:
     enum Result
     {
         SUCCESS,
+        // FIXME honor these error codes
         ERROR_TRY_LATER,
         ERROR_GIVE_UP
     };

@@ -83,6 +83,7 @@ utoa_generic_base10(char* str, unsigned pos, Unsigned value, unsigned digits)
     if(digits == 1) {
         --pos;
         str[pos] = '0' + static_cast<unsigned char>(value);
+        value /= 10;
     }
     return value;
 }
@@ -190,6 +191,73 @@ inline std::uint_fast64_t u64_rint(double value)
         return static_cast<std::uint_fast64_t>(std::llrint(value));
 }
 
+inline std::uint_fast64_t u64_rint(long double value)
+{
+    if(std::is_convertible<std::uint64_t, long>::value)
+        return static_cast<std::uint_fast64_t>(std::lrint(value));
+    else
+        return static_cast<std::uint_fast64_t>(std::llrint(value));
+}
+
+int descale_pow10(double value, unsigned significant_digits, std::uint_fast64_t& ivalue)
+{
+    static std::uint64_t const sig_power_lut[] = {
+        1,  // 0
+        10,  // 1
+        100,  // 2
+        1000,  // 3
+        10000,  // 4
+        100000,  // 5
+        1000000,  // 6
+        10000000,  // 7
+        100000000,  // 8
+        1000000000,  // 9
+        10000000000,  // 10
+        100000000000,  // 11
+        1000000000000,  // 12
+        10000000000000,  // 13
+        100000000000000,  // 14
+        1000000000000000,  // 15
+        10000000000000000,  // 16
+        100000000000000000   // 17
+    };
+    auto e2 = naive_ilogb(value);
+    static long double const C = 0.3010299956639811952137388947244L; // log(2)/log(10)
+    int e10;
+    // 1.0*2^-10
+    // 1.9999*2^-10 ~= 2*2^-10 = 1.0*2^-9
+    // Increasing x means increasing exponent.
+    //
+    // x=9.0256105364686323*10^-285
+    // log2(x) = 943.58...
+    // mantissa = 1.3421..., exponent = -944
+    // Increasing mantissa eventually leads to higher value for e10.
+    // e10 = -944*log(2)/log(10) = -284.17...
+    // e10 = -945*log(2)/log(10) = -284.47...
+    // We need to truncate -284.47 downwards, to 285. But cast to int truncates
+    // upwards.
+    e2 -= 1;
+    if(e2 < 0)
+        e10 = static_cast<int>(C*e2) - 1;
+    else
+        e10 = static_cast<int>(C*e2);
+    int shift = -e10 + static_cast<int>(significant_digits - 1);
+    long double descaled = value;
+    long double factor = powl(10.0L, shift);
+    descaled *= factor;
+
+    ivalue = u64_rint(descaled);
+
+    auto power = sig_power_lut[significant_digits];
+    while(ivalue >= power)
+    {
+        descaled /= 10.0;
+        ivalue = u64_rint(descaled);
+        e10 += 1;
+    }
+    assert(ivalue >= power/10 && ivalue < power);
+    return static_cast<int>(e10);
+}
 int descale_pow5(double value, unsigned significant_digits, std::uint_fast64_t& ivalue)
 {
     static std::uint64_t const sig_power_lut[] = {
@@ -278,7 +346,7 @@ void itoa_base10(output_buffer* pbuffer, int value)
 void ftoa_base10_natural(output_buffer* pbuffer, double value, unsigned significant_digits)
 {
     std::uint_fast64_t ivalue;
-    int exponent = descale_pow5(value, significant_digits, ivalue);
+    int exponent = descale_pow10(value, significant_digits, ivalue);
 
     if(exponent < 0) {
         unsigned zeroes = static_cast<unsigned>(-exponent + 1);
@@ -290,11 +358,11 @@ void ftoa_base10_natural(output_buffer* pbuffer, double value, unsigned signific
         str[0] = '0';
         pbuffer->commit(size);
     } else if(static_cast<unsigned>(exponent+1) >= significant_digits) {
-        unsigned zeroes = exponent+1;
+        unsigned zeroes = exponent+1 - significant_digits;
         unsigned size = zeroes + significant_digits;
         char* str = pbuffer->reserve(size);
-        utoa_generic_base10(str, size, ivalue);
-        std::memset(str, '0', zeroes);
+        std::memset(str + significant_digits, '0', zeroes);
+        utoa_generic_base10(str, significant_digits, ivalue);
         pbuffer->commit(size);
     } else {
         unsigned before_dot = static_cast<unsigned>(exponent)+1;
@@ -304,6 +372,7 @@ void ftoa_base10_natural(output_buffer* pbuffer, double value, unsigned signific
         ivalue = utoa_generic_base10(str, size, ivalue, after_dot);
         str[before_dot] = '.';
         utoa_generic_base10(str, before_dot, ivalue);
+        pbuffer->commit(size);
     }
 }
 
@@ -313,14 +382,108 @@ void ftoa_base10_natural(output_buffer* pbuffer, double value, unsigned signific
 #ifdef UNIT_TEST
 #include "unit_test.hpp"
 
-void test_ftoa()
-{
-    TEST(1 == 2);
-}
+#include <string>
+#include <sstream>  // istringstream, ostringstream
+#include <iomanip>  // iomanip
+#include <random>
 
-unit_test::suite<> tests = {
-    TESTCASE(test_ftoa)
+namespace asynclog {
+namespace detail {
+
+class string_writer : public writer {
+public:
+    Result write(void const* pbuffer, std::size_t count) override
+    {
+        auto pc = static_cast<char const*>(pbuffer);
+        buffer_.insert(buffer_.end(), pc, pc + count);
+        return SUCCESS;
+    }
+
+    void reset()
+    {
+        buffer_.clear();
+    }
+
+    std::string const& str() const
+    {
+        return buffer_;
+    }
+
+private:
+    std::string buffer_;
 };
+
+#define TEST_FTOA(number, digits) test_ftoa(number, digits, __FILE__, __LINE__);
+class ftoa
+{
+public:
+    ftoa() :
+        output_buffer_(&writer_, 1024)
+    {
+    }
+
+    void greater_than_one()
+    {
+        TEST_FTOA(1.0, 17);
+        TEST_FTOA(10.0, 17);
+        TEST_FTOA(123.0, 17);
+        TEST_FTOA(123.456, 17);
+        TEST_FTOA(123456, 17);
+        TEST_FTOA(12345678901234567890.0, 17);
+        TEST_FTOA(1.23456789e300, 17);
+        TEST_FTOA(1.2345678901234567e308, 17);
+        TEST_FTOA(1.7976931348623157e308, 17);
+        TEST_FTOA(1.7976931348623158e308, 17);
+    }
+
+
+    void random()
+    {
+        std::mt19937_64 rng;
+        for(int i=0; i!=1000000; ++i) {
+            std::uint64_t bits = rng();
+            bits &= (std::uint64_t(1)<<63)-1;
+            int exponent = static_cast<unsigned>(bits >> 52);
+            if(exponent == 0 || exponent == 2047)
+                continue;
+            double v = *reinterpret_cast<double*>(&bits);
+            //std::cout << bits << " * 2^" << exponent << ' ';
+            //std::cout << std::setprecision(17) << v << ' ';
+            //std::cout << bits << std::endl;
+
+            TEST_FTOA(v, 17);
+        }
+    }
+
+private:
+    void test_ftoa(double number, unsigned digits, char const* file, unsigned line)
+    {
+        writer_.reset();
+        ftoa_base10_natural(&output_buffer_, number, 17);
+        output_buffer_.flush();
+        std::string const& str = writer_.str();
+        std::istringstream istr(str);
+        double number2;
+        istr >> number2;
+        if(number != number2)
+        {
+            std::ostringstream ostr;
+            ostr << "read back[number=" << number << ", digits=" << digits << "]";
+            throw unit_test::error(ostr.str(), file, line);
+        }
+    }
+
+    string_writer writer_;
+    output_buffer output_buffer_;
+};
+
+unit_test::suite<ftoa> tests = {
+    TESTCASE(ftoa::greater_than_one),
+    TESTCASE(ftoa::random)
+};
+
+}   // namespace detail
+}   // namespace asynclog
 
 UNIT_TEST_MAIN();
 #endif

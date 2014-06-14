@@ -3,6 +3,7 @@
 #include <cstddef>  // size_t
 #include <initializer_list>
 #include <vector>
+#include <string>
 #include <iostream> // cout, endl
 #include <stdexcept>    // logic_error
 #include <sstream>  // ostringstream
@@ -134,7 +135,7 @@ inline int run()
 
 class error : public std::logic_error {
 public:
-    error(char const* expression, char const* file, unsigned line) :
+    error(std::string const& expression, char const* file, unsigned line) :
         logic_error(make_what(expression, file, line)),
         expression_(expression),
         file_(file),
@@ -143,14 +144,14 @@ public:
     }
 
 private:
-    static std::string make_what(char const* expression, char const* file, unsigned line)
+    static std::string make_what(std::string const& expression, char const* file, unsigned line)
     {
         std::ostringstream ostr;
         ostr << file << '(' << line << "): error in \"" << g_current_testcase << "\": test " << expression << " failed";
         return ostr.str();
     }
 
-    char const* expression_;
+    std::string expression_;
     char const* file_;
     unsigned line_;
 };

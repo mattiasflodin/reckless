@@ -29,4 +29,4 @@ def build(ctx):
     ctx.program(source='measure_write_files.cpp', target='measure_write_files',
         use='asynclog performance')
 
-    ctx.program(source='src/itoa.cpp src/utility.cpp src/output_buffer.cpp', defines=['UNIT_TEST'], target='itoa_test')
+    ctx.program(source='src/itoa.cpp src/output_buffer.cpp src/utility.cpp src/asynclog.cpp', defines=['UNIT_TEST'], target='itoa_test')
