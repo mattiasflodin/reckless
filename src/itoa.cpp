@@ -6,6 +6,7 @@
 #include <cmath>        // log10
 #include <cassert>
 #include <cstring>      // memset
+#include <iomanip>
 
 namespace asynclog {
 namespace detail {
@@ -82,7 +83,7 @@ utoa_generic_base10(char* str, unsigned pos, Unsigned value, unsigned digits)
     }
     if(digits == 1) {
         --pos;
-        str[pos] = '0' + static_cast<unsigned char>(value);
+        str[pos] = '0' + static_cast<unsigned char>(value % 10);
         value /= 10;
     }
     return value;
@@ -241,6 +242,7 @@ int descale_pow10(double value, unsigned significant_digits, std::uint_fast64_t&
         e10 = static_cast<int>(C*e2) - 1;
     else
         e10 = static_cast<int>(C*e2);
+    //e10 -= 1;
     int shift = -e10 + static_cast<int>(significant_digits - 1);
     long double descaled = value;
     long double factor = powl(10.0L, shift);
@@ -349,7 +351,7 @@ void ftoa_base10_natural(output_buffer* pbuffer, double value, unsigned signific
     int exponent = descale_pow10(value, significant_digits, ivalue);
 
     if(exponent < 0) {
-        unsigned zeroes = static_cast<unsigned>(-exponent + 1);
+        unsigned zeroes = static_cast<unsigned>(-exponent - 1);
         unsigned size = 2 + zeroes + significant_digits;
         char* str = pbuffer->reserve(size);
         utoa_generic_base10(str, size, ivalue);
@@ -386,6 +388,7 @@ void ftoa_base10_natural(output_buffer* pbuffer, double value, unsigned signific
 #include <sstream>  // istringstream, ostringstream
 #include <iomanip>  // iomanip
 #include <random>
+#include <algorithm>    // mismatch
 
 namespace asynclog {
 namespace detail {
@@ -413,7 +416,10 @@ private:
     std::string buffer_;
 };
 
-#define TEST_FTOA(number, digits) test_ftoa(number, digits, __FILE__, __LINE__);
+std::size_t const PERFECT_QUALITY = std::numeric_limits<std::size_t>::max();
+
+#define TEST_FTOA(number) test_conversion_quality(number, __FILE__, __LINE__)
+
 class ftoa
 {
 public:
@@ -424,23 +430,26 @@ public:
 
     void greater_than_one()
     {
-        TEST_FTOA(1.0, 17);
-        TEST_FTOA(10.0, 17);
-        TEST_FTOA(123.0, 17);
-        TEST_FTOA(123.456, 17);
-        TEST_FTOA(123456, 17);
-        TEST_FTOA(12345678901234567890.0, 17);
-        TEST_FTOA(1.23456789e300, 17);
-        TEST_FTOA(1.2345678901234567e308, 17);
-        TEST_FTOA(1.7976931348623157e308, 17);
-        TEST_FTOA(1.7976931348623158e308, 17);
+        TEST_FTOA(1.0);
+        TEST_FTOA(10.0);
+        TEST_FTOA(123.0);
+        TEST_FTOA(123.456);
+        TEST_FTOA(123456);
+        TEST_FTOA(12345678901234567890.0);
+        TEST_FTOA(1.23456789e300);
+        TEST_FTOA(1.2345678901234567e308);
+        TEST_FTOA(1.7976931348623157e308);
+        TEST_FTOA(1.7976931348623158e308);
     }
 
 
     void random()
     {
         std::mt19937_64 rng;
-        for(int i=0; i!=1000000; ++i) {
+        int const total = 10000000;
+        int perfect = 0;
+        int quality_counts[17] = {0};
+        for(int i=0; i!=total; ++i) {
             std::uint64_t bits = rng();
             bits &= (std::uint64_t(1)<<63)-1;
             int exponent = static_cast<unsigned>(bits >> 52);
@@ -451,12 +460,25 @@ public:
             //std::cout << std::setprecision(17) << v << ' ';
             //std::cout << bits << std::endl;
 
-            TEST_FTOA(v, 17);
+            auto quality = get_conversion_quality(v);
+            if(quality == PERFECT_QUALITY)
+                perfect++;
+            else {
+                TEST(quality < 17);
+                quality_counts[quality]++;
+            }
         }
+        auto start = std::find_if(quality_counts, quality_counts+17, [](std::size_t x) {return x != 0;});
+        while(start != quality_counts+17)
+        {
+            std::cout << (start - quality_counts) << " digits: " << *start << std::endl;
+            ++start;
+        }
+        std::cout << "perfect: " << perfect << std::endl;
     }
 
 private:
-    void test_ftoa(double number, unsigned digits, char const* file, unsigned line)
+    std::size_t get_conversion_quality(double number)
     {
         writer_.reset();
         ftoa_base10_natural(&output_buffer_, number, 17);
@@ -468,7 +490,26 @@ private:
         if(number != number2)
         {
             std::ostringstream ostr;
-            ostr << "read back[number=" << number << ", digits=" << digits << "]";
+            ostr << std::setprecision(17) << std::fixed << number;
+            std::string const& iostream_str = ostr.str();
+            auto it = mismatch(iostream_str.begin(), iostream_str.end(), str.begin()).first;
+            std::size_t correct_digits = it - iostream_str.begin();
+            return correct_digits;
+
+            //std::ostringstream ostr2;
+            //ostr2 << "read back[iostream=" << number << ", diff at digit " << (correct_digits+1) << "]";
+            //ostr2 << std::endl << str << std::endl << iostream_str;
+            //throw unit_test::error(ostr2.str(), file, line);
+        }
+        return std::numeric_limits<std::size_t>::max();
+    }
+
+    void test_conversion_quality(double number, char const* file, int line)
+    {
+        if(get_conversion_quality(number) != PERFECT_QUALITY)
+        {
+            std::ostringstream ostr;
+            ostr << "conversion of " << number;
             throw unit_test::error(ostr.str(), file, line);
         }
     }
