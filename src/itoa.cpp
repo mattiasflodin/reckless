@@ -223,6 +223,8 @@ int descale_pow10(double value, unsigned significant_digits, std::uint_fast64_t&
         100000000000000000   // 17
     };
     auto e2 = naive_ilogb(value);
+    //if(e2 == -1023)
+    //    return descale_subnormal(value, significant_digits, ivalue)
     static long double const C = 0.3010299956639811952137388947244L; // log(2)/log(10)
     int e10;
     // 1.0*2^-10
@@ -248,63 +250,6 @@ int descale_pow10(double value, unsigned significant_digits, std::uint_fast64_t&
     long double factor = powl(10.0L, shift);
     descaled *= factor;
 
-    ivalue = u64_rint(descaled);
-
-    auto power = sig_power_lut[significant_digits];
-    while(ivalue >= power)
-    {
-        descaled /= 10.0;
-        ivalue = u64_rint(descaled);
-        e10 += 1;
-    }
-    assert(ivalue >= power/10 && ivalue < power);
-    return static_cast<int>(e10);
-}
-int descale_pow5(double value, unsigned significant_digits, std::uint_fast64_t& ivalue)
-{
-    static std::uint64_t const sig_power_lut[] = {
-        1,  // 0
-        10,  // 1
-        100,  // 2
-        1000,  // 3
-        10000,  // 4
-        100000,  // 5
-        1000000,  // 6
-        10000000,  // 7
-        100000000,  // 8
-        1000000000,  // 9
-        10000000000,  // 10
-        100000000000,  // 11
-        1000000000000,  // 12
-        10000000000000,  // 13
-        100000000000000,  // 14
-        1000000000000000,  // 15
-        10000000000000000,  // 16
-        100000000000000000   // 17
-    };
-    auto e2 = naive_ilogb(value);
-    static double const C = 0.301029995663981195; // log(2)/log(10)
-    int e10;
-    // 1.0*2^-10
-    // 1.9999*2^-10 ~= 2*2^-10 = 1.0*2^-9
-    // Increasing x means increasing exponent.
-    //
-    // x=9.0256105364686323*10^-285
-    // log2(x) = 943.58...
-    // mantissa = 1.3421..., exponent = -944
-    // Increasing mantissa eventually leads to higher value for e10.
-    // e10 = -944*log(2)/log(10) = -284.17...
-    // e10 = -945*log(2)/log(10) = -284.47...
-    // We need to truncate -284.47 downwards, to 285. But cast to int truncates
-    // upwards.
-    e2 -= 1;
-    if(e2 < 0)
-        e10 = static_cast<int>(C*e2) - 1;
-    else
-        e10 = static_cast<int>(C*e2);
-    int shift = -e10 + static_cast<int>(significant_digits - 1);
-    double descaled = std::scalbn(value, shift);
-    descaled *= std::pow(5.0, shift);
     ivalue = u64_rint(descaled);
 
     auto power = sig_power_lut[significant_digits];
@@ -442,6 +387,10 @@ public:
         TEST_FTOA(1.7976931348623158e308);
     }
 
+    void subnormals()
+    {
+        TEST_FTOA(2.2250738585072009e-308);
+    }
 
     void random()
     {
@@ -449,24 +398,23 @@ public:
         int const total = 10000000;
         int perfect = 0;
         int quality_counts[17] = {0};
-        for(int i=0; i!=total; ++i) {
+        int i = 0;
+        while(i != total) {
             std::uint64_t bits = rng();
             bits &= (std::uint64_t(1)<<63)-1;
             int exponent = static_cast<unsigned>(bits >> 52);
             if(exponent == 0 || exponent == 2047)
                 continue;
-            double v = *reinterpret_cast<double*>(&bits);
-            //std::cout << bits << " * 2^" << exponent << ' ';
-            //std::cout << std::setprecision(17) << v << ' ';
-            //std::cout << bits << std::endl;
+            double const v = *reinterpret_cast<double const*>(&bits);
 
             auto quality = get_conversion_quality(v);
-            if(quality == PERFECT_QUALITY)
+            if(quality == PERFECT_QUALITY) {
                 perfect++;
-            else {
+            } else {
                 TEST(quality < 17);
                 quality_counts[quality]++;
             }
+            ++i;
         }
         auto start = std::find_if(quality_counts, quality_counts+17, [](std::size_t x) {return x != 0;});
         while(start != quality_counts+17)
@@ -474,7 +422,9 @@ public:
             std::cout << (start - quality_counts) << " digits: " << *start << std::endl;
             ++start;
         }
-        std::cout << "perfect: " << perfect << std::endl;
+        std::cout << "perfect conversion: " << perfect;
+        std::cout << " (" << 100*static_cast<double>(perfect)/total << "%)";
+        std::cout << std::endl;
     }
 
 private:
@@ -495,13 +445,8 @@ private:
             auto it = mismatch(iostream_str.begin(), iostream_str.end(), str.begin()).first;
             std::size_t correct_digits = it - iostream_str.begin();
             return correct_digits;
-
-            //std::ostringstream ostr2;
-            //ostr2 << "read back[iostream=" << number << ", diff at digit " << (correct_digits+1) << "]";
-            //ostr2 << std::endl << str << std::endl << iostream_str;
-            //throw unit_test::error(ostr2.str(), file, line);
         }
-        return std::numeric_limits<std::size_t>::max();
+        return PERFECT_QUALITY;
     }
 
     void test_conversion_quality(double number, char const* file, int line)
@@ -519,8 +464,9 @@ private:
 };
 
 unit_test::suite<ftoa> tests = {
-    TESTCASE(ftoa::greater_than_one),
-    TESTCASE(ftoa::random)
+    //TESTCASE(ftoa::greater_than_one),
+    TESTCASE(ftoa::subnormals)
+    //TESTCASE(ftoa::random)
 };
 
 }   // namespace detail
