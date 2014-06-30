@@ -184,6 +184,22 @@ int naive_ilogb(double v)
     return static_cast<int>(exponent) - 1023;
 }
 
+double fxtract(double v, int* exp)
+{
+    double significand, exponent;
+    asm("fxtract" : "=t"(significand), "=u"(exponent) : "0"(v));
+    *exp = static_cast<int>(exponent);
+    return significand;
+}
+
+long double fxtract(long double v, int* exp)
+{
+    long double significand, exponent;
+    asm("fxtract" : "=t"(significand), "=u"(exponent) : "0"(v));
+    *exp = static_cast<int>(exponent);
+    return significand;
+}
+
 inline std::uint_fast64_t u64_rint(double value)
 {
     if(std::is_convertible<std::uint64_t, long>::value)
@@ -200,31 +216,29 @@ inline std::uint_fast64_t u64_rint(long double value)
         return static_cast<std::uint_fast64_t>(std::llrint(value));
 }
 
-int descale_pow10(double value, unsigned significant_digits, std::uint_fast64_t& ivalue)
+std::uint64_t const sig_power_lut[] = {
+    1,  // 0
+    10,  // 1
+    100,  // 2
+    1000,  // 3
+    10000,  // 4
+    100000,  // 5
+    1000000,  // 6
+    10000000,  // 7
+    100000000,  // 8
+    1000000000,  // 9
+    10000000000,  // 10
+    100000000000,  // 11
+    1000000000000,  // 12
+    10000000000000,  // 13
+    100000000000000,  // 14
+    1000000000000000,  // 15
+    10000000000000000,  // 16
+    100000000000000000   // 17
+};
+
+int descale_normal(long double value, int e2, unsigned significant_digits, std::uint_fast64_t& ivalue)
 {
-    static std::uint64_t const sig_power_lut[] = {
-        1,  // 0
-        10,  // 1
-        100,  // 2
-        1000,  // 3
-        10000,  // 4
-        100000,  // 5
-        1000000,  // 6
-        10000000,  // 7
-        100000000,  // 8
-        1000000000,  // 9
-        10000000000,  // 10
-        100000000000,  // 11
-        1000000000000,  // 12
-        10000000000000,  // 13
-        100000000000000,  // 14
-        1000000000000000,  // 15
-        10000000000000000,  // 16
-        100000000000000000   // 17
-    };
-    auto e2 = naive_ilogb(value);
-    //if(e2 == -1023)
-    //    return descale_subnormal(value, significant_digits, ivalue)
     static long double const C = 0.3010299956639811952137388947244L; // log(2)/log(10)
     int e10;
     // 1.0*2^-10
@@ -263,6 +277,30 @@ int descale_pow10(double value, unsigned significant_digits, std::uint_fast64_t&
     return static_cast<int>(e10);
 }
 
+int descale_subnormal(double value, unsigned significant_digits, std::uint_fast64_t& ivalue)
+{
+    std::uint64_t const* pv = reinterpret_cast<std::uint64_t const*>(&value);
+    // seeeeeee eeeemmmm mmmmmmmm mmmmmmmm mmmmmmmm mmmmmmmm mmmmmmmm mmmmmmmm
+    std::uint64_t m = *pv & 0xfffffffffffff;
+    long double x = m;
+    x *= (2.2250738585072013831L / 0x10000000000000);
+    int e2;
+    fxtract(x, &e2);
+    return descale_normal(x, e2, significant_digits, ivalue);
+    
+}
+
+int descale_pow10_binary64(double value, unsigned significant_digits, std::uint_fast64_t& ivalue)
+{
+    //int e2;
+    //double blah = fxtract(value, &e2);
+    auto e2 = naive_ilogb(value);
+    if(e2 == -1023)
+        return descale_subnormal(value, significant_digits, ivalue);
+    else
+        return descale_normal(value, e2, significant_digits, ivalue);
+}
+
 }   // anonymous namespace
 
 // TODO define these for more integer sizes
@@ -293,7 +331,7 @@ void itoa_base10(output_buffer* pbuffer, int value)
 void ftoa_base10_natural(output_buffer* pbuffer, double value, unsigned significant_digits)
 {
     std::uint_fast64_t ivalue;
-    int exponent = descale_pow10(value, significant_digits, ivalue);
+    int exponent = descale_pow10_binary64(value, significant_digits, ivalue);
 
     if(exponent < 0) {
         unsigned zeroes = static_cast<unsigned>(-exponent - 1);
@@ -389,6 +427,7 @@ public:
 
     void subnormals()
     {
+        TEST_FTOA(0.04e-308);
         TEST_FTOA(2.2250738585072009e-308);
     }
 
