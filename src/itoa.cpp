@@ -216,29 +216,29 @@ inline std::uint_fast64_t u64_rint(long double value)
         return static_cast<std::uint_fast64_t>(std::llrint(value));
 }
 
-std::uint64_t const sig_power_lut[] = {
-    1,  // 0
-    10,  // 1
-    100,  // 2
-    1000,  // 3
-    10000,  // 4
-    100000,  // 5
-    1000000,  // 6
-    10000000,  // 7
-    100000000,  // 8
-    1000000000,  // 9
-    10000000000,  // 10
-    100000000000,  // 11
-    1000000000000,  // 12
-    10000000000000,  // 13
-    100000000000000,  // 14
-    1000000000000000,  // 15
-    10000000000000000,  // 16
-    100000000000000000   // 17
-};
-
 int descale_normal(long double value, int e2, unsigned significant_digits, std::uint_fast64_t& ivalue)
 {
+    static std::uint64_t const sig_power_lut[] = {
+        1,  // 0
+        10,  // 1
+        100,  // 2
+        1000,  // 3
+        10000,  // 4
+        100000,  // 5
+        1000000,  // 6
+        10000000,  // 7
+        100000000,  // 8
+        1000000000,  // 9
+        10000000000,  // 10
+        100000000000,  // 11
+        1000000000000,  // 12
+        10000000000000,  // 13
+        100000000000000,  // 14
+        1000000000000000,  // 15
+        10000000000000000,  // 16
+        100000000000000000   // 17
+    };
+
     static long double const C = 0.3010299956639811952137388947244L; // log(2)/log(10)
     int e10;
     // 1.0*2^-10
@@ -283,17 +283,20 @@ int descale_subnormal(double value, unsigned significant_digits, std::uint_fast6
     // seeeeeee eeeemmmm mmmmmmmm mmmmmmmm mmmmmmmm mmmmmmmm mmmmmmmm mmmmmmmm
     std::uint64_t m = *pv & 0xfffffffffffff;
     long double x = m;
-    x *= (2.2250738585072013831L / 0x10000000000000);
+    x *= (2.2250738585072013831L / 0x10000000000000); // 2^(1-1023)
     int e2;
     fxtract(x, &e2);
-    return descale_normal(x, e2, significant_digits, ivalue);
+    return -308 + descale_normal(x, e2, significant_digits, ivalue);
     
 }
 
-int descale_pow10_binary64(double value, unsigned significant_digits, std::uint_fast64_t& ivalue)
+int descale(double value, unsigned significant_digits, std::uint_fast64_t& ivalue)
 {
-    //int e2;
-    //double blah = fxtract(value, &e2);
+    if(value == 0.0) {
+        ivalue = 0;
+        return 0;
+    }
+
     auto e2 = naive_ilogb(value);
     if(e2 == -1023)
         return descale_subnormal(value, significant_digits, ivalue);
@@ -328,12 +331,45 @@ void itoa_base10(output_buffer* pbuffer, int value)
     }
 }
 
-void ftoa_base10_natural(output_buffer* pbuffer, double value, unsigned significant_digits)
+void ftoa_base10_natural(output_buffer* pbuffer, double value, unsigned significant_digits, int minimum_exponent, int maximum_exponent)
 {
-    std::uint_fast64_t ivalue;
-    int exponent = descale_pow10_binary64(value, significant_digits, ivalue);
+    if(std::signbit(value)) {
+        value = -value;
+        char* s = pbuffer->reserve(1);
+        *s = '-';
+        pbuffer->commit(1);
+    }
 
-    if(exponent < 0) {
+    auto category = std::fpclassify(value);
+    if(category == FP_NAN) {
+        char* s = pbuffer->reserve(3);
+        s[0] = 'n';
+        s[1] = 'a';
+        s[2] = 'n';
+        pbuffer->commit(3);
+        return;
+    } else if(category == FP_INFINITE) {
+        char* s = pbuffer->reserve(3);
+        s[0] = 'i';
+        s[1] = 'n';
+        s[2] = 'f';
+        pbuffer->commit(3);
+        return;
+    }
+
+    if(category == FP_ZERO) {
+        char* s = pbuffer->reserve(1);
+        *s = '0';
+        pbuffer->commit(1);
+        return;
+    }
+
+    std::uint_fast64_t ivalue;
+    int exponent = descale(value, significant_digits, ivalue);
+
+    if(exponent < minimum_exponent || exponent > maximum_exponent) {
+        
+    } else if(exponent < 0) {
         unsigned zeroes = static_cast<unsigned>(-exponent - 1);
         unsigned size = 2 + zeroes + significant_digits;
         char* str = pbuffer->reserve(size);
@@ -427,8 +463,36 @@ public:
 
     void subnormals()
     {
-        TEST_FTOA(0.04e-308);
         TEST_FTOA(2.2250738585072009e-308);
+        TEST_FTOA(0.04e-308);
+        TEST_FTOA(0.00001234e-308);
+        TEST_FTOA(4.9406564584124654e-324);
+        TEST_FTOA(0.0);
+    }
+
+    void special()
+    {
+        std::cout << 1e+1 << std::endl;
+        std::cout << 1e+2 << std::endl;
+        std::cout << 1e+3 << std::endl;
+        std::cout << 1e+4 << std::endl;
+        std::cout << 1e+5 << std::endl;
+        std::cout << 1e+6 << std::endl;
+        std::cout << 1e+7 << std::endl;
+        std::cout << 1e-1 << std::endl;
+        std::cout << 1e-2 << std::endl;
+        std::cout << 1e-3 << std::endl;
+        std::cout << 1e-4 << std::endl;
+        std::cout << 1e-5 << std::endl;
+        std::cout << 1e-6 << std::endl;
+        std::cout << 1e-7 << std::endl;
+        TEST(convert(std::numeric_limits<double>::quiet_NaN()) == "nan");
+        TEST(convert(std::numeric_limits<double>::signaling_NaN()) == "nan");
+        TEST(convert(std::nan("1")) == "nan");
+        TEST(convert(std::nan("2")) == "nan");
+        TEST(convert(-std::numeric_limits<double>::quiet_NaN()) == "-nan");
+        TEST(convert(std::numeric_limits<double>::infinity()) == "inf");
+        TEST(convert(-std::numeric_limits<double>::infinity()) == "-inf");
     }
 
     void random()
@@ -469,10 +533,7 @@ public:
 private:
     std::size_t get_conversion_quality(double number)
     {
-        writer_.reset();
-        ftoa_base10_natural(&output_buffer_, number, 17);
-        output_buffer_.flush();
-        std::string const& str = writer_.str();
+        std::string const& str = convert(number);
         std::istringstream istr(str);
         double number2;
         istr >> number2;
@@ -486,6 +547,14 @@ private:
             return correct_digits;
         }
         return PERFECT_QUALITY;
+    }
+
+    std::string convert(double number)
+    {
+        writer_.reset();
+        ftoa_base10_natural(&output_buffer_, number, 17);
+        output_buffer_.flush();
+        return writer_.str();
     }
 
     void test_conversion_quality(double number, char const* file, int line)
@@ -504,7 +573,8 @@ private:
 
 unit_test::suite<ftoa> tests = {
     //TESTCASE(ftoa::greater_than_one),
-    TESTCASE(ftoa::subnormals)
+    //TESTCASE(ftoa::subnormals)
+    TESTCASE(ftoa::special)
     //TESTCASE(ftoa::random)
 };
 
