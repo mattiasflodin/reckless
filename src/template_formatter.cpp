@@ -49,7 +49,7 @@ namespace {
         if(f != 'd')
             return nullptr;
 
-        detail::ftoa_base10_natural(pbuffer, v, 6u);
+        detail::ftoa_base10(pbuffer, v, 6u);
         return pformat + 1;
     }
 

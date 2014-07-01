@@ -331,7 +331,7 @@ void itoa_base10(output_buffer* pbuffer, int value)
     }
 }
 
-void ftoa_base10_natural(output_buffer* pbuffer, double value, unsigned significant_digits, int minimum_exponent, int maximum_exponent)
+void ftoa_base10(output_buffer* pbuffer, double value, unsigned significant_digits, int minimum_exponent, int maximum_exponent)
 {
     if(std::signbit(value)) {
         value = -value;
@@ -383,20 +383,17 @@ void ftoa_base10_natural(output_buffer* pbuffer, double value, unsigned signific
 
         int dot = significant_digits > 1;
 
-        int size = significant_digits + dot + 1 + exponent_digits;
+        int size = significant_digits + dot + 2 + exponent_digits;
         char* s = pbuffer->reserve(size);
         utoa_generic_base10(s, size, static_cast<unsigned>(exponent));
         s[size-exponent_digits-1] = exponent_sign;
-        ivalue = utoa_generic_base10(s, significant_digits-1, ivalue, size-exponent_digits-1);
-        
-
-        if(significant_digits == 1) {
-            char* s = pbuffer->reserve(1);
-            *s = '0' + static_cast<char>(ivalue);
-            pbuffer->commit(1);
-        } else {
+        s[size-exponent_digits-2] = 'e';
+        if(dot) {
+            ivalue = utoa_generic_base10(s, size-exponent_digits-2, ivalue, significant_digits-1);
+            s[1] = '.';
         }
-        
+        s[0] = '0' + static_cast<char>(ivalue);
+        pbuffer->commit(size);
     } else if(exponent < 0) {
         unsigned zeroes = static_cast<unsigned>(-exponent - 1);
         unsigned size = 2 + zeroes + significant_digits;
@@ -500,20 +497,6 @@ public:
 
     void special()
     {
-        std::cout << 1e+1 << std::endl;
-        std::cout << 1e+2 << std::endl;
-        std::cout << 1e+3 << std::endl;
-        std::cout << 1e+4 << std::endl;
-        std::cout << 1e+5 << std::endl;
-        std::cout << 1e+6 << std::endl;
-        std::cout << 1e+7 << std::endl;
-        std::cout << 1e-1 << std::endl;
-        std::cout << 1e-2 << std::endl;
-        std::cout << 1e-3 << std::endl;
-        std::cout << 1e-4 << std::endl;
-        std::cout << 1e-5 << std::endl;
-        std::cout << 1e-6 << std::endl;
-        std::cout << 1e-7 << std::endl;
         TEST(convert(std::numeric_limits<double>::quiet_NaN()) == "nan");
         TEST(convert(std::numeric_limits<double>::signaling_NaN()) == "nan");
         TEST(convert(std::nan("1")) == "nan");
@@ -521,6 +504,17 @@ public:
         TEST(convert(-std::numeric_limits<double>::quiet_NaN()) == "-nan");
         TEST(convert(std::numeric_limits<double>::infinity()) == "inf");
         TEST(convert(-std::numeric_limits<double>::infinity()) == "-inf");
+    }
+
+    void scientific()
+    {
+        TEST(convert(1.2345e-10, -4, 5, 6) == "1.23450e-10");
+        TEST(convert(1.2345e+10, -4, 5, 6) == "1.23450e+10");
+        TEST(convert(1.2345e+10, -4, 5, 1) == "1e+10");
+        TEST(convert(1.6345e+10, -4, 5, 1) == "2e+10");
+        TEST(convert(1.6645e+10, -4, 5, 2) == "1.7e+10");
+        TEST(convert(4.-324);
+        TEST(convert(1.6645e+10, -4, 5, 2) == "1.7e+10");
     }
 
     void random()
@@ -577,10 +571,10 @@ private:
         return PERFECT_QUALITY;
     }
 
-    std::string convert(double number)
+    std::string convert(double number, int minimum_exponent=-1000, int maximum_exponent=1000, int significant_digits=17)
     {
         writer_.reset();
-        ftoa_base10_natural(&output_buffer_, number, 17);
+        ftoa_base10(&output_buffer_, number, significant_digits, minimum_exponent, maximum_exponent);
         output_buffer_.flush();
         return writer_.str();
     }
@@ -602,7 +596,8 @@ private:
 unit_test::suite<ftoa> tests = {
     //TESTCASE(ftoa::greater_than_one),
     //TESTCASE(ftoa::subnormals)
-    TESTCASE(ftoa::special)
+    //TESTCASE(ftoa::special)
+    TESTCASE(ftoa::scientific)
     //TESTCASE(ftoa::random)
 };
 
