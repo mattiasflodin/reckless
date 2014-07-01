@@ -368,6 +368,34 @@ void ftoa_base10_natural(output_buffer* pbuffer, double value, unsigned signific
     int exponent = descale(value, significant_digits, ivalue);
 
     if(exponent < minimum_exponent || exponent > maximum_exponent) {
+        char exponent_sign = '+';
+        if(exponent < 0) {
+            exponent_sign = '-';
+            exponent = -exponent;
+        }
+        int exponent_digits;
+        if(exponent < 10)
+            exponent_digits = 1;
+        else if(exponent < 100)
+            exponent_digits = 2;
+        else
+            exponent_digits = 3;
+
+        int dot = significant_digits > 1;
+
+        int size = significant_digits + dot + 1 + exponent_digits;
+        char* s = pbuffer->reserve(size);
+        utoa_generic_base10(s, size, static_cast<unsigned>(exponent));
+        s[size-exponent_digits-1] = exponent_sign;
+        ivalue = utoa_generic_base10(s, significant_digits-1, ivalue, size-exponent_digits-1);
+        
+
+        if(significant_digits == 1) {
+            char* s = pbuffer->reserve(1);
+            *s = '0' + static_cast<char>(ivalue);
+            pbuffer->commit(1);
+        } else {
+        }
         
     } else if(exponent < 0) {
         unsigned zeroes = static_cast<unsigned>(-exponent - 1);
