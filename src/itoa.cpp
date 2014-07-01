@@ -331,6 +331,10 @@ void itoa_base10(output_buffer* pbuffer, int value)
     }
 }
 
+void ftoa_base10_precision(output_buffer* pbuffer, double value, unsigned significant_digits, int minimum_exponent, int maximum_exponent)
+{
+}
+
 void ftoa_base10(output_buffer* pbuffer, double value, unsigned significant_digits, int minimum_exponent, int maximum_exponent)
 {
     if(std::signbit(value)) {
@@ -374,9 +378,9 @@ void ftoa_base10(output_buffer* pbuffer, double value, unsigned significant_digi
             exponent = -exponent;
         }
         int exponent_digits;
-        if(exponent < 10)
-            exponent_digits = 1;
-        else if(exponent < 100)
+        // Apparently stdio never prints less than two digits for the exponent,
+        // so we'll do the same to stay consistent.
+        if(exponent < 100)
             exponent_digits = 2;
         else
             exponent_digits = 3;
@@ -385,7 +389,7 @@ void ftoa_base10(output_buffer* pbuffer, double value, unsigned significant_digi
 
         int size = significant_digits + dot + 2 + exponent_digits;
         char* s = pbuffer->reserve(size);
-        utoa_generic_base10(s, size, static_cast<unsigned>(exponent));
+        utoa_generic_base10(s, size, static_cast<unsigned>(exponent), exponent_digits);
         s[size-exponent_digits-1] = exponent_sign;
         s[size-exponent_digits-2] = 'e';
         if(dot) {
@@ -508,13 +512,25 @@ public:
 
     void scientific()
     {
+        std::printf("%f\n", 1.2345e-8);
+        std::printf("%f\n", 1.2345e-9);
+        std::printf("%f\n", 1.2345e-10);
+        std::printf("%f\n", 1.2345e-11);
+        std::printf("%f\n", 1.2345e300);
+        std::printf("%g\n", 1.2345e-8);
+        std::printf("%g\n", 1.2345e-9);
+        std::printf("%g\n", 1.2345e-10);
+        std::printf("%g\n", 1.2345e-11);
+        std::printf("%g\n", 1.2345e300);
+        TEST(convert(1.2345e-8, -4, 5, 6) == "1.23450e-08");
         TEST(convert(1.2345e-10, -4, 5, 6) == "1.23450e-10");
         TEST(convert(1.2345e+10, -4, 5, 6) == "1.23450e+10");
         TEST(convert(1.2345e+10, -4, 5, 1) == "1e+10");
         TEST(convert(1.6345e+10, -4, 5, 1) == "2e+10");
         TEST(convert(1.6645e+10, -4, 5, 2) == "1.7e+10");
-        TEST(convert(4.-324);
         TEST(convert(1.6645e+10, -4, 5, 2) == "1.7e+10");
+        TEST(convert(1.7976931348623157e308, -4, 5, 5) == "1.7977e+308");
+        TEST(convert(4.9406564584124654e-324, -4, 5, 5) == "4.9407e-324");
     }
 
     void random()
