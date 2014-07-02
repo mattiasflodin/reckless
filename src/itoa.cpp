@@ -200,6 +200,13 @@ long double fxtract(long double v, int* exp)
     return significand;
 }
 
+long double fxtract(long double v, long double* exp)
+{
+    long double significand;
+    asm("fxtract" : "=t"(significand), "=u"(*exp) : "0"(v));
+    return significand;
+}
+
 inline std::uint_fast64_t u64_rint(double value)
 {
     if(std::is_convertible<std::uint64_t, long>::value)
@@ -214,6 +221,77 @@ inline std::uint_fast64_t u64_rint(long double value)
         return static_cast<std::uint_fast64_t>(std::lrint(value));
     else
         return static_cast<std::uint_fast64_t>(std::llrint(value));
+}
+
+std::int64_t binary64_to_decimal18(double input, int* pexponent)
+{
+    long double e2;
+    long double m2 = fxtract(static_cast<long double>(input), &e2);
+
+    // We have
+    //   input = m2 * 2^e2  [1 <= m2 < 2] (1)
+    // and want a new representation
+    //   input = m10 * 10^e10  [1 <= m10 < 10].
+    //   
+    // (1) can be rewritten as
+    //   m2 * 10^(C*e2)  [C = log(2)/log(10)] =
+    //   m2 * 10^(e10i + e10f)  [e10i = trunc(C*e2), e10f=frac(C*e2)] =
+    //   m2 * 10^e10i * 10^e10f.
+    //   
+    // If m2 * 10^e10f turns out to be in the range [1, 10) then this gives us
+    // a value for m10 (and consequently for e10=C*e2i). But assuming e2f is a
+    // positive fraction, we have
+    //   0 <= e2f < 1
+    //   1 <= 10^e2f < 10.
+    //   1 <= m2 * 10^e2f < 20.
+    //   
+    // We can adjust for m2 * 10^e2f >= 10 by shifting it to the right and
+    // increasing e10 by one. Hence, with D = e2*log(2)/log(10) we have
+    //   m10 = m2 * 10^(frac(D))
+    //   e10 = trunc(D).
+    // when m2*10^(frac(D)) < 10, or
+    //   m10 = m2 * 10^(frac(D)) / 10
+    //   e10 = trunc(D) + 1.
+    // when m2*10^(frac(D)) >= 10, i.e. normalization requires at most a shift
+    // to the right by 1 digit.
+    // 
+    // If we e2f is a negative fraction we get
+    //   -1 < e2f <= 0
+    //   0.1 <= 10^e2f <= 1.
+    //   0.1 <= m2 * 10^e2f < 2.
+    // Note that this is the range obtained for a positive exponent except
+    // divided by 10. If we multiply this by 10 and subtract 1 from the
+    // exponent then we get the same situation as above, i.e.
+    //   1 <= 10 * m2 * 10^e2f < 20.
+
+    long double d = e2;
+    d *=  0.30102999566398119521L;
+    long double e10i;
+    long double e10f = std::modf(d, &e10i);
+    long double m10;
+    if(e2 < 0) {
+        e10f += 1;
+        e10i -= 1;
+    }
+    //m10 = m2*powl(10, e10f + 17);
+    //std::int64_t mantissa = std::llrint(m10);
+    //if(mantissa >= 1000000000000000000) {
+    //    m10 /= 10.0L;
+    //    mantissa = std::llrint(m10);
+    //    e10i += 1.0L;
+    //}
+    m10 = m2*powl(10, e10f + 16);
+    std::int64_t mantissa = std::llrint(m10);
+    if(mantissa < 100000000000000000)
+        mantissa *= 10;
+    else
+        e10i += 1.0L;
+    // FIXME rounding of m10 might cause it to overflow, right?. We need to
+    // adjust again in that case. But try to reproduce this scenario first so
+    // we know it's needed.
+
+    *pexponent = static_cast<int>(e10i);
+    return mantissa;
 }
 
 std::uint64_t const power_lut[] = {
@@ -330,11 +408,76 @@ void itoa_base10(output_buffer* pbuffer, int value)
     }
 }
 
-void ftoa_base10_precision(output_buffer* pbuffer, double value, unsigned precision, int minimum_exponent, int maximum_exponent)
+void ftoa_base10_precision(output_buffer* pbuffer, double value, unsigned precision)
 {
-    std::uint64_t ivalue;
-    int exponent = descale(value, 17, ivalue);
-    
+    int exponent;
+    auto mantissa_signed = binary64_to_decimal18(value, &exponent);
+    std::uint64_t mantissa;
+    if(mantissa_signed>=0) {
+        mantissa = static_cast<std::uint64_t>(mantissa_signed);
+    } else {
+        char* s = pbuffer->reserve(1);
+        *s = '-';
+        pbuffer->commit(1);
+        mantissa = static_cast<std::uint64_t>(-mantissa_signed);
+    }
+    if(exponent >= 0) {
+        // Exponent gives us the number of digits before the dot minus one.
+        unsigned digits_before_dot = static_cast<unsigned>(exponent) + 1;
+        if(digits_before_dot >= 18) {
+            // Number is large enough that no digits from the mantissa will be
+            // to the right of the dot, so we just fill out with zeroes.
+            unsigned zeroes_before_dot = digits_before_dot - 18;
+            unsigned zeroes_after_dot = precision;
+            unsigned size = digits_before_dot + 1 + zeroes_after_dot;
+            char* s = pbuffer->reserve(size);
+            unsigned pos = size;
+            for(unsigned i=0;i!=zeroes_after_dot;++i)
+                s[pos-i-1] = '0';
+            pos -= zeroes_after_dot;
+            s[--pos] = '.';
+            for(unsigned i=0;i!=zeroes_before_dot;++i)
+                s[pos-i-1] = '0';
+            pos -= zeroes_before_dot;
+            utoa_generic_base10(s, pos, mantissa);
+            pbuffer->commit(size);
+        } else {
+            // Some digits of the mantissa are on the right of the dot.
+            unsigned mantissa_digits_after_dot = 18-digits_before_dot;
+            unsigned zeroes_after_dot;
+            unsigned significant_digits_after_dot;
+            if(precision > mantissa_digits_after_dot) {
+                zeroes_after_dot = precision - mantissa_digits_after_dot;
+                significant_digits_after_dot = mantissa_digits_after_dot;
+            } else {
+                zeroes_after_dot = 0;
+                significant_digits_after_dot = precision;
+                auto power = power_lut[mantissa_digits_after_dot - precision];
+                // FIXME can mantissa overflow due to rounding and cause too many
+                // digits here?
+                mantissa = (mantissa + power/2)/power;
+            }
+
+            unsigned size = digits_before_dot + 1 + precision;
+            char* s = pbuffer->reserve(size);
+            unsigned pos = size;
+            for(unsigned i=0;i!=zeroes_after_dot;++i)
+                s[pos-i-1] = '0';
+            pos -= zeroes_after_dot;
+            mantissa = utoa_generic_base10(s, pos, mantissa, significant_digits_after_dot);
+            pos -= significant_digits_after_dot;
+            s[--pos] = '.';
+            utoa_generic_base10(s, pos, mantissa);
+            pbuffer->commit(size);
+        }
+    } else {
+        // exponent < 0
+        unsigned zeroes = static_cast<unsigned>(-exponent);
+        unsigned significant_digits = 18;
+        if(precision < zeroes) + significant_digits) {
+            significant_digits = 
+        }
+    }
 }
 
 void ftoa_base10(output_buffer* pbuffer, double value, unsigned significant_digits, int minimum_exponent, int maximum_exponent)
@@ -478,6 +621,14 @@ public:
     {
     }
 
+    //void decimal()
+    //{
+    //    int exponent;
+    //    std::int64_t mantissa = binary64_to_decimal18(3.0, &exponent);
+    //    mantissa = binary64_to_decimal18(6.0, &exponent);
+    //    mantissa = binary64_to_decimal18(0.75, &exponent);
+    //}
+
     void greater_than_one()
     {
         TEST_FTOA(1.0);
@@ -533,6 +684,22 @@ public:
         TEST(convert(1.6645e+10, -4, 5, 2) == "1.7e+10");
         TEST(convert(1.7976931348623157e308, -4, 5, 5) == "1.7977e+308");
         TEST(convert(4.9406564584124654e-324, -4, 5, 5) == "4.9407e-324");
+    }
+
+    void precision()
+    {
+        TEST(convert_prec(1.5, 2) == "1.50");
+        TEST(convert_prec(1.234567890, 4) == "1.2346");
+        TEST(convert_prec(1.2345678901234567, 16) == "1.2345678901234567");
+        TEST(convert_prec(1.2345678901234567, 17) == "1.23456789012345670");
+        TEST(convert_prec(1.2345678901234567, 25) == "1.2345678901234567000000000");
+        TEST(convert_prec(1.7976931348623157e308, 3) == "179769313486231563000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000.000");
+        TEST(convert_prec(1234.5678, 0) == "1234");
+        TEST(convert_prec(1234.5678, 1) == "1234.6");
+
+        TEST(convert_prec(0.3, 1) == "0.3");
+        TEST(convert_prec(0.3, 2) == "0.30");
+        TEST(convert_prec(0.3, 20) == "0.30000000000000000000");
     }
 
     void random()
@@ -597,6 +764,14 @@ private:
         return writer_.str();
     }
 
+    std::string convert_prec(double number, unsigned precision)
+    {
+        writer_.reset();
+        ftoa_base10_precision(&output_buffer_, number, precision);
+        output_buffer_.flush();
+        return writer_.str();
+    }
+
     void test_conversion_quality(double number, char const* file, int line)
     {
         if(get_conversion_quality(number) != PERFECT_QUALITY)
@@ -612,10 +787,12 @@ private:
 };
 
 unit_test::suite<ftoa> tests = {
+    //TESTCASE(ftoa::decimal)
+    TESTCASE(ftoa::precision)
     //TESTCASE(ftoa::greater_than_one),
     //TESTCASE(ftoa::subnormals)
     //TESTCASE(ftoa::special)
-    TESTCASE(ftoa::scientific)
+    //TESTCASE(ftoa::scientific)
     //TESTCASE(ftoa::random)
 };
 
