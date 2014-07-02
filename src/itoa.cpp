@@ -216,29 +216,29 @@ inline std::uint_fast64_t u64_rint(long double value)
         return static_cast<std::uint_fast64_t>(std::llrint(value));
 }
 
+std::uint64_t const power_lut[] = {
+    1,  // 0
+    10,  // 1
+    100,  // 2
+    1000,  // 3
+    10000,  // 4
+    100000,  // 5
+    1000000,  // 6
+    10000000,  // 7
+    100000000,  // 8
+    1000000000,  // 9
+    10000000000,  // 10
+    100000000000,  // 11
+    1000000000000,  // 12
+    10000000000000,  // 13
+    100000000000000,  // 14
+    1000000000000000,  // 15
+    10000000000000000,  // 16
+    100000000000000000   // 17
+};
+
 int descale_normal(long double value, int e2, unsigned significant_digits, std::uint_fast64_t& ivalue)
 {
-    static std::uint64_t const sig_power_lut[] = {
-        1,  // 0
-        10,  // 1
-        100,  // 2
-        1000,  // 3
-        10000,  // 4
-        100000,  // 5
-        1000000,  // 6
-        10000000,  // 7
-        100000000,  // 8
-        1000000000,  // 9
-        10000000000,  // 10
-        100000000000,  // 11
-        1000000000000,  // 12
-        10000000000000,  // 13
-        100000000000000,  // 14
-        1000000000000000,  // 15
-        10000000000000000,  // 16
-        100000000000000000   // 17
-    };
-
     static long double const C = 0.3010299956639811952137388947244L; // log(2)/log(10)
     int e10;
     // 1.0*2^-10
@@ -258,7 +258,6 @@ int descale_normal(long double value, int e2, unsigned significant_digits, std::
         e10 = static_cast<int>(C*e2) - 1;
     else
         e10 = static_cast<int>(C*e2);
-    //e10 -= 1;
     int shift = -e10 + static_cast<int>(significant_digits - 1);
     long double descaled = value;
     long double factor = powl(10.0L, shift);
@@ -266,7 +265,7 @@ int descale_normal(long double value, int e2, unsigned significant_digits, std::
 
     ivalue = u64_rint(descaled);
 
-    auto power = sig_power_lut[significant_digits];
+    auto power = power_lut[significant_digits];
     while(ivalue >= power)
     {
         descaled /= 10.0;
@@ -331,8 +330,11 @@ void itoa_base10(output_buffer* pbuffer, int value)
     }
 }
 
-void ftoa_base10_precision(output_buffer* pbuffer, double value, unsigned significant_digits, int minimum_exponent, int maximum_exponent)
+void ftoa_base10_precision(output_buffer* pbuffer, double value, unsigned precision, int minimum_exponent, int maximum_exponent)
 {
+    std::uint64_t ivalue;
+    int exponent = descale(value, 17, ivalue);
+    
 }
 
 void ftoa_base10(output_buffer* pbuffer, double value, unsigned significant_digits, int minimum_exponent, int maximum_exponent)
