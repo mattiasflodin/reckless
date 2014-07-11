@@ -12,6 +12,18 @@ namespace asynclog {
 namespace detail {
 namespace {
 
+template <typename T>
+typename std::make_unsigned<T>::type unsigned_cast(T v)
+{
+    return static_cast<typename std::make_unsigned<T>::type>(v);
+}
+
+template <typename T>
+typename std::make_signed<T>::type signed_cast(T v)
+{
+    return static_cast<typename std::make_signed<T>::type>(v);
+}
+
 char const decimal_digits[] =
     "00010203040506070809"
     "10111213141516171819"
@@ -54,7 +66,7 @@ utoa_generic_base10(char* str, unsigned pos, Unsigned value)
     }
     if(value < 10) {
         --pos;
-        str[pos] = '0' + static_cast<unsigned char>(value);
+        str[pos] = '0' + unsigned_cast(value);
     } else {
         std::size_t offset = 2*value;
         char d1 = decimal_digits[offset];
@@ -83,7 +95,7 @@ utoa_generic_base10(char* str, unsigned pos, Unsigned value, unsigned digits)
     }
     if(digits == 1) {
         --pos;
-        str[pos] = '0' + static_cast<unsigned char>(value % 10);
+        str[pos] = '0' + unsigned_cast(value % 10);
         value /= 10;
     }
     return value;
@@ -312,7 +324,8 @@ std::uint64_t const power_lut[] = {
     100000000000000,  // 14
     1000000000000000,  // 15
     10000000000000000,  // 16
-    100000000000000000   // 17
+    100000000000000000,  // 17
+    1000000000000000000   // 20
 };
 
 int descale_normal(long double value, int e2, unsigned significant_digits, std::uint_fast64_t& ivalue)
@@ -397,14 +410,14 @@ void itoa_base10(output_buffer* pbuffer, int value)
 {
     prefetch_digits();
     if(value<0) {
-        unsigned int uv = static_cast<unsigned int>(-value);
+        unsigned uv = unsigned_cast(-value);
         unsigned size = log10(uv) + 1;
         char* str = pbuffer->reserve(size);
         utoa_generic_base10(str, size, uv);
         pbuffer->commit(size);
         str[0] = '-';
     } else {
-        utoa_base10(pbuffer, static_cast<unsigned int>(value));
+        utoa_base10(pbuffer, unsigned_cast(value));
     }
 }
 
@@ -414,42 +427,52 @@ void ftoa_base10_precision(output_buffer* pbuffer, double value, unsigned precis
     auto mantissa_signed = binary64_to_decimal18(value, &exponent);
     std::uint64_t mantissa;
     if(mantissa_signed>=0) {
-        mantissa = static_cast<std::uint64_t>(mantissa_signed);
+        mantissa = unsigned_cast(mantissa_signed);
     } else {
         char* s = pbuffer->reserve(1);
         *s = '-';
         pbuffer->commit(1);
-        mantissa = static_cast<std::uint64_t>(-mantissa_signed);
+        mantissa = unsigned_cast(-mantissa_signed);
     }
     if(exponent >= 0) {
-        // Exponent gives us the number of digits before the dot minus one.
-        unsigned digits_before_dot = static_cast<unsigned>(exponent) + 1;
+        // There are exponent+1 digits before the dot.
+        unsigned digits_before_dot = unsigned_cast(exponent) + 1;
         if(digits_before_dot >= 18) {
             // Number is large enough that no digits from the mantissa will be
-            // to the right of the dot, so we just fill out with zeroes.
+            // to the right of the dot, so we just fill out the right-hand
+            // side with zeroes.
             unsigned zeroes_before_dot = digits_before_dot - 18;
             unsigned zeroes_after_dot = precision;
-            unsigned size = digits_before_dot + 1 + zeroes_after_dot;
+            unsigned size = digits_before_dot;
+            if(precision != 0)
+                size += 1 + zeroes_after_dot;
             char* s = pbuffer->reserve(size);
             unsigned pos = size;
             for(unsigned i=0;i!=zeroes_after_dot;++i)
                 s[pos-i-1] = '0';
             pos -= zeroes_after_dot;
-            s[--pos] = '.';
-            for(unsigned i=0;i!=zeroes_before_dot;++i)
-                s[pos-i-1] = '0';
+            if(precision != 0) {
+                s[--pos] = '.';
+                for(unsigned i=0;i!=zeroes_before_dot;++i)
+                    s[pos-i-1] = '0';
+            }
             pos -= zeroes_before_dot;
             utoa_generic_base10(s, pos, mantissa);
             pbuffer->commit(size);
         } else {
-            // Some digits of the mantissa are on the right of the dot.
+            // Some digits of the mantissa are on the right side of the dot.
             unsigned mantissa_digits_after_dot = 18-digits_before_dot;
             unsigned zeroes_after_dot;
             unsigned significant_digits_after_dot;
             if(precision > mantissa_digits_after_dot) {
+                // Precision is high enough that there will be trailing zeroes
+                // that are not part of the mantissa's significant digits. Use
+                // the entire mantissa and fill out with zeroes after.
                 zeroes_after_dot = precision - mantissa_digits_after_dot;
                 significant_digits_after_dot = mantissa_digits_after_dot;
             } else {
+                // Precision is so low that some digits from the mantissa will
+                // be cut off. We need to divide (and round).
                 zeroes_after_dot = 0;
                 significant_digits_after_dot = precision;
                 auto power = power_lut[mantissa_digits_after_dot - precision];
@@ -458,24 +481,67 @@ void ftoa_base10_precision(output_buffer* pbuffer, double value, unsigned precis
                 mantissa = (mantissa + power/2)/power;
             }
 
-            unsigned size = digits_before_dot + 1 + precision;
-            char* s = pbuffer->reserve(size);
-            unsigned pos = size;
-            for(unsigned i=0;i!=zeroes_after_dot;++i)
-                s[pos-i-1] = '0';
-            pos -= zeroes_after_dot;
-            mantissa = utoa_generic_base10(s, pos, mantissa, significant_digits_after_dot);
-            pos -= significant_digits_after_dot;
-            s[--pos] = '.';
-            utoa_generic_base10(s, pos, mantissa);
-            pbuffer->commit(size);
+            unsigned size = digits_before_dot;
+            if(precision != 0) {
+                size += + 1 + precision;
+                char* s = pbuffer->reserve(size);
+                unsigned pos = size;
+                for(unsigned i=0;i!=zeroes_after_dot;++i)
+                    s[pos-i-1] = '0';
+                pos -= zeroes_after_dot;
+                mantissa = utoa_generic_base10(s, pos, mantissa, significant_digits_after_dot);
+                pos -= significant_digits_after_dot;
+                s[--pos] = '.';
+                utoa_generic_base10(s, pos, mantissa);
+                pbuffer->commit(size);
+            } else {
+                char* s = pbuffer->reserve(size);
+                utoa_generic_base10(s, size, mantissa);
+                pbuffer->commit(size);
+            }
         }
     } else {
-        // exponent < 0
-        unsigned zeroes = static_cast<unsigned>(-exponent);
-        unsigned significant_digits = 18;
-        if(precision < zeroes) + significant_digits) {
-            significant_digits = 
+        // exponent < 0. No digits of the mantissa are on the left hand side of
+        // the dot.
+        unsigned zeroes_before_mantissa = std::max(precision, unsigned_cast(-exponent) - 1);
+        int significant_digits = std::min(18, signed_cast(precision) - signed_cast(zeroes_before_mantissa));
+        if(significant_digits<0) {
+            // The precision is low enough that we will get only zeroes.
+            unsigned size = precision + 2;
+            char* s = pbuffer->reserve(size);
+            unsigned pos = size;
+            for(unsigned i=0;i!=zeroes_before_mantissa;++i)
+                s[pos-i-1] = '0';
+            s[1] = '.';
+            s[0] = '0';
+            pbuffer->commit(size);
+        } else {
+            // The precision is high enough that we will see the mantissa.
+            int zeroes_after_mantissa = precision - significant_digits;
+            if(zeroes_after_mantissa>0) {
+                unsigned size = unsigned_cast(2 + significant_digits + zeroes_after_mantissa);
+                unsigned pos = size;
+                char* s = pbuffer->reserve(pos);
+                for(int i=0; i!=zeroes_after_mantissa;++i)
+                    s[pos-i-1] = '0';
+                pos -= zeroes_after_mantissa;
+                utoa_generic_base10(s, pos, mantissa);
+                pos -= 18;
+                s[1] = '.';
+                s[0] = '0';
+                pbuffer->commit(size);
+            } else {
+                unsigned size = unsigned_cast(2 + significant_digits);
+                char* s = pbuffer->reserve(size);
+                auto power = power_lut[18 - significant_digits];
+                // FIXME can mantissa overflow due to rounding and cause too many
+                // digits here?
+                mantissa = (mantissa + power/2)/power;
+                utoa_generic_base10(s, size, mantissa);
+                s[1] = '.';
+                s[0] = '0';
+                pbuffer->commit(size);
+            }
         }
     }
 }
@@ -534,7 +600,7 @@ void ftoa_base10(output_buffer* pbuffer, double value, unsigned significant_digi
 
         int size = significant_digits + dot + 2 + exponent_digits;
         char* s = pbuffer->reserve(size);
-        utoa_generic_base10(s, size, static_cast<unsigned>(exponent), exponent_digits);
+        utoa_generic_base10(s, size, unsigned_cast(exponent), exponent_digits);
         s[size-exponent_digits-1] = exponent_sign;
         s[size-exponent_digits-2] = 'e';
         if(dot) {
@@ -544,7 +610,7 @@ void ftoa_base10(output_buffer* pbuffer, double value, unsigned significant_digi
         s[0] = '0' + static_cast<char>(ivalue);
         pbuffer->commit(size);
     } else if(exponent < 0) {
-        unsigned zeroes = static_cast<unsigned>(-exponent - 1);
+        unsigned zeroes = unsigned_cast(-exponent - 1);
         unsigned size = 2 + zeroes + significant_digits;
         char* str = pbuffer->reserve(size);
         utoa_generic_base10(str, size, ivalue);
@@ -552,7 +618,7 @@ void ftoa_base10(output_buffer* pbuffer, double value, unsigned significant_digi
         str[1] = '.';
         str[0] = '0';
         pbuffer->commit(size);
-    } else if(static_cast<unsigned>(exponent+1) >= significant_digits) {
+    } else if(unsigned_cast(exponent+1) >= significant_digits) {
         unsigned zeroes = exponent+1 - significant_digits;
         unsigned size = zeroes + significant_digits;
         char* str = pbuffer->reserve(size);
@@ -560,7 +626,7 @@ void ftoa_base10(output_buffer* pbuffer, double value, unsigned significant_digi
         utoa_generic_base10(str, significant_digits, ivalue);
         pbuffer->commit(size);
     } else {
-        unsigned before_dot = static_cast<unsigned>(exponent)+1;
+        unsigned before_dot = unsigned_cast(exponent)+1;
         unsigned after_dot = significant_digits - before_dot;
         unsigned size = before_dot + 1 + after_dot;
         char* str = pbuffer->reserve(size);
@@ -694,12 +760,21 @@ public:
         TEST(convert_prec(1.2345678901234567, 17) == "1.23456789012345670");
         TEST(convert_prec(1.2345678901234567, 25) == "1.2345678901234567000000000");
         TEST(convert_prec(1.7976931348623157e308, 3) == "179769313486231563000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000.000");
-        TEST(convert_prec(1234.5678, 0) == "1234");
+        TEST(convert_prec(1234.5678, 0) == "1235");
         TEST(convert_prec(1234.5678, 1) == "1234.6");
 
         TEST(convert_prec(0.3, 1) == "0.3");
         TEST(convert_prec(0.3, 2) == "0.30");
-        TEST(convert_prec(0.3, 20) == "0.30000000000000000000");
+        TEST(convert_prec(0.3, 20) == "0.29999999999999999000");
+
+        TEST(convert_prec(1.2345e20, 5) == "123450000000000000000.00000");
+        TEST(convert_prec(1.2345e20, 0) == "123450000000000000000");
+        TEST(convert_prec(1.2345e2, 5) == "123.45000");
+        TEST(convert_prec(1.2345e-20, 5) == "0.00000");
+        TEST(convert_prec(0.5, 0) == "1");
+        TEST(convert_prec(0.05, 1) == "0.1");
+        TEST(convert_prec(1.23456789012345670, 20) == "1.23456789012345670000");
+        TEST(convert_prec(0.123456789012345670, 20) == "0.12345678901234567000");
     }
 
     void random()
@@ -712,7 +787,7 @@ public:
         while(i != total) {
             std::uint64_t bits = rng();
             bits &= (std::uint64_t(1)<<63)-1;
-            int exponent = static_cast<unsigned>(bits >> 52);
+            unsigned exponent = static_cast<unsigned>(bits >> 52);
             if(exponent == 0 || exponent == 2047)
                 continue;
             double const v = *reinterpret_cast<double const*>(&bits);
