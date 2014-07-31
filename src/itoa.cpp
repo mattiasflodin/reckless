@@ -434,6 +434,67 @@ void ftoa_base10_precision(output_buffer* pbuffer, double value, unsigned precis
         pbuffer->commit(1);
         mantissa = unsigned_cast(-mantissa_signed);
     }
+
+    unsigned mantissa_digits_before_dot = 0;
+    unsigned zeroes_before_dot = 0;
+    unsigned mantissa_digits_after_dot = 0;
+    unsigned zeroes_before_mantissa = 0;
+    unsigned zeroes_after_mantissa = 0;
+
+    if(exponent >= 0) {
+        // There are exponent+1 digits before the dot.
+        unsigned digits_before_dot = unsigned_cast(exponent) + 1;
+        mantissa_digits_before_dot = std::max(18, digits_before_dot);
+        zeroes_before_dot = digits_before_dot - mantissa_digits_before_dot;
+        mantissa_digits_after_dot = std::max(precision, 18-mantissa_digits_before_dot);
+        zeroes_after_mantissa = precision - mantissa_digits_after_dot;
+    } else {
+        zeroes_before_mantissa = std::max(precision, unsigned_cast(-exponent) - 1);
+        // No digits of the mantissa are on the left hand side of the dot.
+        // 0.0000mmmm000
+        //   [precision]
+        //   [-(exponent+1)] [18 digits + zeroes | significant digits]
+        int a = -(exponent+1);
+        int zeroes_after_mantissa = precision - a - 18;
+        if(precision >= a+18) {
+            // The entire mantissa is visible.
+        } else {
+            if(precision > a) {
+                int significant_digits = precision - a;
+            } else {
+
+            }
+            int significant_digits = precision - a;
+        }
+
+        int significant_digits = std::min(18, signed_cast(precision) - signed_cast(zeroes_before_mantissa));
+        if(significant_digits<0) {
+            // The precision is low enough that we will get only zeroes.
+        } else {
+            // The precision is high enough that we will see the mantissa.
+            if(precision > significant_digits) {
+                mantissa_digits_after_dot = significant_digits;
+                zeroes_after_mantissa = precision - significant_digits;
+            } else {
+                mantissa_digits_after_dot = precision;
+            }
+        }
+    }
+}
+
+void ftoa_base10_precision2(output_buffer* pbuffer, double value, unsigned precision)
+{
+    int exponent;
+    auto mantissa_signed = binary64_to_decimal18(value, &exponent);
+    std::uint64_t mantissa;
+    if(mantissa_signed>=0) {
+        mantissa = unsigned_cast(mantissa_signed);
+    } else {
+        char* s = pbuffer->reserve(1);
+        *s = '-';
+        pbuffer->commit(1);
+        mantissa = unsigned_cast(-mantissa_signed);
+    }
     if(exponent >= 0) {
         // There are exponent+1 digits before the dot.
         unsigned digits_before_dot = unsigned_cast(exponent) + 1;
