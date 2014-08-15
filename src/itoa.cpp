@@ -421,6 +421,17 @@ void itoa_base10(output_buffer* pbuffer, int value)
     }
 }
 
+unsigned zero_digits(char* s, unsigned pos, unsigned count)
+{
+    unsigned start = pos-count;
+    while(count != 0)
+    {
+        --count;
+        s[start+count] = '0';
+    }
+    return start;
+}
+
 void ftoa_base10_precision(output_buffer* pbuffer, double value, unsigned precision)
 {
     int exponent;
@@ -435,51 +446,73 @@ void ftoa_base10_precision(output_buffer* pbuffer, double value, unsigned precis
         mantissa = unsigned_cast(-mantissa_signed);
     }
 
-    unsigned mantissa_digits_before_dot = 0;
-    unsigned zeroes_before_dot = 0;
-    unsigned mantissa_digits_after_dot = 0;
-    unsigned zeroes_before_mantissa = 0;
-    unsigned zeroes_after_mantissa = 0;
+    // The representation of a number can be in one of these forms. m and
+    // n are digits from the mantissa. Z, S and P are zero digits.
+    //  mmmZZZ.SSS
+    //  mmm.nnnSSS
+    //  0.PPPnnnSSS
+    // We will try to quantify these variants using one set of variables so
+    // that we only need a single implementation of the actual formatting,
+    // rather than many different control paths that are difficult to verify
+    // and understand.
+
+    unsigned mmm;
+    unsigned nnn;
+    unsigned zzz;
+    unsigned sss;
+    unsigned ppp;
 
     if(exponent >= 0) {
         // There are exponent+1 digits before the dot.
+        //  MMMzzz.sss
+        //  MMM.NNNxxx
         unsigned digits_before_dot = unsigned_cast(exponent) + 1;
-        mantissa_digits_before_dot = std::max(18, digits_before_dot);
-        zeroes_before_dot = digits_before_dot - mantissa_digits_before_dot;
-        mantissa_digits_after_dot = std::max(precision, 18-mantissa_digits_before_dot);
-        zeroes_after_mantissa = precision - mantissa_digits_after_dot;
+        mmm = std::min(18u, digits_before_dot);
+        zzz = digits_before_dot - mmm;
+        nnn = std::min(precision, 18-mmm);
+        sss = precision - nnn;
+        ppp = 0;
+
+        auto divisor = power_lut[18-(mmm+nnn)];
+        mantissa = (mantissa + divisor/2)/divisor;
     } else {
-        zeroes_before_mantissa = std::max(precision, unsigned_cast(-exponent) - 1);
         // No digits of the mantissa are on the left hand side of the dot.
-        // 0.0000mmmm000
-        //   [precision]
-        //   [-(exponent+1)] [18 digits + zeroes | significant digits]
-        int a = -(exponent+1);
-        int zeroes_after_mantissa = precision - a - 18;
-        if(precision >= a+18) {
+        // 0.pppMMMxxx
+        zzz = 0;
+        ppp = unsigned_cast(-exponent) - 1;
+        ppp = std::max(precision, ppp);
+        if(precision >= ppp + 18) {
             // The entire mantissa is visible.
+            sss = precision - ppp - 18;
+            mmm = 18;
         } else {
-            if(precision > a) {
-                int significant_digits = precision - a;
-            } else {
-
-            }
-            int significant_digits = precision - a;
+            // Limited precision cuts off the mantissa before the last digit.
+            sss = 0;
+            if(precision > ppp)
+                mmm = precision - ppp;
+            else
+                mmm = 0;
         }
-
-        int significant_digits = std::min(18, signed_cast(precision) - signed_cast(zeroes_before_mantissa));
-        if(significant_digits<0) {
-            // The precision is low enough that we will get only zeroes.
-        } else {
-            // The precision is high enough that we will see the mantissa.
-            if(precision > significant_digits) {
-                mantissa_digits_after_dot = significant_digits;
-                zeroes_after_mantissa = precision - significant_digits;
-            } else {
-                mantissa_digits_after_dot = precision;
-            }
-        }
+        nnn = 0;
     }
+
+    int before_dot = mmm + zzz;
+    int after_dot = ppp + nnn + sss;
+    int size = before_dot;
+    if(after_dot != 0)
+        size += 1 + after_dot;
+    char* s = pbuffer->reserve(size);
+    int pos = size;
+    
+    if(after_dot != 0) {
+        pos = zero_digits(s, pos, sss);
+        mantissa = utoa_generic_base10(s, pos, mantissa, nnn);
+        pos = zero_digits(s, pos-nnn, ppp);
+        s[--pos] = '.';
+    }
+    pos = zero_digits(s, pos, zzz);
+    pos = utoa_generic_base10(s, pos, mantissa);
+    pbuffer->commit(size);
 }
 
 void ftoa_base10_precision2(output_buffer* pbuffer, double value, unsigned precision)
