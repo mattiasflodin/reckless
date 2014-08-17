@@ -480,7 +480,7 @@ void ftoa_base10_precision(output_buffer* pbuffer, double value, unsigned precis
         // 0.pppMMMxxx
         zzz = 0;
         ppp = unsigned_cast(-exponent) - 1;
-        ppp = std::max(precision, ppp);
+        ppp = std::min(precision, ppp);
         if(precision >= ppp + 18) {
             // The entire mantissa is visible.
             sss = precision - ppp - 18;
@@ -494,6 +494,9 @@ void ftoa_base10_precision(output_buffer* pbuffer, double value, unsigned precis
                 mmm = 0;
         }
         nnn = 0;
+
+        auto divisor = power_lut[18-(mmm)];
+        mantissa = (mantissa + divisor/2)/divisor;
     }
 
     int before_dot = mmm + zzz;
@@ -501,6 +504,8 @@ void ftoa_base10_precision(output_buffer* pbuffer, double value, unsigned precis
     int size = before_dot;
     if(after_dot != 0)
         size += 1 + after_dot;
+    if(exponent < 0)
+        size += 2;  // "0."
     char* s = pbuffer->reserve(size);
     int pos = size;
     
@@ -512,6 +517,11 @@ void ftoa_base10_precision(output_buffer* pbuffer, double value, unsigned precis
     }
     pos = zero_digits(s, pos, zzz);
     pos = utoa_generic_base10(s, pos, mantissa);
+
+    if(exponent<0) {
+        s[--pos] = '.';
+        s[0] = '0';
+    }
     pbuffer->commit(size);
 }
 
