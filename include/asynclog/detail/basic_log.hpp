@@ -6,7 +6,7 @@
 #include "asynclog/detail/formatter.hpp"
 #include "asynclog/output_buffer.hpp"
 
-#include <boost/lockfree/queue.hpp>
+#include <boost_1_56_0/lockfree/queue.hpp>
 
 #include <thread>
 #include <functional>
@@ -71,7 +71,7 @@ private:
     char* allocate_input_frame(std::size_t frame_size);
     void reset_shared_input_queue(std::size_t node_count);
 
-    typedef boost::lockfree::queue<detail::commit_extent, boost::lockfree::fixed_sized<true>> shared_input_queue_t;
+    typedef boost_1_56_0::lockfree::queue<detail::commit_extent, boost_1_56_0::lockfree::fixed_sized<true>> shared_input_queue_t;
 
     typedef detail::thread_object<detail::thread_input_buffer, std::size_t, std::size_t> thread_input_buffer_t;
     thread_input_buffer_t pthread_input_buffer_;
