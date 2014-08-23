@@ -948,6 +948,7 @@ private:
         writer_.reset();
         ftoa_base10_precision(&output_buffer_, number, precision);
         output_buffer_.flush();
+        std::cout << writer_.str() << std::endl;
         return writer_.str();
     }
 
