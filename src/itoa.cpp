@@ -450,7 +450,7 @@ void ftoa_base10_precision(output_buffer* pbuffer, double value, unsigned precis
     // n are digits from the mantissa. Z, S and P are zero digits.
     //  mmmZZZ.SSS
     //  mmm.nnnSSS
-    //  0.PPPnnnSSS
+    //  0.PPPnnnZZZ
     // We will try to quantify these variants using one set of variables so
     // that we only need a single implementation of the actual formatting,
     // rather than many different control paths that are difficult to verify
@@ -464,8 +464,8 @@ void ftoa_base10_precision(output_buffer* pbuffer, double value, unsigned precis
 
     if(exponent >= 0) {
         // There are exponent+1 digits before the dot.
-        //  MMMzzz.sss
-        //  MMM.NNNxxx
+        //  mmmZZZ.SSS
+        //  mmm.nnnXXX
         unsigned digits_before_dot = unsigned_cast(exponent) + 1;
         mmm = std::min(18u, digits_before_dot);
         zzz = digits_before_dot - mmm;
@@ -477,23 +477,23 @@ void ftoa_base10_precision(output_buffer* pbuffer, double value, unsigned precis
         mantissa = (mantissa + divisor/2)/divisor;
     } else {
         // No digits of the mantissa are on the left hand side of the dot.
-        // 0.pppMMMxxx
-        zzz = 0;
+        // 0.PPPmmmSSS
         ppp = unsigned_cast(-exponent) - 1;
         ppp = std::min(precision, ppp);
         if(precision >= ppp + 18) {
             // The entire mantissa is visible.
-            sss = precision - ppp - 18;
+            zzz = precision - ppp - 18;
             mmm = 18;
         } else {
             // Limited precision cuts off the mantissa before the last digit.
-            sss = 0;
+            zzz = 0;
             if(precision > ppp)
                 mmm = precision - ppp;
             else
                 mmm = 0;
         }
         nnn = 0;
+        sss = 0;
 
         auto divisor = power_lut[18-(mmm)];
         mantissa = (mantissa + divisor/2)/divisor;
