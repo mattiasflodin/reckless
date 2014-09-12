@@ -450,11 +450,11 @@ void ftoa_base10_precision(output_buffer* pbuffer, double value, unsigned precis
     // n are digits from the mantissa. Z, S and P are zero digits.
     //  mmmZZZ.SSS
     //  mmm.nnnSSS
-    //  0.PPPnnnZZZ
-    // We will try to quantify these variants using one set of variables so
-    // that we only need a single implementation of the actual formatting,
-    // rather than many different control paths that are difficult to verify
-    // and understand.
+    //  Z.PPPnnnSSS
+    // We will try to quantify these variants using one set of numeric
+    // variables so that we only need a single implementation of the actual
+    // formatting, rather than many different control paths that are difficult
+    // to verify and understand.
 
     unsigned mmm;
     unsigned nnn;
@@ -462,6 +462,9 @@ void ftoa_base10_precision(output_buffer* pbuffer, double value, unsigned precis
     unsigned sss;
     unsigned ppp;
 
+    NEXT we have a problem when rounding upwards causes the mantissa digit
+    range sometimes we may need an extra digit. What do? Can we predict this
+    somehow?
     if(exponent >= 0) {
         // There are exponent+1 digits before the dot.
         //  mmmZZZ.SSS
@@ -477,25 +480,25 @@ void ftoa_base10_precision(output_buffer* pbuffer, double value, unsigned precis
         mantissa = (mantissa + divisor/2)/divisor;
     } else {
         // No digits of the mantissa are on the left hand side of the dot.
-        // 0.PPPmmmSSS
+        // Z.PPPnnnSSS
+        mmm = 0;
+        zzz = 1;
         ppp = unsigned_cast(-exponent) - 1;
         ppp = std::min(precision, ppp);
         if(precision >= ppp + 18) {
             // The entire mantissa is visible.
-            zzz = precision - ppp - 18;
-            mmm = 18;
+            nnn = 18;
+            sss = precision - ppp - 18;
         } else {
             // Limited precision cuts off the mantissa before the last digit.
-            zzz = 0;
+            sss = 0;
             if(precision > ppp)
-                mmm = precision - ppp;
+                nnn = precision - ppp;
             else
-                mmm = 0;
+                nnn = 0;
         }
-        nnn = 0;
-        sss = 0;
 
-        auto divisor = power_lut[18-(mmm)];
+        auto divisor = power_lut[18-(nnn)];
         mantissa = (mantissa + divisor/2)/divisor;
     }
 
@@ -503,25 +506,22 @@ void ftoa_base10_precision(output_buffer* pbuffer, double value, unsigned precis
     int after_dot = ppp + nnn + sss;
     int size = before_dot;
     if(after_dot != 0)
-        size += 1 + after_dot;
-    if(exponent < 0)
-        size += 2;  // "0."
+        size += 1 + after_dot;  // +1 for '.' separator
+    
     char* s = pbuffer->reserve(size);
     int pos = size;
     
     if(after_dot != 0) {
         pos = zero_digits(s, pos, sss);
         mantissa = utoa_generic_base10(s, pos, mantissa, nnn);
-        pos = zero_digits(s, pos-nnn, ppp);
+        pos -= nnn;
+        pos = zero_digits(s, pos, ppp);
         s[--pos] = '.';
     }
     pos = zero_digits(s, pos, zzz);
-    pos = utoa_generic_base10(s, pos, mantissa);
+    if(pos != 0)
+         utoa_generic_base10(s, pos, mantissa);
 
-    if(exponent<0) {
-        s[--pos] = '.';
-        s[0] = '0';
-    }
     pbuffer->commit(size);
 }
 
@@ -948,7 +948,7 @@ private:
         writer_.reset();
         ftoa_base10_precision(&output_buffer_, number, precision);
         output_buffer_.flush();
-        std::cout << writer_.str() << std::endl;
+        std::cout << '[' << writer_.str() << ']' << std::endl;
         return writer_.str();
     }
 
