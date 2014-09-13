@@ -453,15 +453,29 @@ void ftoa_base10_precision(output_buffer* pbuffer, double value, unsigned precis
     //  mmm.nnnSSS    12345.67890000, 1.23, 1.0
     //  Z.PPPnnnSSS   0.0000123456789012345678000, 0.03
     //
+    // We will try to quantify these variants using one set of numeric
+    // variables so that once we have the number of digits for each part, we
+    // only need a single implementation of the actual formatting, rather than
+    // many different control paths that are difficult to verify and
+    // understand.
+    // 
+    // Note that when categorizing the input value into one of the above
+    // forms, we must be conservative so that any digit that would be added
+    // from rounding upwards will still be presented. Take 0.9 as an example.
+    // This might seem like it is in the Z.PPPnnnSSS category (with PPP and
+    // SSS having zero digits). But if we try to treat it as such, then with
+    // precision=0 we end up with "1", which must be represented with the
+    // mmm.nnnSSS form (with m=1, n=0, S=0). In general, if the number
+    // mantissa digits is expected to be X and it is prefixed by Y zeroes,
+    // then we need to treat it as X+1 digits from the mantissa and Y-1
+    // zeroes.
+    //
+    // , we must be conservative 
     // The third and fourth variants have some additional difficulties
     // The fourth variant is essentially a special case of the third, and is
     // required because rounding can generate an extra non-zero digit. The
     // number 0.9, when rounded to zero precision, is 
     //
-    // We will try to quantify these variants using one set of numeric
-    // variables so that we only need a single implementation of the actual
-    // formatting, rather than many different control paths that are difficult
-    // to verify and understand.
     //
     // The precision specifies/limits/expands only how many digits we put
     // after the period. For the mmm part, we always put as many digits as is
