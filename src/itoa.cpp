@@ -447,14 +447,29 @@ void ftoa_base10_precision(output_buffer* pbuffer, double value, unsigned precis
     }
 
     // The representation of a number can be in one of these forms. m and
-    // n are digits from the mantissa. Z, S and P are zero digits.
-    //  mmmZZZ.SSS
-    //  mmm.nnnSSS
-    //  Z.PPPnnnSSS
+    // n are digits from the mantissa. Z, S and P are zero digits. Each form
+    // is shown together with examples
+    //  mmmZZZ.SSS    12345678901234567800000.0000
+    //  mmm.nnnSSS    12345.67890000, 1.23, 1.0
+    //  Z.PPPnnnSSS   0.0000123456789012345678000, 0.03
+    //
+    // The third and fourth variants have some additional difficulties
+    // The fourth variant is essentially a special case of the third, and is
+    // required because rounding can generate an extra non-zero digit. The
+    // number 0.9, when rounded to zero precision, is 
+    //
     // We will try to quantify these variants using one set of numeric
     // variables so that we only need a single implementation of the actual
     // formatting, rather than many different control paths that are difficult
     // to verify and understand.
+    //
+    // The precision specifies/limits/expands only how many digits we put
+    // after the period. For the mmm part, we always put as many digits as is
+    // required to represent the entire number. But because the mantissa has
+    // limited precision it is useless to output more than 18 digits from the
+    // mantissa; the rest is filled up with zeroes (the ZZZ part).
+    //
+    // The two last variants are, on the surface, identical. Typically 
 
     unsigned mmm;
     unsigned nnn;
@@ -497,6 +512,7 @@ void ftoa_base10_precision(output_buffer* pbuffer, double value, unsigned precis
             else
                 nnn = 0;
         }
+        // In the case of nnn being rounded upwards we may get an extra digit
 
         auto divisor = power_lut[18-(nnn)];
         mantissa = (mantissa + divisor/2)/divisor;
@@ -880,6 +896,7 @@ public:
         TEST(convert_prec(1.2345e-20, 5) == "0.00000");
         TEST(convert_prec(0.5, 0) == "1");
         TEST(convert_prec(0.05, 1) == "0.1");
+        TEST(convert_prec(9.9, 0) == "10");
         TEST(convert_prec(1.23456789012345670, 20) == "1.23456789012345670000");
         TEST(convert_prec(0.123456789012345670, 20) == "0.12345678901234567000");
     }
