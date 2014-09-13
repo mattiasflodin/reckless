@@ -462,9 +462,9 @@ void ftoa_base10_precision(output_buffer* pbuffer, double value, unsigned precis
     unsigned sss;
     unsigned ppp;
 
-    NEXT we have a problem when rounding upwards causes the mantissa digit
-    range sometimes we may need an extra digit. What do? Can we predict this
-    somehow?
+    //NEXT we have a problem when rounding upwards causes the mantissa digit
+    //range sometimes we may need an extra digit. What do? Can we predict this
+    //somehow?
     if(exponent >= 0) {
         // There are exponent+1 digits before the dot.
         //  mmmZZZ.SSS
@@ -515,7 +515,10 @@ void ftoa_base10_precision(output_buffer* pbuffer, double value, unsigned precis
         pos = zero_digits(s, pos, sss);
         mantissa = utoa_generic_base10(s, pos, mantissa, nnn);
         pos -= nnn;
-        pos = zero_digits(s, pos, ppp);
+        if(ppp != 0) {
+            // We're supposed to output the PPP zeroes, but the mantissa
+            // overflowed when rounding. So we'll need to 
+            pos = zero_digits(s, pos, ppp);
         s[--pos] = '.';
     }
     pos = zero_digits(s, pos, zzz);
