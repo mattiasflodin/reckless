@@ -325,7 +325,7 @@ std::uint64_t const power_lut[] = {
     1000000000000000,  // 15
     10000000000000000,  // 16
     100000000000000000,  // 17
-    1000000000000000000   // 20
+    1000000000000000000   // 18
 };
 
 int descale_normal(long double value, int e2, unsigned significant_digits, std::uint_fast64_t& ivalue)
@@ -449,6 +449,7 @@ void ftoa_base10_precision(output_buffer* pbuffer, double value, unsigned precis
     // The representation of a number can be in one of these forms. m and
     // n are digits from the mantissa. Z, S and P are zero digits. Each form
     // is shown together with examples
+    // 
     //  mmmZZZ.SSS    12345678901234567800000.0000
     //  mmm.nnnSSS    12345.67890000, 1.23, 1.0
     //  Z.PPPnnnSSS   0.0000123456789012345678000, 0.03
@@ -459,31 +460,36 @@ void ftoa_base10_precision(output_buffer* pbuffer, double value, unsigned precis
     // many different control paths that are difficult to verify and
     // understand.
     // 
-    // Note that when categorizing the input value into one of the above
-    // forms, we must be conservative so that any digit that would be added
-    // from rounding upwards will still be presented. Take 0.9 as an example.
-    // This might seem like it is in the Z.PPPnnnSSS category (with PPP and
-    // SSS having zero digits). But if we try to treat it as such, then with
-    // precision=0 we end up with "1", which must be represented with the
-    // mmm.nnnSSS form (with m=1, n=0, S=0). In general, if the number
-    // mantissa digits is expected to be X and it is prefixed by Y zeroes,
-    // then we need to treat it as X+1 digits from the mantissa and Y-1
-    // zeroes.
-    //
-    // , we must be conservative 
-    // The third and fourth variants have some additional difficulties
-    // The fourth variant is essentially a special case of the third, and is
-    // required because rounding can generate an extra non-zero digit. The
-    // number 0.9, when rounded to zero precision, is 
-    //
-    //
     // The precision specifies/limits/expands only how many digits we put
     // after the period. For the mmm part, we always put as many digits as is
     // required to represent the entire number. But because the mantissa has
     // limited precision it is useless to output more than 18 digits from the
     // mantissa; the rest is filled up with zeroes (the ZZZ part).
-    //
-    // The two last variants are, on the surface, identical. Typically 
+    // 
+    // Note that when categorizing the input value into one of the above
+    // forms, we must be careful so that any digit that would be added
+    // from upward rounding will still be presented. Take 0.9 as an example.
+    // This might seem like it is in the Z.PPPnnnSSS category (with PPP and
+    // SSS having zero digits). But if we try to treat it as such, then with
+    // precision=0 we end up with 1.0 after rounding, which must be
+    // represented with the mmm.nnnSSS form (with m=1, n=0, S=0). In general,
+    // if the number of mantissa digits is expected to be X and it is prefixed
+    // by Y zeroes, then we need to treat it as X+1 digits from the mantissa
+    // and Y-1 zeroes. It doesn't hurt to output more digits from the
+    // mantissa, since we just get zero digits anyway. In fact we could remove
+    // the prefix zeroes entirely, and just keep picking digits out of the
+    // mantissa, but that would hamper performance. We will refer to the extra
+    // zero that we take out of the mantissa (and that, in some cases will
+    // become a "1" because of rounding) as the "placeholder zero".
+    // 
+    // Another special case to consider is when rounding actually increases
+    // the number of digits that were originally predicted. In the case of 9.6
+    // with precision=0, we round off to 10. A string that seemed like it
+    // would be a single digit is now suddenly two digits. Similarly, with
+    // 9999.6 we get "10000". This case only occurs when there are
+    // significant digits on the right-hand side of the dot and the precision
+    // is 0. It is essentially an ordinary integer, large enough to fit in 64
+    // bits, and can be delegated to utoa_base10 for extra speed.
 
     unsigned mmm;
     unsigned nnn;
@@ -491,14 +497,13 @@ void ftoa_base10_precision(output_buffer* pbuffer, double value, unsigned precis
     unsigned sss;
     unsigned ppp;
 
-    //NEXT we have a problem when rounding upwards causes the mantissa digit
-    //range sometimes we may need an extra digit. What do? Can we predict this
-    //somehow?
-    if(exponent >= 0) {
+    if(exponent+1 >= 0) {
         // There are exponent+1 digits before the dot.
         //  mmmZZZ.SSS
-        //  mmm.nnnXXX
-        unsigned digits_before_dot = unsigned_cast(exponent) + 1;
+        //  mmm.nnnSSS
+        // When exponent+1 == 0 then mmm = 1 and only serves as a placeholder
+        // zero.
+        unsigned digits_before_dot = unsigned_cast(exponent+1);
         mmm = std::min(18u, digits_before_dot);
         zzz = digits_before_dot - mmm;
         nnn = std::min(precision, 18-mmm);
@@ -512,12 +517,13 @@ void ftoa_base10_precision(output_buffer* pbuffer, double value, unsigned precis
         // Z.PPPnnnSSS
         mmm = 0;
         zzz = 1;
-        ppp = unsigned_cast(-exponent) - 1;
+        ppp = unsigned_cast(-(exponent+1));
+        ppp -= 1;   // Decrement ppp make room for placeholder zero
         ppp = std::min(precision, ppp);
-        if(precision >= ppp + 18) {
-            // The entire mantissa is visible.
-            nnn = 18;
-            sss = precision - ppp - 18;
+        if(precision >= ppp + 18 + 1) {
+            // The entire mantissa, including the placeholder zero, is visible.
+            nnn = 18 + 1;
+            sss = precision - ppp - 18 - 1;
         } else {
             // Limited precision cuts off the mantissa before the last digit.
             sss = 0;
@@ -526,7 +532,6 @@ void ftoa_base10_precision(output_buffer* pbuffer, double value, unsigned precis
             else
                 nnn = 0;
         }
-        // In the case of nnn being rounded upwards we may get an extra digit
 
         auto divisor = power_lut[18-(nnn)];
         mantissa = (mantissa + divisor/2)/divisor;
