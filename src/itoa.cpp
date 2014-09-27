@@ -554,7 +554,8 @@ void ftoa_base10_precision(output_buffer* pbuffer, double value, unsigned precis
             // We're supposed to output the PPP zeroes, but the mantissa
             // overflowed when rounding. So we'll need to 
             pos = zero_digits(s, pos, ppp);
-        s[--pos] = '.';
+            s[--pos] = '.';
+        }
     }
     pos = zero_digits(s, pos, zzz);
     if(pos != 0)
