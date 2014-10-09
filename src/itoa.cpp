@@ -460,9 +460,9 @@ void ftoa_base10_precision(output_buffer* pbuffer, double value, unsigned precis
     // many different control paths that are difficult to verify and
     // understand.
     // 
-    // The precision specifies/limits/expands only how many digits we put
-    // after the period. For the mmm part, we always put as many digits as is
-    // required to represent the entire number. But because the mantissa has
+    // The precision argument specifies/limits/expands only how many digits we
+    // put after the period. For the mmm part, we always put as many digits as
+    // is required to represent the entire number. But because the mantissa has
     // limited precision it is useless to output more than 18 digits from the
     // mantissa; the rest is filled up with zeroes (the ZZZ part).
     // 
@@ -477,10 +477,10 @@ void ftoa_base10_precision(output_buffer* pbuffer, double value, unsigned precis
     // by Y zeroes, then we need to treat it as X+1 digits from the mantissa
     // and Y-1 zeroes. It doesn't hurt to output more digits from the
     // mantissa, since we just get zero digits anyway. In fact we could remove
-    // the prefix zeroes entirely, and just keep picking digits out of the
+    // the PPP zeroes entirely, and just keep picking digits out of the
     // mantissa, but that would hamper performance. We will refer to the extra
     // zero that we take out of the mantissa (and that, in some cases will
-    // become a "1" because of rounding) as the "placeholder zero".
+    // become a "1" because of rounding) as the "overflow zero".
     // 
     // Another special case to consider is when rounding actually increases
     // the number of digits that were originally predicted. In the case of 9.6
@@ -501,8 +501,6 @@ void ftoa_base10_precision(output_buffer* pbuffer, double value, unsigned precis
         // There are exponent+1 digits before the dot.
         //  mmmZZZ.SSS
         //  mmm.nnnSSS
-        // When exponent+1 == 0 then mmm = 1 and only serves as a placeholder
-        // zero.
         unsigned digits_before_dot = unsigned_cast(exponent+1);
         mmm = std::min(18u, digits_before_dot);
         zzz = digits_before_dot - mmm;
@@ -512,16 +510,19 @@ void ftoa_base10_precision(output_buffer* pbuffer, double value, unsigned precis
 
         auto divisor = power_lut[18-(mmm+nnn)];
         mantissa = (mantissa + divisor/2)/divisor;
+        
+        if(mmm == 0)
+            zzz = 1;
     } else {
         // No digits of the mantissa are on the left hand side of the dot.
         // Z.PPPnnnSSS
         mmm = 0;
         zzz = 1;
         ppp = unsigned_cast(-(exponent+1));
-        ppp -= 1;   // Decrement ppp make room for placeholder zero
+        ppp -= 1;   // Decrement ppp make room for overflow zero
         ppp = std::min(precision, ppp);
         if(precision >= ppp + 18 + 1) {
-            // The entire mantissa, including the placeholder zero, is visible.
+            // The entire mantissa, including the overflow zero, is visible.
             nnn = 18 + 1;
             sss = precision - ppp - 18 - 1;
         } else {
@@ -550,12 +551,8 @@ void ftoa_base10_precision(output_buffer* pbuffer, double value, unsigned precis
         pos = zero_digits(s, pos, sss);
         mantissa = utoa_generic_base10(s, pos, mantissa, nnn);
         pos -= nnn;
-        if(ppp != 0) {
-            // We're supposed to output the PPP zeroes, but the mantissa
-            // overflowed when rounding. So we'll need to 
-            pos = zero_digits(s, pos, ppp);
-            s[--pos] = '.';
-        }
+        pos = zero_digits(s, pos, ppp);
+        s[--pos] = '.';
     }
     pos = zero_digits(s, pos, zzz);
     if(pos != 0)
