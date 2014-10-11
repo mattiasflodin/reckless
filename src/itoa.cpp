@@ -446,44 +446,53 @@ void ftoa_base10_precision(output_buffer* pbuffer, double value, unsigned precis
         mantissa = unsigned_cast(-mantissa_signed);
     }
 
-    // Variants:
-    // ZZZmmmXXX
-    // With dot at D?
-
-    unsigned zeroes_before;
+    // Disregarding the dot, any decimal number can be represented as a set of
+    // prefix zeroes, 0-18 mantissa digits, and a set of suffix zeroes.
+    // To avoid many different control paths that are difficult to verify and
+    // understand, we'll try to quantify each part first and the position of
+    // the dot. Then we can use these to fairly easily perform the conversion.
+    unsigned prefix_zeroes;
     unsigned mantissa_digits;
-    unsigned zeroes_after;
+    unsigned suffix_zeroes;
     unsigned dot_position;
     if(exponent+1 > 0) {
         // exponent+1 digits before the dot.
         dot_position = unsigned_cast(exponent+1);
         unsigned total_digits = dot_position + precision;
-        zeroes_before = 0;
+        prefix_zeroes = 0;
         mantissa_digits = std::min(18u, total_digits);
-        zeroes_after = total_digits - mantissa_digits;
+        suffix_zeroes = total_digits - mantissa_digits;
     } else {
         // No digits before the dot.
-        zeroes_before = std::min(precision, unsigned_cast(-(exponent+1)));
-        mantissa_digits = std::min(18u, precision - zeroes_before);
-        zeroes_after = precision - zeroes_before - mantissa_digits;
-        zeroes_before += 1;  // For the additional zero before the dot.
+        prefix_zeroes = std::min(precision, unsigned_cast(-(exponent+1)));
+        mantissa_digits = std::min(18u, precision - prefix_zeroes);
+        suffix_zeroes = precision - prefix_zeroes - mantissa_digits;
+        prefix_zeroes += 1;  // For the additional zero before the dot.
         dot_position = 1;
     }
     
+    // Reduce the mantissa part to the computed number of digits.
     auto divisor = power_lut[18-mantissa_digits];
     auto order = power_lut[mantissa_digits];
     mantissa = (mantissa + divisor/2)/divisor;
-    // FIXME what happens if mantissa_digits == 0 and we get a carry?
     bool carry = mantissa >= order;
     if(carry) {
-        mantissa_digits += 1;
-        if(zeroes_before>0)
-            zeroes_before -= 1;
+        // When reducing the mantissa, rounding caused it to overflow.
+        // For example, when formatting 0.095 with precision=2, we have
+        // prefix_zeroes=2, mantissa_digits=1 and suffix_zeroes=0. When trying
+        // to reduce the mantissa to 1 digit, we end up with 10 because the final
+        // value should be formatted as 0.1. But then we need to 
+        if(mantissa == 18u)
+            ++suffix_zeroes;
+        else
+            mantissa_digits += 1;
+        if(prefix_zeroes>0)
+            prefix_zeroes -= 1;
         else
             dot_position += 1;
     }
 
-    unsigned size = zeroes_before + mantissa_digits + zeroes_after;
+    unsigned size = prefix_zeroes + mantissa_digits + suffix_zeroes;
     unsigned digits_left_to_dot = size - dot_position;
     if(dot_position != size)
         size += 1;
@@ -491,14 +500,14 @@ void ftoa_base10_precision(output_buffer* pbuffer, double value, unsigned precis
     char* s = pbuffer->reserve(size);
     unsigned pos = size;
     
-    if(digits_left_to_dot <= zeroes_after && digits_left_to_dot != 0) {
+    if(digits_left_to_dot <= suffix_zeroes && digits_left_to_dot != 0) {
         pos = zero_digits(s, pos, digits_left_to_dot);
         s[--pos] = '.';
-        pos = zero_digits(s, pos, zeroes_after - digits_left_to_dot);
+        pos = zero_digits(s, pos, suffix_zeroes - digits_left_to_dot);
         digits_left_to_dot = 0;
     } else {
-        pos = zero_digits(s, pos, zeroes_after);
-        digits_left_to_dot -= zeroes_after;
+        pos = zero_digits(s, pos, suffix_zeroes);
+        digits_left_to_dot -= suffix_zeroes;
     }
 
     if(digits_left_to_dot != 0 && digits_left_to_dot <= mantissa_digits) {
@@ -512,12 +521,12 @@ void ftoa_base10_precision(output_buffer* pbuffer, double value, unsigned precis
         pos = utoa_generic_base10(s, pos, mantissa);
     }
 
-    if(digits_left_to_dot <= zeroes_before && digits_left_to_dot != 0) {
+    if(digits_left_to_dot <= prefix_zeroes && digits_left_to_dot != 0) {
         pos = zero_digits(s, pos, digits_left_to_dot);
         s[--pos] = '.';
-        pos = zero_digits(s, pos, zeroes_before - digits_left_to_dot);
+        pos = zero_digits(s, pos, prefix_zeroes - digits_left_to_dot);
     } else {
-        pos = zero_digits(s, pos, zeroes_before);
+        pos = zero_digits(s, pos, prefix_zeroes);
     }
 
     assert(pos == 0);
@@ -881,8 +890,9 @@ public:
         TEST(convert_prec(0.5, 0) == "1");
         TEST(convert_prec(0.05, 1) == "0.1");
         TEST(convert_prec(9.9, 0) == "10");
+        TEST(convert_prec(0, 0) == "0");
         TEST(convert_prec(1.23456789012345670, 20) == "1.23456789012345670000");
-        TEST(convert_prec(0.123456789012345670, 20) == "0.12345678901234567000");
+        TEST(convert_prec(0.123456789012345670, 20) == "0.12345678901234566300");
     }
 
     void random()
