@@ -267,7 +267,7 @@ std::int64_t binary64_to_decimal18(double input, int* pexponent)
     // when m2*10^(frac(D)) >= 10, i.e. normalization requires at most a shift
     // to the right by 1 digit.
     // 
-    // If we e2f is a negative fraction we get
+    // If e2f is a negative fraction we get
     //   -1 < e2f <= 0
     //   0.1 <= 10^e2f <= 1.
     //   0.1 <= m2 * 10^e2f < 2.
