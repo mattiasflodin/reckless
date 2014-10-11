@@ -184,8 +184,8 @@ unsigned log10(std::uint32_t x)
     }
 }
 
-// TODO probably faster to do this with fxtract, gotta figure out how to do the
-// inline asm for it.
+// TODO this should probably be removed in favor of fxtract. When we replace
+// descale with binary64_to_decimal18 we won't need naive_ilogb anymore.
 int naive_ilogb(double v)
 {
     std::uint16_t const* pv = reinterpret_cast<std::uint16_t const*>(&v);
@@ -196,30 +196,25 @@ int naive_ilogb(double v)
     return static_cast<int>(exponent) - 1023;
 }
 
-double fxtract(double v, int* exp)
+template <typename Float>
+Float fxtract(Float v, Float* exp)
 {
-    double significand, exponent;
-    asm("fxtract" : "=t"(significand), "=u"(exponent) : "0"(v));
-    *exp = static_cast<int>(exponent);
-    return significand;
-}
-
-long double fxtract(long double v, int* exp)
-{
-    long double significand, exponent;
-    asm("fxtract" : "=t"(significand), "=u"(exponent) : "0"(v));
-    *exp = static_cast<int>(exponent);
-    return significand;
-}
-
-long double fxtract(long double v, long double* exp)
-{
-    long double significand;
+    Float significand;
     asm("fxtract" : "=t"(significand), "=u"(*exp) : "0"(v));
     return significand;
 }
 
-inline std::uint_fast64_t u64_rint(double value)
+template <typename Float>
+Float fxtract(Float v, int* exp)
+{
+    Float exponent;
+    Float significand = fxtract(v, &exponent);
+    *exp = static_cast<int>(exponent);
+    return significand;
+}
+
+template <typename Float>
+inline std::uint_fast64_t u64_rint(Float value)
 {
     if(std::is_convertible<std::uint64_t, long>::value)
         return static_cast<std::uint_fast64_t>(std::lrint(value));
@@ -227,14 +222,8 @@ inline std::uint_fast64_t u64_rint(double value)
         return static_cast<std::uint_fast64_t>(std::llrint(value));
 }
 
-inline std::uint_fast64_t u64_rint(long double value)
-{
-    if(std::is_convertible<std::uint64_t, long>::value)
-        return static_cast<std::uint_fast64_t>(std::lrint(value));
-    else
-        return static_cast<std::uint_fast64_t>(std::llrint(value));
-}
-
+// TODO some day we should probably use this everywhere instead of descale().
+// It is simpler and more rigorously documented.
 std::int64_t binary64_to_decimal18(double input, int* pexponent)
 {
     long double e2;
@@ -285,20 +274,14 @@ std::int64_t binary64_to_decimal18(double input, int* pexponent)
         e10f += 1;
         e10i -= 1;
     }
-    //m10 = m2*powl(10, e10f + 17);
-    //std::int64_t mantissa = std::llrint(m10);
-    //if(mantissa >= 1000000000000000000) {
-    //    m10 /= 10.0L;
-    //    mantissa = std::llrint(m10);
-    //    e10i += 1.0L;
-    //}
+
     m10 = m2*powl(10, e10f + 16);
     std::int64_t mantissa = std::llrint(m10);
     if(mantissa < 100000000000000000)
         mantissa *= 10;
     else
         e10i += 1.0L;
-    // FIXME rounding of m10 might cause it to overflow, right?. We need to
+    // TODO rounding of m10 might cause it to overflow, right?. We need to
     // adjust again in that case. But try to reproduce this scenario first so
     // we know it's needed.
 
@@ -377,7 +360,6 @@ int descale_subnormal(double value, unsigned significant_digits, std::uint_fast6
     int e2;
     fxtract(x, &e2);
     return -308 + descale_normal(x, e2, significant_digits, ivalue);
-    
 }
 
 int descale(double value, unsigned significant_digits, std::uint_fast64_t& ivalue)
@@ -430,236 +412,6 @@ unsigned zero_digits(char* s, unsigned pos, unsigned count)
         s[start+count] = '0';
     }
     return start;
-}
-
-void ftoa_base10_precision(output_buffer* pbuffer, double value, unsigned precision)
-{
-    int exponent;
-    auto mantissa_signed = binary64_to_decimal18(value, &exponent);
-    std::uint64_t mantissa;
-    if(mantissa_signed>=0) {
-        mantissa = unsigned_cast(mantissa_signed);
-    } else {
-        char* s = pbuffer->reserve(1);
-        *s = '-';
-        pbuffer->commit(1);
-        mantissa = unsigned_cast(-mantissa_signed);
-    }
-
-    // Disregarding the dot, any decimal number can be represented as a set of
-    // prefix zeroes, 0-18 mantissa digits, and a set of suffix zeroes.
-    // To avoid many different control paths that are difficult to verify and
-    // understand, we'll try to quantify each part first and the position of
-    // the dot. Then we can use these to fairly easily perform the conversion.
-    unsigned prefix_zeroes;
-    unsigned mantissa_digits;
-    unsigned suffix_zeroes;
-    unsigned dot_position;
-    if(exponent+1 > 0) {
-        // exponent+1 digits before the dot.
-        dot_position = unsigned_cast(exponent+1);
-        unsigned total_digits = dot_position + precision;
-        prefix_zeroes = 0;
-        mantissa_digits = std::min(18u, total_digits);
-        suffix_zeroes = total_digits - mantissa_digits;
-    } else {
-        // No digits before the dot.
-        prefix_zeroes = std::min(precision, unsigned_cast(-(exponent+1)));
-        mantissa_digits = std::min(18u, precision - prefix_zeroes);
-        suffix_zeroes = precision - prefix_zeroes - mantissa_digits;
-        prefix_zeroes += 1;  // For the additional zero before the dot.
-        dot_position = 1;
-    }
-    
-    // Reduce the mantissa part to the computed number of digits.
-    auto divisor = power_lut[18-mantissa_digits];
-    auto order = power_lut[mantissa_digits];
-    mantissa = (mantissa + divisor/2)/divisor;
-    bool carry = mantissa >= order;
-    if(carry) {
-        // When reducing the mantissa, rounding caused it to overflow.
-        // For example, when formatting 0.095 with precision=2, we have
-        // prefix_zeroes=2, mantissa_digits=1 and suffix_zeroes=0. When trying
-        // to reduce the mantissa to 1 digit, we end up with 10 because the final
-        // value should be formatted as 0.1. But then we need to 
-        if(mantissa == 18u)
-            ++suffix_zeroes;
-        else
-            mantissa_digits += 1;
-        if(prefix_zeroes>0)
-            prefix_zeroes -= 1;
-        else
-            dot_position += 1;
-    }
-
-    unsigned size = prefix_zeroes + mantissa_digits + suffix_zeroes;
-    unsigned digits_left_to_dot = size - dot_position;
-    if(dot_position != size)
-        size += 1;
-
-    char* s = pbuffer->reserve(size);
-    unsigned pos = size;
-    
-    if(digits_left_to_dot <= suffix_zeroes && digits_left_to_dot != 0) {
-        pos = zero_digits(s, pos, digits_left_to_dot);
-        s[--pos] = '.';
-        pos = zero_digits(s, pos, suffix_zeroes - digits_left_to_dot);
-        digits_left_to_dot = 0;
-    } else {
-        pos = zero_digits(s, pos, suffix_zeroes);
-        digits_left_to_dot -= suffix_zeroes;
-    }
-
-    if(digits_left_to_dot != 0 && digits_left_to_dot <= mantissa_digits) {
-        mantissa = utoa_generic_base10(s, pos, mantissa, digits_left_to_dot);
-        pos -= digits_left_to_dot;
-        s[--pos] = '.';
-        if(mantissa_digits != digits_left_to_dot)
-            pos = utoa_generic_base10(s, pos, mantissa);
-        digits_left_to_dot = 0;
-    } else if(mantissa_digits != 0) {
-        pos = utoa_generic_base10(s, pos, mantissa);
-    }
-
-    if(digits_left_to_dot <= prefix_zeroes && digits_left_to_dot != 0) {
-        pos = zero_digits(s, pos, digits_left_to_dot);
-        s[--pos] = '.';
-        pos = zero_digits(s, pos, prefix_zeroes - digits_left_to_dot);
-    } else {
-        pos = zero_digits(s, pos, prefix_zeroes);
-    }
-
-    assert(pos == 0);
-    pbuffer->commit(size);
-}
-
-void ftoa_base10_precision2(output_buffer* pbuffer, double value, unsigned precision)
-{
-    int exponent;
-    auto mantissa_signed = binary64_to_decimal18(value, &exponent);
-    std::uint64_t mantissa;
-    if(mantissa_signed>=0) {
-        mantissa = unsigned_cast(mantissa_signed);
-    } else {
-        char* s = pbuffer->reserve(1);
-        *s = '-';
-        pbuffer->commit(1);
-        mantissa = unsigned_cast(-mantissa_signed);
-    }
-
-    // The representation of a number can be in one of these forms. m and
-    // n are digits from the mantissa. Z, S and P are zero digits. Each form
-    // is shown together with examples
-    // 
-    //  mmmZZZ.SSS    12345678901234567800000.0000
-    //  mmm.nnnSSS    12345.67890000, 1.23, 1.0
-    //  Z.PPPnnnSSS   0.0000123456789012345678000, 0.03
-    //
-    // We will try to quantify these variants using one set of numeric
-    // variables so that once we have the number of digits for each part, we
-    // only need a single implementation of the actual formatting, rather than
-    // many different control paths that are difficult to verify and
-    // understand.
-    // 
-    // The precision argument specifies/limits/expands only how many digits we
-    // put after the period. For the mmm part, we always put as many digits as
-    // is required to represent the entire number. But because the mantissa has
-    // limited precision it is useless to output more than 18 digits from the
-    // mantissa; the rest is filled up with zeroes (the ZZZ part).
-    // 
-    // Note that when categorizing the input value into one of the above
-    // forms, we must be careful so that any digit that would be added
-    // from upward rounding will still be presented. Take 0.9 as an example.
-    // This might seem like it is in the Z.PPPnnnSSS category (with PPP and
-    // SSS having zero digits). But if we try to treat it as such, then with
-    // precision=0 we end up with 1.0 after rounding, which must be
-    // represented with the mmm.nnnSSS form (with m=1, n=0, S=0). In general,
-    // if the number of mantissa digits is expected to be X and it is prefixed
-    // by Y zeroes, then we need to treat it as X+1 digits from the mantissa
-    // and Y-1 zeroes. It doesn't hurt to output more digits from the
-    // mantissa, since we just get zero digits anyway. In fact we could remove
-    // the PPP zeroes entirely, and just keep picking digits out of the
-    // mantissa, but that would hamper performance. We will refer to the extra
-    // zero that we take out of the mantissa (and that, in some cases will
-    // become a "1" because of rounding) as the "overflow zero".
-    // 
-    // Another special case to consider is when rounding actually increases
-    // the number of digits that were originally predicted. In the case of 9.6
-    // with precision=0, we round off to 10. A string that seemed like it
-    // would be a single digit is now suddenly two digits. Similarly, with
-    // 9999.6 we get "10000". This case only occurs when there are
-    // significant digits on the right-hand side of the dot and the precision
-    // is 0. It is essentially an ordinary integer, large enough to fit in 64
-    // bits, and can be delegated to utoa_base10 for extra speed.
-
-    unsigned mmm;
-    unsigned nnn;
-    unsigned zzz;
-    unsigned sss;
-    unsigned ppp;
-
-    if(exponent+1 >= 0) {
-        // There are exponent+1 digits before the dot.
-        //  mmmZZZ.SSS
-        //  mmm.nnnSSS
-        unsigned digits_before_dot = unsigned_cast(exponent+1);
-        mmm = std::min(18u, digits_before_dot);
-        zzz = digits_before_dot - mmm;
-        nnn = std::min(precision, 18-mmm);
-        sss = precision - nnn;
-        ppp = 0;
-
-        auto divisor = power_lut[18-(mmm+nnn)];
-        mantissa = (mantissa + divisor/2)/divisor;
-        
-        if(mmm == 0)
-            zzz = 1;
-    } else {
-        // No digits of the mantissa are on the left hand side of the dot.
-        // Z.PPPnnnSSS
-        mmm = 0;
-        zzz = 1;
-        ppp = unsigned_cast(-(exponent+1));
-        ppp -= 1;   // Decrement ppp make room for overflow zero
-        ppp = std::min(precision, ppp);
-        if(precision >= ppp + 18 + 1) {
-            // The entire mantissa, including the overflow zero, is visible.
-            nnn = 18 + 1;
-            sss = precision - ppp - 18 - 1;
-        } else {
-            // Limited precision cuts off the mantissa before the last digit.
-            sss = 0;
-            if(precision > ppp)
-                nnn = precision - ppp;
-            else
-                nnn = 0;
-        }
-
-        auto divisor = power_lut[18-(nnn)];
-        mantissa = (mantissa + divisor/2)/divisor;
-    }
-
-    int before_dot = mmm + zzz;
-    int after_dot = ppp + nnn + sss;
-    int size = before_dot;
-    if(after_dot != 0)
-        size += 1 + after_dot;  // +1 for '.' separator
-    
-    char* s = pbuffer->reserve(size);
-    int pos = size;
-    
-    if(after_dot != 0) {
-        pos = zero_digits(s, pos, sss);
-        mantissa = utoa_generic_base10(s, pos, mantissa, nnn);
-        pos -= nnn;
-        pos = zero_digits(s, pos, ppp);
-        s[--pos] = '.';
-    }
-    pos = zero_digits(s, pos, zzz);
-    if(pos != 0)
-         utoa_generic_base10(s, pos, mantissa);
-
-    pbuffer->commit(size);
 }
 
 void ftoa_base10(output_buffer* pbuffer, double value, unsigned significant_digits, int minimum_exponent, int maximum_exponent)
@@ -753,6 +505,106 @@ void ftoa_base10(output_buffer* pbuffer, double value, unsigned significant_digi
     }
 }
 
+void ftoa_base10_precision(output_buffer* pbuffer, double value, unsigned precision)
+{
+    int exponent;
+    auto mantissa_signed = binary64_to_decimal18(value, &exponent);
+    std::uint64_t mantissa;
+    if(mantissa_signed>=0) {
+        mantissa = unsigned_cast(mantissa_signed);
+    } else {
+        char* s = pbuffer->reserve(1);
+        *s = '-';
+        pbuffer->commit(1);
+        mantissa = unsigned_cast(-mantissa_signed);
+    }
+
+    // Disregarding the dot, any decimal number can be represented as a set of
+    // prefix zeroes, 0-18 mantissa digits, and a set of suffix zeroes.
+    // To avoid many different control paths that are difficult to verify and
+    // understand, we'll try to quantify each part first and the position of
+    // the dot. Then we can use these to fairly easily perform the conversion.
+    unsigned prefix_zeroes;
+    unsigned mantissa_digits;
+    unsigned suffix_zeroes;
+    unsigned dot_position;
+    if(exponent+1 > 0) {
+        // exponent+1 digits before the dot.
+        dot_position = unsigned_cast(exponent+1);
+        unsigned total_digits = dot_position + precision;
+        prefix_zeroes = 0;
+        mantissa_digits = std::min(18u, total_digits);
+        suffix_zeroes = total_digits - mantissa_digits;
+    } else {
+        // No digits before the dot. -(exponent+1) zeroes before the first
+        // significant digit.
+        prefix_zeroes = std::min(precision, unsigned_cast(-(exponent+1)));
+        mantissa_digits = std::min(18u, precision - prefix_zeroes);
+        suffix_zeroes = precision - prefix_zeroes - mantissa_digits;
+        prefix_zeroes += 1;  // For the additional zero before the dot.
+        dot_position = 1;
+    }
+    
+    // Reduce the mantissa part to the requested number of digits.
+    auto divisor = power_lut[18-mantissa_digits];
+    auto order = power_lut[mantissa_digits];
+    mantissa = (mantissa + divisor/2)/divisor;
+    bool carry = mantissa >= order;
+    if(carry) {
+        // When reducing the mantissa, rounding caused it to overflow.
+        // For example, when formatting 0.095 with precision=2, we have
+        // prefix_zeroes=2, mantissa_digits=1 and suffix_zeroes=0. When trying
+        // to reduce the mantissa to 1 digit we end up not with 9, but with 10
+        // due to rounding. In this case we need to make room for an extra
+        // digit from the mantissa, which we'll take from the prefix zeroes or
+        // by moving the dot forward.
+        mantissa_digits += 1;
+        if(prefix_zeroes>0)
+            prefix_zeroes -= 1;
+        else
+            dot_position += 1;
+    }
+
+    unsigned size = prefix_zeroes + mantissa_digits + suffix_zeroes;
+    unsigned digits_left_to_dot = size - dot_position;
+    if(dot_position != size)
+        size += 1;
+
+    char* s = pbuffer->reserve(size);
+    unsigned pos = size;
+
+    auto fill_zeroes = [&](unsigned zeroes)
+    {
+        if(digits_left_to_dot <= zeroes && digits_left_to_dot != 0) {
+            pos = zero_digits(s, pos, digits_left_to_dot);
+            s[--pos] = '.';
+            pos = zero_digits(s, pos, zeroes - digits_left_to_dot);
+            digits_left_to_dot = 0;
+        } else {
+            pos = zero_digits(s, pos, zeroes);
+            digits_left_to_dot -= zeroes;
+        }
+    };
+    
+    fill_zeroes(suffix_zeroes);
+
+    if(digits_left_to_dot != 0 && digits_left_to_dot <= mantissa_digits) {
+        mantissa = utoa_generic_base10(s, pos, mantissa, digits_left_to_dot);
+        pos -= digits_left_to_dot;
+        s[--pos] = '.';
+        if(mantissa_digits != digits_left_to_dot)
+            pos = utoa_generic_base10(s, pos, mantissa);
+        digits_left_to_dot = 0;
+    } else if(mantissa_digits != 0) {
+        pos = utoa_generic_base10(s, pos, mantissa);
+    }
+
+    fill_zeroes(prefix_zeroes);
+
+    assert(pos == 0);
+    pbuffer->commit(size);
+}
+
 }   // namespace detail
 }   // namespace asynclog
 
@@ -803,14 +655,6 @@ public:
     {
     }
 
-    //void decimal()
-    //{
-    //    int exponent;
-    //    std::int64_t mantissa = binary64_to_decimal18(3.0, &exponent);
-    //    mantissa = binary64_to_decimal18(6.0, &exponent);
-    //    mantissa = binary64_to_decimal18(0.75, &exponent);
-    //}
-
     void greater_than_one()
     {
         TEST_FTOA(1.0);
@@ -847,16 +691,6 @@ public:
 
     void scientific()
     {
-        std::printf("%f\n", 1.2345e-8);
-        std::printf("%f\n", 1.2345e-9);
-        std::printf("%f\n", 1.2345e-10);
-        std::printf("%f\n", 1.2345e-11);
-        std::printf("%f\n", 1.2345e300);
-        std::printf("%g\n", 1.2345e-8);
-        std::printf("%g\n", 1.2345e-9);
-        std::printf("%g\n", 1.2345e-10);
-        std::printf("%g\n", 1.2345e-11);
-        std::printf("%g\n", 1.2345e300);
         TEST(convert(1.2345e-8, -4, 5, 6) == "1.23450e-08");
         TEST(convert(1.2345e-10, -4, 5, 6) == "1.23450e-10");
         TEST(convert(1.2345e+10, -4, 5, 6) == "1.23450e+10");
@@ -922,10 +756,10 @@ public:
         auto start = std::find_if(quality_counts, quality_counts+17, [](std::size_t x) {return x != 0;});
         while(start != quality_counts+17)
         {
-            std::cout << (start - quality_counts) << " digits: " << *start << std::endl;
+            std::cout << (start - quality_counts) << " digits: " << *start << " non-perfect conversions" << std::endl;
             ++start;
         }
-        std::cout << "perfect conversion: " << perfect;
+        std::cout << "perfect conversions: " << perfect;
         std::cout << " (" << 100*static_cast<double>(perfect)/total << "%)";
         std::cout << std::endl;
     }
@@ -962,7 +796,7 @@ private:
         writer_.reset();
         ftoa_base10_precision(&output_buffer_, number, precision);
         output_buffer_.flush();
-        std::cout << '[' << writer_.str() << ']' << std::endl;
+        //std::cout << '[' << writer_.str() << ']' << std::endl;
         return writer_.str();
     }
 
@@ -981,13 +815,12 @@ private:
 };
 
 unit_test::suite<ftoa> tests = {
-    //TESTCASE(ftoa::decimal)
-    TESTCASE(ftoa::precision)
-    //TESTCASE(ftoa::greater_than_one),
-    //TESTCASE(ftoa::subnormals)
-    //TESTCASE(ftoa::special)
-    //TESTCASE(ftoa::scientific)
-    //TESTCASE(ftoa::random)
+    TESTCASE(ftoa::precision),
+    TESTCASE(ftoa::greater_than_one),
+    TESTCASE(ftoa::subnormals),
+    TESTCASE(ftoa::special),
+    TESTCASE(ftoa::scientific),
+    TESTCASE(ftoa::random)
 };
 
 }   // namespace detail
