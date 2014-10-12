@@ -1,4 +1,4 @@
-#include "itoa.hpp"
+#include "ntoa.hpp"
 
 #include "asynclog/detail/utility.hpp"
 
@@ -597,6 +597,7 @@ void ftoa_base10_precision(output_buffer* pbuffer, double value, unsigned precis
         digits_left_to_dot = 0;
     } else if(mantissa_digits != 0) {
         pos = utoa_generic_base10(s, pos, mantissa);
+        digits_left_to_dot -= mantissa_digits;
     }
 
     fill_zeroes(prefix_zeroes);
@@ -727,6 +728,8 @@ public:
         TEST(convert_prec(0, 0) == "0");
         TEST(convert_prec(1.23456789012345670, 20) == "1.23456789012345670000");
         TEST(convert_prec(0.123456789012345670, 20) == "0.12345678901234566300");
+        
+        TEST(convert_prec(0.000123, 6) == "0.000123");
     }
 
     void random()

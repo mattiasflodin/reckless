@@ -60,8 +60,8 @@ public:
         char* p = pbuffer->reserve(25);
         struct tm tm;
         localtime_r(&tv_.tv_sec, &tm);
-        strftime(p, 26, "%Y-%m-%d %H:%M:%S.", &tm);
-        sprintf(p+21, "%03u ", static_cast<unsigned>(tv_.tv_usec)/1000u);
+        strftime(p, 25, "%Y-%m-%d %H:%M:%S.", &tm);
+        sprintf(p+20, "%03u ", static_cast<unsigned>(tv_.tv_usec)/1000u);
         pbuffer->commit(24);
 
         return true;
