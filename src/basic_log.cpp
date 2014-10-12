@@ -88,7 +88,6 @@ void asynclog::basic_log::output_worker()
         if(not ce.pinput_buffer) {
             // Request to shut down thread.
             std::ofstream timings("timings_alog_worker.txt");
-            std::cout << performance_log.size() << " samples" << std::endl;
             for(auto sample : performance_log) {
                 timings << sample << std::endl;
             }
@@ -103,10 +102,9 @@ void asynclog::basic_log::output_worker()
                 pinput_start = ce.pinput_buffer->wraparound();
                 pdispatch = *reinterpret_cast<formatter_dispatch_function_t**>(pinput_start);
             }
-            std::cout << "dispatch" << std::endl;
-            performance_log.start();
+            auto start = performance_log.start();
             auto frame_size = (*pdispatch)(&output_buffer_, pinput_start);
-            performance_log.end();
+            performance_log.stop(start);
             pinput_start = ce.pinput_buffer->discard_input_frame(frame_size);
         }
         // TODO we *could* do something like flush on a timer instead when we're getting a lot of writes / sec.

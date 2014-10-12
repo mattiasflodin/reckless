@@ -10,12 +10,12 @@
 
 void performance::detail::lock_memory(void const* addr, std::size_t len)
 {
-    if(0 != mlock(addr, len))
-        throw std::system_error(errno, std::system_category());
+    //if(0 != mlock(addr, len))
+    //    throw std::system_error(errno, std::system_category());
 }
 void performance::detail::unlock_memory(void const* addr, std::size_t len)
 {
-    munlock(addr, len);
+    //munlock(addr, len);
 }
 
 void performance::rdtscp_cpuid_clock::bind_cpu(int cpu)
