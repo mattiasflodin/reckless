@@ -56,6 +56,11 @@ namespace performance {
             return _samples + _next_sample_position;
         }
 
+        std::size_t size() const
+        {
+            return _next_sample_position;
+        }
+
     private:
         sample _samples[LogSize]; 
         std::size_t _next_sample_position;

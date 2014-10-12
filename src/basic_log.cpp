@@ -3,6 +3,7 @@
 #include "../performance.hpp"
 
 #include <fstream>
+#include <iostream>
 
 asynclog::basic_log::basic_log(writer* pwriter, 
         std::size_t output_buffer_max_capacity,
@@ -86,7 +87,8 @@ void asynclog::basic_log::output_worker()
             
         if(not ce.pinput_buffer) {
             // Request to shut down thread.
-            std::ofstream timings("alog_worker.txt");
+            std::ofstream timings("timings_alog_worker.txt");
+            std::cout << performance_log.size() << " samples" << std::endl;
             for(auto sample : performance_log) {
                 timings << sample << std::endl;
             }
