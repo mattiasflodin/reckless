@@ -103,6 +103,7 @@ void asynclog::basic_log::output_worker()
                 pinput_start = ce.pinput_buffer->wraparound();
                 pdispatch = *reinterpret_cast<formatter_dispatch_function_t**>(pinput_start);
             }
+            std::cout << "dispatch" << std::endl;
             performance_log.start();
             auto frame_size = (*pdispatch)(&output_buffer_, pinput_start);
             performance_log.end();
