@@ -19,13 +19,13 @@ def build(ctx):
     # -std=c++11 -g -pthread -O3 -march=native -Wa,-adhln=main.s -masm=intel -fverbose-asm -c main.cpp
     ctx.stlib(source='src/asynclog.cpp src/output_buffer.cpp src/file_writer.cpp src/template_formatter.cpp src/input.cpp src/basic_log.cpp src/ntoa.cpp src/utility.cpp', target='asynclog')
     ctx.stlib(source='performance.cpp', target='performance')
-    ctx.program(source='main.cpp', target='test',
-            use='asynclog')
+    #ctx.program(source='main.cpp', target='test',
+    #        use='asynclog')
     ctx.program(source='measure_simple_call_burst.cpp', target='measure_simple_call_burst',
-        use='asynclog performance')
+        use='performance asynclog')
     ctx.program(source='measure_periodic_calls.cpp', target='measure_periodic_calls',
-        use='asynclog performance')
+        use='performance asynclog')
     ctx.program(source='measure_write_files.cpp', target='measure_write_files',
-        use='asynclog performance')
+        use='performance asynclog')
 
     ctx.program(source='src/ntoa.cpp src/output_buffer.cpp src/utility.cpp src/asynclog.cpp', defines=['UNIT_TEST'], target='ntoa_test')

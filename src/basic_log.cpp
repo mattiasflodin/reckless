@@ -1,5 +1,9 @@
 #include "asynclog/detail/basic_log.hpp"
 
+#include "../performance.hpp"
+
+#include <fstream>
+
 asynclog::basic_log::basic_log(writer* pwriter, 
         std::size_t output_buffer_max_capacity,
         std::size_t shared_input_queue_size,
@@ -68,6 +72,8 @@ void asynclog::basic_log::close()
 void asynclog::basic_log::output_worker()
 {
     using namespace detail;
+    performance::rdtscp_cpuid_clock::bind_cpu(1);
+    performance::logger<16384, performance::rdtscp_cpuid_clock, std::uint32_t> performance_log;
     while(true) {
         commit_extent ce;
         unsigned wait_time_ms = 0;
@@ -78,9 +84,15 @@ void asynclog::basic_log::output_worker()
         }
         shared_input_consumed_event_.signal();
             
-        if(not ce.pinput_buffer)
+        if(not ce.pinput_buffer) {
             // Request to shut down thread.
+            std::ofstream timings("alog_worker.txt");
+            for(auto sample : performance_log) {
+                timings << sample << std::endl;
+            }
+            performance::rdtscp_cpuid_clock::unbind_cpu();
             return;
+        }
 
         char* pinput_start = ce.pinput_buffer->input_start();
         while(pinput_start != ce.pcommit_end) {
@@ -89,7 +101,9 @@ void asynclog::basic_log::output_worker()
                 pinput_start = ce.pinput_buffer->wraparound();
                 pdispatch = *reinterpret_cast<formatter_dispatch_function_t**>(pinput_start);
             }
+            performance_log.start();
             auto frame_size = (*pdispatch)(&output_buffer_, pinput_start);
+            performance_log.end();
             pinput_start = ce.pinput_buffer->discard_input_frame(frame_size);
         }
         // TODO we *could* do something like flush on a timer instead when we're getting a lot of writes / sec.
