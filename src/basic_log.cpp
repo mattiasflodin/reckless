@@ -1,9 +1,5 @@
 #include "asynclog/detail/basic_log.hpp"
 
-#include "../performance.hpp"
-
-#include <fstream>
-#include <iostream>
 
 asynclog::basic_log::basic_log(writer* pwriter, 
         std::size_t output_buffer_max_capacity,
@@ -73,19 +69,26 @@ void asynclog::basic_log::close()
 void asynclog::basic_log::output_worker()
 {
     using namespace detail;
-    performance::rdtscp_cpuid_clock::bind_cpu(1);
-    performance::logger<16384, performance::rdtscp_cpuid_clock, std::uint32_t> performance_log;
+    std::unordered_set<thread_input_buffer*> touched_input_buffers;
     while(true) {
         commit_extent ce;
         unsigned wait_time_ms = 0;
-        while(not shared_input_queue_.pop(ce)) {
-            shared_input_queue_full_event_.wait(wait_time_ms);
-            wait_time_ms = (wait_time_ms == 0)? 1 : 2*wait_time_ms;
-            wait_time_ms = std::min(wait_time_ms, 1000u);
+        if(not shared_input_queue_.pop(ce)) {
+            shared_input_consumed_event_.signal();
+            for(thread_input_buffer* pinput_buffer : touched_input_buffers)
+                pinput_buffer->signal_input_consumed();
+            touched_input_buffers.clear();
+            if(!output_buffer_.empty())
+                output_buffer_.flush();
+            while(not shared_input_queue_.pop(ce)) {
+                shared_input_queue_full_event_.wait(wait_time_ms);
+                wait_time_ms = (wait_time_ms == 0)? 1 : (wait_time_ms + wait_time_ms/4);
+                wait_time_ms = std::min(wait_time_ms, 1000u);
+            }
         }
-        shared_input_consumed_event_.signal();
             
         if(not ce.pinput_buffer) {
+            output_buffer_.flush();
             // Request to shut down thread.
             std::ofstream timings("timings_alog_worker.txt");
             for(auto sample : performance_log) {
@@ -96,20 +99,17 @@ void asynclog::basic_log::output_worker()
         }
 
         char* pinput_start = ce.pinput_buffer->input_start();
+            auto start = performance_log.start();
         while(pinput_start != ce.pcommit_end) {
             auto pdispatch = *reinterpret_cast<formatter_dispatch_function_t**>(pinput_start);
             if(WRAPAROUND_MARKER == pdispatch) {
                 pinput_start = ce.pinput_buffer->wraparound();
                 pdispatch = *reinterpret_cast<formatter_dispatch_function_t**>(pinput_start);
             }
-            auto start = performance_log.start();
             auto frame_size = (*pdispatch)(&output_buffer_, pinput_start);
-            performance_log.stop(start);
             pinput_start = ce.pinput_buffer->discard_input_frame(frame_size);
+            touched_input_buffers.insert(ce.pinput_buffer);
         }
-        // TODO we *could* do something like flush on a timer instead when we're getting a lot of writes / sec.
-        // OR, we should at least keep on dumping data without flush as long as the input queue has data to give us.
-        output_buffer_.flush();
     }
 }
 
@@ -138,5 +138,6 @@ void asynclog::basic_log::reset_shared_input_queue(std::size_t node_count)
     // destroy the current queue and create a new one with the desired size. We
     // are guaranteed that the queue is empty since close() clears it.
     shared_input_queue_.~shared_input_queue_t();
+    // TODO how do we handle an exception here?
     new (&shared_input_queue_) shared_input_queue_t(node_count);
 }

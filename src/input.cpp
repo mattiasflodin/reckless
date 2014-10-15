@@ -34,7 +34,6 @@ char* asynclog::detail::thread_input_buffer::discard_input_frame(std::size_t siz
     auto p = pinput_start_.load(std::memory_order_relaxed);
     p = advance_frame_pointer(p, size);
     pinput_start_.store(p, std::memory_order_relaxed);
-    signal_input_consumed();
     return p;
 }
 

@@ -54,6 +54,10 @@ public:
     {
         pcommit_end_ += size;
     }
+    bool empty() const
+    {
+        return pcommit_end_ == pbuffer_;
+    }
     void flush();
 
 private:

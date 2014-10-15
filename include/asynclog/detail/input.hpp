@@ -26,12 +26,12 @@ public:
     {
         return pinput_end_;
     }
+    void signal_input_consumed();
 
 private:
     static char* allocate_buffer(std::size_t size, std::size_t alignment);
     char* advance_frame_pointer(char* p, std::size_t distance);
     void wait_input_consumed();
-    void signal_input_consumed();
     bool is_aligned(void* p)
     {
         return (reinterpret_cast<std::uintptr_t>(p) & frame_alignment_mask_) == 0;
