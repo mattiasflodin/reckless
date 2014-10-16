@@ -6,7 +6,7 @@ def options(ctx):
 
 def configure(ctx):
     ctx.load('compiler_cxx')
-    ctx.env.append_value('INCLUDES', ['include', 'include/boost_1_56_0'])
+    ctx.env.append_value('INCLUDES', ['include', 'boost'])
     ctx.env.append_value('CXXFLAGS', ['-std=c++11', '-Wall', '-pedantic', '-g', '-pthread', '-O3', '-march=native'])
     #ctx.env.append_value('CXXFLAGS', ['-fprofile-arcs', '-ftest-coverage'])
     ctx.env.append_value('LINKFLAGS', ['-g', '-pthread'])
@@ -15,17 +15,10 @@ def configure(ctx):
     ctx.env.append_value('LIB', ['rt'])
 
 def build(ctx):
+    ctx.recurse('performance_log')
+    ctx.recurse('performance')
+    
     # To see annotated assembly:
     # -std=c++11 -g -pthread -O3 -march=native -Wa,-adhln=main.s -masm=intel -fverbose-asm -c main.cpp
-    ctx.stlib(source='src/asynclog.cpp src/output_buffer.cpp src/file_writer.cpp src/template_formatter.cpp src/input.cpp src/basic_log.cpp src/ntoa.cpp src/utility.cpp', target='asynclog')
-    ctx.stlib(source='performance.cpp', target='performance')
-    #ctx.program(source='main.cpp', target='test',
-    #        use='asynclog')
-    ctx.program(source='perftest/measure_simple_call_burst.cpp', target='measure_simple_call_burst',
-        use='performance asynclog', includes='performance')
-    ctx.program(source='perftest/measure_periodic_calls.cpp', target='measure_periodic_calls',
-        use='performance asynclog')
-    ctx.program(source='perftest/measure_write_files.cpp', target='measure_write_files',
-        use='performance asynclog')
-
-    ctx.program(source='src/ntoa.cpp src/output_buffer.cpp src/utility.cpp src/asynclog.cpp', defines=['UNIT_TEST'], target='ntoa_test')
+    ctx.stlib(source=ctx.path.ant_glob("src/*.cpp"), target='asynclog', includes=['performance_log/include'])
+    ctx.program(source=ctx.path.ant_glob("src/*.cpp"), defines=['UNIT_TEST'], target='unit_test')
