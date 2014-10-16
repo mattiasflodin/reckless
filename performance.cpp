@@ -6,19 +6,17 @@
 #include <unistd.h>
 #include <pthread.h>
 
-#include <iostream>
-
-void performance::detail::lock_memory(void const* addr, std::size_t len)
+void performance_log::detail::lock_memory(void const* addr, std::size_t len)
 {
     if(0 != mlock(addr, len))
         throw std::system_error(errno, std::system_category());
 }
-void performance::detail::unlock_memory(void const* addr, std::size_t len)
+void performance_log::detail::unlock_memory(void const* addr, std::size_t len)
 {
     munlock(addr, len);
 }
 
-void performance::rdtscp_cpuid_clock::bind_cpu(int cpu)
+void performance_log::rdtscp_cpuid_clock::bind_cpu(int cpu)
 {
     int nprocessors = static_cast<int>(sysconf(_SC_NPROCESSORS_ONLN));
     auto const size = CPU_ALLOC_SIZE(nprocessors);
@@ -37,7 +35,7 @@ void performance::rdtscp_cpuid_clock::bind_cpu(int cpu)
     }
 }
 
-void performance::rdtscp_cpuid_clock::unbind_cpu()
+void performance_log::rdtscp_cpuid_clock::unbind_cpu()
 {
     int nprocessors = static_cast<int>(sysconf(_SC_NPROCESSORS_ONLN));
     auto const size = CPU_ALLOC_SIZE(nprocessors);

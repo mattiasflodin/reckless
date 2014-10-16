@@ -22,7 +22,7 @@ def build(ctx):
     #ctx.program(source='main.cpp', target='test',
     #        use='asynclog')
     ctx.program(source='perftest/measure_simple_call_burst.cpp', target='measure_simple_call_burst',
-        use='performance asynclog')
+        use='performance asynclog', includes='performance')
     ctx.program(source='perftest/measure_periodic_calls.cpp', target='measure_periodic_calls',
         use='performance asynclog')
     ctx.program(source='perftest/measure_write_files.cpp', target='measure_write_files',
