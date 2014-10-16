@@ -21,11 +21,11 @@ def build(ctx):
     ctx.stlib(source='performance.cpp', target='performance')
     #ctx.program(source='main.cpp', target='test',
     #        use='asynclog')
-    ctx.program(source='measure_simple_call_burst.cpp', target='measure_simple_call_burst',
+    ctx.program(source='perftest/measure_simple_call_burst.cpp', target='measure_simple_call_burst',
         use='performance asynclog')
-    ctx.program(source='measure_periodic_calls.cpp', target='measure_periodic_calls',
+    ctx.program(source='perftest/measure_periodic_calls.cpp', target='measure_periodic_calls',
         use='performance asynclog')
-    ctx.program(source='measure_write_files.cpp', target='measure_write_files',
+    ctx.program(source='perftest/measure_write_files.cpp', target='measure_write_files',
         use='performance asynclog')
 
     ctx.program(source='src/ntoa.cpp src/output_buffer.cpp src/utility.cpp src/asynclog.cpp', defines=['UNIT_TEST'], target='ntoa_test')
