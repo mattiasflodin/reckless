@@ -42,7 +42,7 @@ public:
             throw std::system_error(errno, std::system_category());
 
         unsigned elapsed_ms = 0;
-        struct timespec timeout = {0};
+        struct timespec timeout = {0, 0};
 
         do {
             unsigned remaining_ms = milliseconds - elapsed_ms;
@@ -70,7 +70,7 @@ private:
         return syscall(SYS_futex, addr1, op, val1, timeout, addr2, val3);
     }
 
-    int atomic_exchange_explicit(int* pvalue, int new_value, std::memory_order order)
+    int atomic_exchange_explicit(int* pvalue, int new_value, std::memory_order)
     {
         int res = new_value;
         asm volatile("xchg %0, %1\n\t"

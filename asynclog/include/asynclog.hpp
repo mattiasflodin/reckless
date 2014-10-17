@@ -99,7 +99,7 @@ public:
     {
     }
 
-    void apply(output_buffer* pbuffer)
+    void apply(output_buffer*)
     {
     }
 };

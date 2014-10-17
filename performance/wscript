@@ -1,0 +1,6 @@
+def build(ctx):
+    for test in 'simple_call_burst periodic_calls write_files'.split():
+        name = 'measure_' + test
+        ctx.program(source=name+'.cpp', target=name,
+            use='performance_log asynclog')
+

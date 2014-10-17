@@ -73,8 +73,8 @@ char* asynclog::detail::thread_input_buffer::advance_frame_pointer(char* p, std:
     assert(is_aligned(p));
     assert(is_aligned(distance));
     p += distance;
+    assert(size_ >= static_cast<std::size_t>(p - pbegin_));
     auto remaining = size_ - (p - pbegin_);
-    assert(remaining >= 0);
     if(remaining == 0)
         p = pbegin_;
     return p;
