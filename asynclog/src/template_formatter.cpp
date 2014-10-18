@@ -4,6 +4,7 @@
 #include <cstdio>
 #include <cstring>
 #include <sstream>
+#include <cstdint>
 
 namespace asynclog {
 namespace {
@@ -163,6 +164,11 @@ char const* asynclog::format(output_buffer* pbuffer, char const* pformat, std::s
     std::memcpy(p, v.data(), len);
     pbuffer->commit(len);
     return pformat + 1;
+}
+
+char const* format(output_buffer* pbuffer, char const* pformat, void const* p)
+{
+    reinterpret_cast<std::uintptr_t>(p)
 }
 
 void asynclog::template_formatter::append_percent(output_buffer* pbuffer)

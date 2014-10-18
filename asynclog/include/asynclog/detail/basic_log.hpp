@@ -26,6 +26,9 @@ public:
             std::size_t thread_input_buffer_size = 0,
             std::size_t input_frame_alignment = 0);
     virtual ~basic_log();
+    
+    basic_log(basic_log const&) = delete;
+    basic_log& operator=(basic_log const&) = delete;
 
     virtual void open(writer* pwriter, 
             std::size_t output_buffer_max_capacity = 0,
@@ -63,9 +66,6 @@ protected:
     }
 
 private:
-    basic_log(basic_log const&);  // not defined
-    basic_log& operator=(basic_log const&); // not defined
-
     void output_worker();
     void queue_commit_extent(detail::commit_extent const& ce);
     char* allocate_input_frame(std::size_t frame_size);

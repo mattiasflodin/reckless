@@ -300,6 +300,8 @@ char const* format(output_buffer* pbuffer, char const* pformat, long double v);
 char const* format(output_buffer* pbuffer, char const* pformat, char const* v);
 char const* format(output_buffer* pbuffer, char const* pformat, std::string const& v);
 
+char const* format(output_buffer* pbuffer, char const* pformat, void const* p);
+
 }   // namespace asynclog
 
 #endif    // ASYNCLOG_ASYNCLOG_HPP
