@@ -10,7 +10,7 @@
 template <class Fun>
 void measure(Fun fun, char const* timings_file_name)
 {
-    performance::logger<16384, performance::rdtscp_cpuid_clock, std::uint32_t> performance_log;
+    performance_log::logger<16384, performance_log::rdtscp_cpuid_clock, std::uint32_t> performance_log;
 
     for(int i=0; i!=10000; ++i) {
         auto start = performance_log.start();
@@ -31,7 +31,7 @@ int main()
     unlink("fstream.txt");
     unlink("stdio.txt");
     unlink("alog.txt");
-    performance::rdtscp_cpuid_clock::bind_cpu(0);
+    performance_log::rdtscp_cpuid_clock::bind_cpu(0);
 
     std::ofstream ofs("fstream.txt");
     measure([&](char const* s, char c, int i, double d)
@@ -62,6 +62,6 @@ int main()
         }, "timings_simple_call_burst_alog.txt");
     g_log.close();
 
-    performance::rdtscp_cpuid_clock::unbind_cpu();
+    performance_log::rdtscp_cpuid_clock::unbind_cpu();
     return 0;
 }

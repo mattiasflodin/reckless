@@ -1,0 +1,4 @@
+include_rules
+CXXFLAGS += -DUNIT_TEST -Wno-strict-aliasing
+: foreach ../src/*.cpp |> g++ $(CXXFLAGS) -c %f -o %o |> %B.o
+: *.o | $(ASYNCLOG_LIB)/libasynclog.a $(PERFORMANCE_LOG_LIB)/libperformance_log.a |> !ld |> unit_test

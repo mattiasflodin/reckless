@@ -146,7 +146,7 @@ private:
         pbuffer->commit(1);
         format_fields(pbuffer, std::forward<Remaining>(remaining)...);
     }
-    static void format_fields(output_buffer* pbuffer)
+    static void format_fields(output_buffer*)
     {
     }
 };

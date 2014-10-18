@@ -1,6 +1,5 @@
-#include "asynclog.hpp"
-
-#include <performance.hpp>
+#include <asynclog.hpp>
+#include <performance_log.hpp>
 
 #include <cmath>
 #include <fstream>
@@ -13,7 +12,7 @@ asynclog::simple_log g_log;
 template <class Fun>
 void measure(Fun fun, char const* timings_file_name)
 {
-    performance::logger<8192, performance::rdtscp_cpuid_clock, std::uint32_t> performance_log;
+    performance_log::logger<8192, performance_log::rdtscp_cpuid_clock, std::uint32_t> performance_log;
 
     for(int i=0; i!=6000; ++i) {
         usleep(1000);
@@ -33,7 +32,7 @@ int main()
     unlink("fstream.txt");
     unlink("stdio.txt");
     unlink("alog.txt");
-    performance::rdtscp_cpuid_clock::bind_cpu(0);
+    performance_log::rdtscp_cpuid_clock::bind_cpu(0);
 
     std::ofstream ofs("fstream.txt");
     measure([&](char const* s, char c, int i, double d)
@@ -52,7 +51,7 @@ int main()
        }, "timings_periodic_calls_stdio.txt");
     std::fclose(stdio_file);
 
-    measure([&](char const* s, char c, int i, double d) { },
+    measure([&](char const*, char, int, double) { },
             "timings_periodic_calls_nop.txt");
 
     asynclog::file_writer writer("alog.txt");
@@ -64,6 +63,6 @@ int main()
         }, "timings_periodic_calls_alog.txt");
     g_log.close();
 
-    performance::rdtscp_cpuid_clock::unbind_cpu();
+    performance_log::rdtscp_cpuid_clock::unbind_cpu();
     return 0;
 }

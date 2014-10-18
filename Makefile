@@ -13,7 +13,7 @@ objects := $(patsubst %.cpp,%.o,$(wildcard $(srcpath)/*.cpp))
 
 .PHONY: clean
 
-$(target): $(objects) build
+$(target): $(objects)
 	-$(RM) $(target)
 	ar rs $(target) $(objects)
 

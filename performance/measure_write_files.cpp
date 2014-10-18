@@ -1,5 +1,5 @@
-#include "performance.hpp"
-#include "asynclog.hpp"
+#include <performance_log.hpp>
+#include <asynclog.hpp>
 
 #include <fstream>
 #include <sstream>
@@ -18,7 +18,7 @@ void measure(Fun fun, char const* timings_file_name)
         S_IROTH | S_IWOTH | S_IXOTH;
     mkdir("data", full_access);
 
-    performance::logger<16384, performance::rdtscp_cpuid_clock, std::uint32_t> performance_log;
+    performance_log::logger<16384, performance_log::rdtscp_cpuid_clock, std::uint32_t> performance_log;
 
     for(unsigned number=0; number!=1000u; ++number) {
         std::ostringstream ostr;
@@ -45,11 +45,11 @@ int main()
     unlink("stdio.txt");
     unlink("alog.txt");
 
-    performance::rdtscp_cpuid_clock::bind_cpu(0);
+    performance_log::rdtscp_cpuid_clock::bind_cpu(0);
 
     // Do one run in the hope of filling up the cache somewhat so that the
     // first case doesn't get so much of an advantage.
-    measure([&](unsigned number, double percent)
+    measure([&](unsigned, double)
         {
         }, "timings_write_file_noop.txt");
 

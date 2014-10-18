@@ -1,2 +1,0 @@
-def build(ctx):
-    ctx.stlib(source='src/performance_log.cpp', target='performance')
