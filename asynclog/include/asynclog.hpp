@@ -180,7 +180,7 @@ namespace detail {
     }
 }
 
-template <class IndentPolicy, char FieldSeparator = ' ', class... HeaderFields>
+template <class IndentPolicy = no_indent, char FieldSeparator = ' ', class... HeaderFields>
 class policy_log : public basic_log {
 public:
     policy_log()

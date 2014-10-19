@@ -3,9 +3,9 @@
 #include "asynclog/detail/utility.hpp"
 
 #include <type_traits>  // is_unsigned
-#include <cmath>        // log10
 #include <cassert>
 #include <cstring>      // memset
+#include <cmath>        // lrint, llrint
 #include <iomanip>
 
 namespace asynclog {
@@ -50,7 +50,7 @@ inline void prefetch_digits()
 
 template <typename Unsigned>
 typename std::enable_if<std::is_unsigned<Unsigned>::value, unsigned>::type
-utoa_generic_base10(char* str, unsigned pos, Unsigned value)
+utoa_generic_base10_preallocated(char* str, unsigned pos, Unsigned value)
 {
     // FIXME is this right? What if value /= 100 yields 0 here? Do we get an
     // additional unnecessary 0?
@@ -80,7 +80,7 @@ utoa_generic_base10(char* str, unsigned pos, Unsigned value)
 
 template <typename Unsigned>
 typename std::enable_if<std::is_unsigned<Unsigned>::value, Unsigned>::type
-utoa_generic_base10(char* str, unsigned pos, Unsigned value, unsigned digits)
+utoa_generic_base10_preallocated(char* str, unsigned pos, Unsigned value, unsigned digits)
 {
     while(digits >= 2) {
         Unsigned remainder = value % 100;
@@ -99,6 +99,36 @@ utoa_generic_base10(char* str, unsigned pos, Unsigned value, unsigned digits)
         value /= 10;
     }
     return value;
+}
+
+template <bool Uppercase, typename Unsigned>
+typename std::enable_if<std::is_unsigned<Unsigned>::value, unsigned>::type
+utoa_generic_base16_preallocated(char* str, unsigned pos, Unsigned value)
+{
+    char const digit_offset = '0';
+    char const hexdigit_offset = (Uppercase? 'A' : 'a') - 10;
+    while(value) {
+        --pos;
+        char v = value % 0x10;
+        value /= 0x10;
+        str[pos] = v + (v<10? digit_offset : hexdigit_offset);
+    }
+    return pos;   
+}
+
+
+unsigned log2(std::uint32_t v)
+{
+    // From Sean Eron Anderson's "Bit Twiddling Hacks" collection.
+    unsigned r;
+    unsigned shift;
+
+    r =     (v > 0xFFFF) << 4; v >>= r;
+    shift = (v > 0xFF  ) << 3; v >>= shift; r |= shift;
+    shift = (v > 0xF   ) << 2; v >>= shift; r |= shift;
+    shift = (v > 0x3   ) << 1; v >>= shift; r |= shift;
+                                            r |= (v >> 1);
+    return r;
 }
 
 unsigned log10(std::uint32_t x)
@@ -181,6 +211,83 @@ unsigned log10(std::uint32_t x)
                 }
             }
         }
+    }
+}
+
+template <typename Unsigned>
+typename std::enable_if<std::is_unsigned<Unsigned>::value, Unsigned>::type
+log16(Unsigned v)
+{
+    return (log2(v)+3)/4;
+}
+
+template <typename Unsigned>
+typename std::enable_if<std::is_unsigned<Unsigned>::value, void>::type
+itoa_generic_base10(output_buffer* pbuffer, Unsigned value)
+{
+    prefetch_digits();
+    unsigned size = log10(value);
+    char* str = pbuffer->reserve(size);
+    utoa_generic_base10_preallocated(str, size, value);
+    pbuffer->commit(size);
+}
+
+template <typename Signed>
+typename std::enable_if<std::is_signed<Signed>::value, void>::type
+itoa_generic_base10(output_buffer* pbuffer, Signed value)
+{
+    prefetch_digits();
+    if(value<0) {
+        auto uv = unsigned_cast(-value);
+        unsigned size = log10(uv) + 1;
+        char* str = pbuffer->reserve(size);
+        utoa_generic_base10_preallocated(str, size, uv);
+        str[0] = '-';
+        pbuffer->commit(size);
+    } else {
+        itoa_generic_base10(pbuffer, unsigned_cast(value));
+    }
+}
+
+template <typename Unsigned>
+typename std::enable_if<std::is_unsigned<Unsigned>::value, void>::type
+itoa_generic_base16(output_buffer* pbuffer, Unsigned value, bool uppercase, char const* prefix)
+{
+    if(prefix) {
+        std::size_t len = std::strlen(prefix);
+        char* str = pbuffer->reserve(len);
+        std::memcpy(str, prefix, len);
+        pbuffer->commit(len);
+    }
+            
+    value = 0x186a200;
+    unsigned size = log16(value);
+    char* str = pbuffer->reserve(size);
+    if(uppercase)
+        utoa_generic_base16_preallocated<true>(str, size, value);
+    else
+        utoa_generic_base16_preallocated<false>(str, size, value);
+    pbuffer->commit(size);
+}
+
+template <typename Signed>
+typename std::enable_if<std::is_signed<Signed>::value, void>::type
+itoa_generic_base16(output_buffer* pbuffer, Signed value, bool uppercase, char const* prefix)
+{
+    if(value<0) {
+        std::size_t prefix_length = std::strlen(prefix);
+        auto uv = unsigned_cast(-value);
+        unsigned size = 1 + prefix_length + log16(uv);
+        char* str = pbuffer->reserve(size);
+        if(uppercase)
+            utoa_generic_base16_preallocated<true>(str, size, uv);
+        else
+            utoa_generic_base16_preallocated<false>(str, size, uv);
+        memcpy(str + 1, prefix, prefix_length);
+        str[0] = '-';
+        pbuffer->commit(size);
+    } else {
+        itoa_generic_base16(pbuffer, unsigned_cast(value), uppercase, prefix);
     }
 }
 
@@ -379,28 +486,44 @@ int descale(double value, unsigned significant_digits, std::uint_fast64_t& ivalu
 }   // anonymous namespace
 
 // TODO define these for more integer sizes
-void utoa_base10(output_buffer* pbuffer, unsigned int value)
-{
-    prefetch_digits();
-    unsigned size = log10(value);
-    char* str = pbuffer->reserve(size);
-    utoa_generic_base10(str, size, value);
-    pbuffer->commit(size);
-}
-
 void itoa_base10(output_buffer* pbuffer, int value)
 {
-    prefetch_digits();
-    if(value<0) {
-        unsigned uv = unsigned_cast(-value);
-        unsigned size = log10(uv) + 1;
-        char* str = pbuffer->reserve(size);
-        utoa_generic_base10(str, size, uv);
-        pbuffer->commit(size);
-        str[0] = '-';
-    } else {
-        utoa_base10(pbuffer, unsigned_cast(value));
-    }
+    itoa_generic_base10(pbuffer, value);
+}
+
+void itoa_base10(output_buffer* pbuffer, unsigned int value)
+{
+    itoa_generic_base10(pbuffer, value);
+}
+
+void itoa_base10(output_buffer* pbuffer, long value)
+{
+    itoa_generic_base10(pbuffer, value);
+}
+
+void itoa_base10(output_buffer* pbuffer, unsigned long value)
+{
+    itoa_generic_base10(pbuffer, value);
+}
+
+void itoa_base10(output_buffer* pbuffer, long long value)
+{
+    itoa_generic_base10(pbuffer, value);
+}
+
+void itoa_base10(output_buffer* pbuffer, unsigned long long value)
+{
+    itoa_generic_base10(pbuffer, value);
+}
+
+void itoa_base16(output_buffer* pbuffer, unsigned long value, bool uppercase, char const* prefix)
+{
+    itoa_generic_base16(pbuffer, value, uppercase, prefix);
+}
+
+void itoa_base16(output_buffer* pbuffer, long value, bool uppercase, char const* prefix)
+{
+    itoa_generic_base16(pbuffer, value, uppercase, prefix);
 }
 
 unsigned zero_digits(char* s, unsigned pos, unsigned count)
@@ -468,11 +591,11 @@ void ftoa_base10(output_buffer* pbuffer, double value, unsigned significant_digi
 
         int size = significant_digits + dot + 2 + exponent_digits;
         char* s = pbuffer->reserve(size);
-        utoa_generic_base10(s, size, unsigned_cast(exponent), exponent_digits);
+        utoa_generic_base10_preallocated(s, size, unsigned_cast(exponent), exponent_digits);
         s[size-exponent_digits-1] = exponent_sign;
         s[size-exponent_digits-2] = 'e';
         if(dot) {
-            ivalue = utoa_generic_base10(s, size-exponent_digits-2, ivalue, significant_digits-1);
+            ivalue = utoa_generic_base10_preallocated(s, size-exponent_digits-2, ivalue, significant_digits-1);
             s[1] = '.';
         }
         s[0] = '0' + static_cast<char>(ivalue);
@@ -481,7 +604,7 @@ void ftoa_base10(output_buffer* pbuffer, double value, unsigned significant_digi
         unsigned zeroes = unsigned_cast(-exponent - 1);
         unsigned size = 2 + zeroes + significant_digits;
         char* str = pbuffer->reserve(size);
-        utoa_generic_base10(str, size, ivalue);
+        utoa_generic_base10_preallocated(str, size, ivalue);
         std::memset(str+2, '0', zeroes);
         str[1] = '.';
         str[0] = '0';
@@ -491,16 +614,16 @@ void ftoa_base10(output_buffer* pbuffer, double value, unsigned significant_digi
         unsigned size = zeroes + significant_digits;
         char* str = pbuffer->reserve(size);
         std::memset(str + significant_digits, '0', zeroes);
-        utoa_generic_base10(str, significant_digits, ivalue);
+        utoa_generic_base10_preallocated(str, significant_digits, ivalue);
         pbuffer->commit(size);
     } else {
         unsigned before_dot = unsigned_cast(exponent)+1;
         unsigned after_dot = significant_digits - before_dot;
         unsigned size = before_dot + 1 + after_dot;
         char* str = pbuffer->reserve(size);
-        ivalue = utoa_generic_base10(str, size, ivalue, after_dot);
+        ivalue = utoa_generic_base10_preallocated(str, size, ivalue, after_dot);
         str[before_dot] = '.';
-        utoa_generic_base10(str, before_dot, ivalue);
+        utoa_generic_base10_preallocated(str, before_dot, ivalue);
         pbuffer->commit(size);
     }
 }
@@ -589,14 +712,14 @@ void ftoa_base10_precision(output_buffer* pbuffer, double value, unsigned precis
     fill_zeroes(suffix_zeroes);
 
     if(digits_left_to_dot != 0 && digits_left_to_dot <= mantissa_digits) {
-        mantissa = utoa_generic_base10(s, pos, mantissa, digits_left_to_dot);
+        mantissa = utoa_generic_base10_preallocated(s, pos, mantissa, digits_left_to_dot);
         pos -= digits_left_to_dot;
         s[--pos] = '.';
         if(mantissa_digits != digits_left_to_dot)
-            pos = utoa_generic_base10(s, pos, mantissa);
+            pos = utoa_generic_base10_preallocated(s, pos, mantissa);
         digits_left_to_dot = 0;
     } else if(mantissa_digits != 0) {
-        pos = utoa_generic_base10(s, pos, mantissa);
+        pos = utoa_generic_base10_preallocated(s, pos, mantissa);
         digits_left_to_dot -= mantissa_digits;
     }
 

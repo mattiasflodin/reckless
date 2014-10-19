@@ -13,7 +13,7 @@ namespace {
     {
         char f = *pformat;
         if(f == 'd') {
-            detail::utoa_base10(pbuffer, v);
+            detail::itoa_base10(pbuffer, v);
             return pformat + 1;
         } else if(f == 'x') {
             // FIXME
@@ -166,9 +166,17 @@ char const* asynclog::format(output_buffer* pbuffer, char const* pformat, std::s
     return pformat + 1;
 }
 
-char const* format(output_buffer* pbuffer, char const* pformat, void const* p)
+char const* asynclog::format(output_buffer* pbuffer, char const* pformat, void const* p)
 {
-    reinterpret_cast<std::uintptr_t>(p)
+    char c = *pformat;
+    if(c != 'p' && c !='s')
+        return nullptr;
+    char* s = pbuffer->reserve(2);
+    s[0] = '0';
+    s[1] = 'x';
+    pbuffer->commit(2);
+    detail::itoa_base16(pbuffer, reinterpret_cast<std::uintptr_t>(p), false, nullptr);
+    return pformat+1;
 }
 
 void asynclog::template_formatter::append_percent(output_buffer* pbuffer)
