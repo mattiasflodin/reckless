@@ -8,26 +8,78 @@
 
 namespace asynclog {
 namespace {
-    template <typename T>
-    char const* generic_format_uint(output_buffer* pbuffer, char const*& pformat, T v)
+    struct conversion_specification {
+        bool left_justify;
+        bool show_plus_sign;
+        bool blank_sign;
+        bool alternative_form;
+        bool pad_with_zeroes;
+        unsigned minimum_field_width;
+        int precision;
+    }
+
+    unsigned atou(char const*& s)
     {
-        char f = *pformat;
-        if(f == 'd') {
-            detail::itoa_base10(pbuffer, v);
-            return pformat + 1;
-        } else if(f == 'x') {
-            // FIXME
-            return nullptr;
-        } else if(f == 'b') {
-            // FIXME
-            return nullptr;
+        unsigned v = *s - '0';
+        ++s;
+        if(!isdigit(*s))
+            return v;
+        v = 10*v + *s - '0';
+        ++s;
+        while(isdigit(*s)) {
+            v = 10*v + *s - '0';
+            ++s;
+        }
+        return v;
+    }
+
+    bool isdigit(char c)
+    {
+        return c >= '0' && c <= '9';
+    }
+    
+    char const* parse_conversion_specification(conversion_specification* pspec, char const* pformat)
+    {
+        bool left_justify = false;
+        bool show_plus_sign = false;
+        bool blank_sign = false;
+        bool pad_with_zeroes = false;
+        while(true) {
+            char flag = *pformat;
+            if(flag == '-')
+                pspec->left_justify = true;
+            else if(flag == '+')
+                pspec->show_plus_sign = true;
+            else if (flag == ' ')
+                pspec->blank_sign = true;
+            else if(flag == '#')
+                pspec->alternative_form = true;
+            else if(flag == '0'):
+                pspec->pad_with_zeroes = true;
+            else
+                break;
+            ++pformat;
+        }
+        pspec->left_justify = left_justify;
+        pspec->show_plus_sign = show_plus_sign;
+        pspec->blank_sign = blank_sign;
+        pspec->alternative_form = alternative_form;
+        pspec->pad_with_zeroes = pad_with_zeroes;
+        
+        pspec->minimum_field_width = isdigit(*pformat)? atou(pformat) : 0;
+        if(*pformat == '.') {
+            ++pformat;
+            pspec->precision = isdigit(*pformat)? atou(pformat) : -1;
         } else {
-            return nullptr;
+            pspec->precision = -1;
         }
     }
+        
     template <typename T>
-    char const* generic_format_int(output_buffer* pbuffer, char const*& pformat, T v)
+    char const* generic_format_int(output_buffer* pbuffer, char const* pformat, T v)
     {
+        parse_conversion_specification spec;
+        pformat = parse_conversion_specification(&spec, pformat);
         char f = *pformat;
         if(f == 'd') {
             detail::itoa_base10(pbuffer, v);

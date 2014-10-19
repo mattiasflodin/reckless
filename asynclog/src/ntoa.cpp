@@ -119,7 +119,9 @@ utoa_generic_base16_preallocated(char* str, unsigned pos, Unsigned value)
 
 unsigned log2(std::uint32_t v)
 {
-    // From Sean Eron Anderson's "Bit Twiddling Hacks" collection.
+    // From Sean Eron Anderson's "Bit Twiddling Hacks" collection, except for
+    // the +1 at the end. Our bastardized logarithms all return the number of
+    // digits required in a string, not the "real" logarithm.
     unsigned r;
     unsigned shift;
 
@@ -128,7 +130,7 @@ unsigned log2(std::uint32_t v)
     shift = (v > 0xF   ) << 2; v >>= shift; r |= shift;
     shift = (v > 0x3   ) << 1; v >>= shift; r |= shift;
                                             r |= (v >> 1);
-    return r;
+    return r+1;
 }
 
 unsigned log10(std::uint32_t x)
