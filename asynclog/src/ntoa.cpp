@@ -9,7 +9,6 @@
 #include <iomanip>
 
 namespace asynclog {
-namespace detail {
 namespace {
 
 template <typename T>
@@ -36,22 +35,18 @@ char const decimal_digits[] =
     "80818283848586878889"
     "90919293949596979899";
 
-unsigned cache_line_size = get_cache_line_size();
 
-inline void prefetch_digits()
+void prefetch_digits()
 {
-    unsigned i = 0;
-    unsigned const stride = cache_line_size;
-    while(i < sizeof(decimal_digits)) {
-        __builtin_prefetch(decimal_digits + i);
-        i += stride;
-    }
+    detail::prefetch(decimal_digits, sizeof(decimal_digits));
 }
 
 template <typename Unsigned>
 typename std::enable_if<std::is_unsigned<Unsigned>::value, unsigned>::type
 utoa_generic_base10_preallocated(char* str, unsigned pos, Unsigned value)
 {
+    if(value == 0)
+        return pos;
     // FIXME is this right? What if value /= 100 yields 0 here? Do we get an
     // additional unnecessary 0?
     while(value >= 100) {
@@ -162,8 +157,8 @@ unsigned log10(std::uint32_t x)
     if(x < 1000u) {
         // It's 1, 2 or 3.
         if(x < 10u) {
-            // It's 1.
-            return 1u;
+            // It's 0 or 1.
+            return x != 0;
         } else {
             // It's 2 or 3.
             if( x < 100u) {
@@ -225,21 +220,37 @@ log16(Unsigned v)
 
 template <typename Unsigned>
 typename std::enable_if<std::is_unsigned<Unsigned>::value, void>::type
-itoa_generic_base10(output_buffer* pbuffer, Unsigned value)
+itoa_generic_base10(output_buffer* pbuffer, Unsigned value, conversion_specification const& cs)
 {
     prefetch_digits();
-    unsigned size = log10(value);
+    unsigned digits = log10(value);
+    unsigned precision = (cs.precision == UNSPECIFIED_PRECISION? 1 : cs.precision);
+    precision = std::max(digits, precision);
+    bool sign = cs.plus_sign != 0;
+    unsigned size = sign + std::max(precision, cs.minimum_field_width);
+    
     char* str = pbuffer->reserve(size);
-    utoa_generic_base10_preallocated(str, size, value);
+    
+    if(cs.plus_sign)
+        str[0] = cs.plus_sign;
+    if(cs.left_justify) {
+        std::memset(str+sign, '0', precision-digits);
+        utoa_generic_base10_preallocated(str, sign+precision, value);
+        std::memset(str+precision, ' ', size - precision);
+    } else {
+        std::memset(str+sign, ' ', size - precision - sign);
+        std::memset(str+size-precision, '0', precision-digits);
+        utoa_generic_base10_preallocated(str, size, value);
+    }
     pbuffer->commit(size);
 }
 
 template <typename Signed>
 typename std::enable_if<std::is_signed<Signed>::value, void>::type
-itoa_generic_base10(output_buffer* pbuffer, Signed value)
+itoa_generic_base10(output_buffer* pbuffer, Signed value, conversion_specification const& cs)
 {
-    prefetch_digits();
     if(value<0) {
+        prefetch_digits();
         auto uv = unsigned_cast(-value);
         unsigned size = log10(uv) + 1;
         char* str = pbuffer->reserve(size);
@@ -247,7 +258,7 @@ itoa_generic_base10(output_buffer* pbuffer, Signed value)
         str[0] = '-';
         pbuffer->commit(size);
     } else {
-        itoa_generic_base10(pbuffer, unsigned_cast(value));
+        itoa_generic_base10(pbuffer, unsigned_cast(value), cs);
     }
 }
 
@@ -485,37 +496,48 @@ int descale(double value, unsigned significant_digits, std::uint_fast64_t& ivalu
         return descale_normal(value, e2, significant_digits, ivalue);
 }
 
+unsigned zero_digits(char* s, unsigned pos, unsigned count)
+{
+    unsigned start = pos-count;
+    while(count != 0)
+    {
+        --count;
+        s[start+count] = '0';
+    }
+    return start;
+}
+
 }   // anonymous namespace
 
 // TODO define these for more integer sizes
-void itoa_base10(output_buffer* pbuffer, int value)
+void itoa_base10(output_buffer* pbuffer, int value, conversion_specification const& cs)
 {
-    itoa_generic_base10(pbuffer, value);
+    itoa_generic_base10(pbuffer, value, cs);
 }
 
-void itoa_base10(output_buffer* pbuffer, unsigned int value)
+void itoa_base10(output_buffer* pbuffer, unsigned int value, conversion_specification const& cs)
 {
-    itoa_generic_base10(pbuffer, value);
+    itoa_generic_base10(pbuffer, value, cs);
 }
 
-void itoa_base10(output_buffer* pbuffer, long value)
+void itoa_base10(output_buffer* pbuffer, long value, conversion_specification const& cs)
 {
-    itoa_generic_base10(pbuffer, value);
+    itoa_generic_base10(pbuffer, value, cs);
 }
 
-void itoa_base10(output_buffer* pbuffer, unsigned long value)
+void itoa_base10(output_buffer* pbuffer, unsigned long value, conversion_specification const& cs)
 {
-    itoa_generic_base10(pbuffer, value);
+    itoa_generic_base10(pbuffer, value, cs);
 }
 
-void itoa_base10(output_buffer* pbuffer, long long value)
+void itoa_base10(output_buffer* pbuffer, long long value, conversion_specification const& cs)
 {
-    itoa_generic_base10(pbuffer, value);
+    itoa_generic_base10(pbuffer, value, cs);
 }
 
-void itoa_base10(output_buffer* pbuffer, unsigned long long value)
+void itoa_base10(output_buffer* pbuffer, unsigned long long value, conversion_specification const& cs)
 {
-    itoa_generic_base10(pbuffer, value);
+    itoa_generic_base10(pbuffer, value, cs);
 }
 
 void itoa_base16(output_buffer* pbuffer, unsigned long value, bool uppercase, char const* prefix)
@@ -526,17 +548,6 @@ void itoa_base16(output_buffer* pbuffer, unsigned long value, bool uppercase, ch
 void itoa_base16(output_buffer* pbuffer, long value, bool uppercase, char const* prefix)
 {
     itoa_generic_base16(pbuffer, value, uppercase, prefix);
-}
-
-unsigned zero_digits(char* s, unsigned pos, unsigned count)
-{
-    unsigned start = pos-count;
-    while(count != 0)
-    {
-        --count;
-        s[start+count] = '0';
-    }
-    return start;
 }
 
 void ftoa_base10(output_buffer* pbuffer, double value, unsigned significant_digits, int minimum_exponent, int maximum_exponent)
@@ -731,7 +742,6 @@ void ftoa_base10_precision(output_buffer* pbuffer, double value, unsigned precis
     pbuffer->commit(size);
 }
 
-}   // namespace detail
 }   // namespace asynclog
 
 #ifdef UNIT_TEST
