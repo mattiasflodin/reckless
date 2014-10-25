@@ -219,47 +219,68 @@ log16(Unsigned v)
 }
 
 template <typename Unsigned>
-typename std::enable_if<std::is_unsigned<Unsigned>::value, void>::type
-itoa_generic_base10(output_buffer* pbuffer, Unsigned value, conversion_specification const& cs)
+void itoa_generic_base10(output_buffer* pbuffer, bool negative, Unsigned value, conversion_specification const& cs)
 {
     prefetch_digits();
+    char sign;
+    if(negative) {
+        sign = true;
+    } else {
+        sign = cs.plus_sign != 0;
+    }
+    
+    // We have either
+    // [sign] [zeroes] [digits] [padding]
+    //        [---precision---]
+    // [--------------size--------------]
+    // or
+    // [padding] [sign] [zeroes] [digits]
+    //                  [---precision---]
+    // [--------------size--------------]
+    // depending on if it's left-justified or not.
     unsigned digits = log10(value);
     unsigned precision = (cs.precision == UNSPECIFIED_PRECISION? 1 : cs.precision);
     precision = std::max(digits, precision);
-    bool sign = cs.plus_sign != 0;
-    unsigned size = sign + std::max(precision, cs.minimum_field_width);
+    unsigned size = std::max(sign + precision, cs.minimum_field_width);
+    unsigned zeroes = precision - digits;
+    unsigned padding = size - sign - precision;
     
     char* str = pbuffer->reserve(size);
     
-    if(cs.plus_sign)
-        str[0] = cs.plus_sign;
     if(cs.left_justify) {
-        std::memset(str+sign, '0', precision-digits);
+        if(sign)
+            str[0] = negative? '-' : cs.plus_sign;
+        std::memset(str+sign, '0', zeroes);
         utoa_generic_base10_preallocated(str, sign+precision, value);
-        std::memset(str+precision, ' ', size - precision);
+        std::memset(str+sign+precision, ' ', padding);
     } else {
-        std::memset(str+sign, ' ', size - precision - sign);
-        std::memset(str+size-precision, '0', precision-digits);
+        std::memset(str, ' ', padding);
+        if(sign)
+            str[padding] = negative? '-' : cs.plus_sign;
+        std::memset(str+padding+sign, '0', zeroes);
         utoa_generic_base10_preallocated(str, size, value);
     }
     pbuffer->commit(size);
 }
 
-template <typename Signed>
-typename std::enable_if<std::is_signed<Signed>::value, void>::type
-itoa_generic_base10(output_buffer* pbuffer, Signed value, conversion_specification const& cs)
+template <typename Integer>
+typename std::enable_if<std::is_signed<Integer>::value, void>::type
+itoa_generic_base10(output_buffer* pbuffer, Integer value, conversion_specification const& cs)
 {
-    if(value<0) {
-        prefetch_digits();
-        auto uv = unsigned_cast(-value);
-        unsigned size = log10(uv) + 1;
-        char* str = pbuffer->reserve(size);
-        utoa_generic_base10_preallocated(str, size, uv);
-        str[0] = '-';
-        pbuffer->commit(size);
-    } else {
-        itoa_generic_base10(pbuffer, unsigned_cast(value), cs);
-    }
+    bool negative = value < 0;
+    unsigned uv;
+    if(negative)
+        uv = unsigned_cast(-value);
+    else
+        uv = unsigned_cast(value);
+    itoa_generic_base10(pbuffer, negative, uv, cs);
+}
+
+template <typename Integer>
+typename std::enable_if<std::is_unsigned<Integer>::value, void>::type
+itoa_generic_base10(output_buffer* pbuffer, Integer value, conversion_specification const& cs)
+{
+    itoa_generic_base10(pbuffer, false, value, cs);
 }
 
 template <typename Unsigned>
@@ -779,13 +800,193 @@ private:
     std::string buffer_;
 };
 
-std::size_t const PERFECT_QUALITY = std::numeric_limits<std::size_t>::max();
+class itoa_base10_suite
+{
+public:
+    itoa_base10_suite() :
+        output_buffer_(&writer_, 1024)
+    {
+    }
+
+    void positive()
+    {
+        TEST(convert(0) == "0");
+        TEST(convert(1) == "1");
+        TEST(convert(2) == "2");
+        TEST(convert(10) == "10");
+        TEST(convert(100) == "100");
+        TEST(convert(std::numeric_limits<int>::max()) == std::to_string(std::numeric_limits<int>::max()));
+    }
+
+    void negative()
+    {
+        TEST(convert(-1) == "-1");
+        TEST(convert(-2) == "-2");
+        TEST(convert(-10) == "-10");
+        TEST(convert(-100) == "-100");
+        TEST(convert(std::numeric_limits<int>::min()) == std::to_string(std::numeric_limits<int>::min()));
+    }
+
+    void field_width()
+    {
+        conversion_specification cs;
+        cs.left_justify = false;
+        cs.alternative_form = false;
+        cs.pad_with_zeroes = false;
+        cs.plus_sign = 0;
+        cs.minimum_field_width = 11;
+        cs.precision = UNSPECIFIED_PRECISION;
+        
+        TEST(convert(0, cs) == "          0");
+        TEST(convert(1, cs) == "          1");
+        TEST(convert(2, cs) == "          2");
+        TEST(convert(10, cs) == "         10");
+        TEST(convert(100, cs) == "        100");
+        
+        TEST(convert(-1, cs) == "         -1");
+        TEST(convert(-2, cs) == "         -2");
+        TEST(convert(-10, cs) == "        -10");
+        TEST(convert(-100, cs) == "       -100");
+    }
+
+    void left_justify()
+    {
+        conversion_specification cs;
+        cs.left_justify = true;
+        cs.alternative_form = false;
+        cs.pad_with_zeroes = false;
+        cs.plus_sign = 0;
+        cs.minimum_field_width = 11;
+        cs.precision = UNSPECIFIED_PRECISION;
+        
+        TEST(convert(0, cs) == "0          ");
+        TEST(convert(1, cs) == "1          ");
+        TEST(convert(2, cs) == "2          ");
+        TEST(convert(10, cs) == "10         ");
+        TEST(convert(100, cs) == "100        ");
+        
+        TEST(convert(-1, cs) == "-1         ");
+        TEST(convert(-2, cs) == "-2         ");
+        TEST(convert(-10, cs) == "-10        ");
+        TEST(convert(-100, cs) == "-100       ");
+    }
+
+    void precision()
+    {
+        conversion_specification cs;
+        cs.left_justify = false;
+        cs.alternative_form = false;
+        cs.pad_with_zeroes = false;
+        cs.plus_sign = 0;
+        cs.minimum_field_width = 0;
+        cs.precision = 0;
+
+        TEST(convert(0, cs) == "");
+        TEST(convert(1, cs) == "1");
+        TEST(convert(10, cs) == "10");
+        
+        cs.precision = 1;
+        
+        TEST(convert(0, cs) == "0");
+        TEST(convert(1, cs) == "1");
+        TEST(convert(10, cs) == "10");
+        
+        cs.precision = 2;
+        
+        TEST(convert(0, cs) == "00");
+        TEST(convert(1, cs) == "01");
+        TEST(convert(10, cs) == "10");
+        
+        cs.precision = 3;
+        
+        TEST(convert(0, cs) == "000");
+        TEST(convert(1, cs) == "001");
+        TEST(convert(10, cs) == "010");
+    }
+
+    void sign()
+    {
+        conversion_specification cs;
+        cs.left_justify = false;
+        cs.alternative_form = false;
+        cs.pad_with_zeroes = false;
+        cs.plus_sign = '+';
+        cs.minimum_field_width = 0;
+        cs.precision = 0;
+        
+        TEST(convert(0, cs) == "+");
+        TEST(convert(1, cs) == "+1");
+        TEST(convert(10, cs) == "+10");
+        TEST(convert(-10, cs) == "-10");
+        
+        cs.plus_sign = ' ';
+        TEST(convert(1, cs) == " 1");
+        TEST(convert(-1, cs) == "-1");
+    }
+
+    void precision_and_padding()
+    {
+        conversion_specification cs;
+        cs.left_justify = false;
+        cs.alternative_form = false;
+        cs.pad_with_zeroes = true;
+        cs.plus_sign = 0;
+        cs.minimum_field_width = 5;
+        cs.precision = 3;
+
+        TEST(convert(0, cs) == "  000");
+        TEST(convert(1, cs) == "  001");
+        TEST(convert(999, cs) == "  999");
+        TEST(convert(1000, cs) == " 1000");
+        TEST(convert(99999, cs) == "99999");
+        TEST(convert(999999, cs) == "999999");
+    }
+    
+private:
+
+    std::string convert(int v)
+    {
+        conversion_specification cs;
+        cs.left_justify = false;
+        cs.alternative_form = false;
+        cs.pad_with_zeroes = false;
+        cs.plus_sign = 0;
+        cs.minimum_field_width = 0;
+        cs.precision = UNSPECIFIED_PRECISION;
+        
+        return convert(v, cs);
+    }
+    std::string convert(int v, conversion_specification const& cs)
+    {
+        writer_.reset();
+        
+        itoa_base10(&output_buffer_, v, cs);
+        
+        output_buffer_.flush();
+        return writer_.str();
+    }
+    
+    string_writer writer_;
+    output_buffer output_buffer_;
+};
+
+unit_test::suite<itoa_base10_suite> itoa_base10_tests = {
+    TESTCASE(itoa_base10_suite::positive),
+    TESTCASE(itoa_base10_suite::negative),
+    TESTCASE(itoa_base10_suite::field_width),
+    TESTCASE(itoa_base10_suite::left_justify),
+    TESTCASE(itoa_base10_suite::precision),
+    TESTCASE(itoa_base10_suite::sign),
+    TESTCASE(itoa_base10_suite::precision_and_padding)
+};
+
 
 #define TEST_FTOA(number) test_conversion_quality(number, __FILE__, __LINE__)
 
 class ftoa
 {
 public:
+    static std::size_t const PERFECT_QUALITY = std::numeric_limits<std::size_t>::max();
     ftoa() :
         output_buffer_(&writer_, 1024)
     {
