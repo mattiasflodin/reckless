@@ -595,9 +595,7 @@ void ftoa_base10(output_buffer* pbuffer, double value, unsigned significant_digi
         s[2] = 'f';
         pbuffer->commit(3);
         return;
-    }
-
-    if(category == FP_ZERO) {
+    } else if(category == FP_ZERO) {
         char* s = pbuffer->reserve(1);
         *s = '0';
         pbuffer->commit(1);
