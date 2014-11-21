@@ -571,70 +571,63 @@ void itoa_base16(output_buffer* pbuffer, long value, bool uppercase, char const*
     itoa_generic_base16(pbuffer, value, uppercase, prefix);
 }
 
-void ftoa_base10(output_buffer* pbuffer, double value, unsigned significant_digits, int minimum_exponent, int maximum_exponent)
+void ftoa_base10_exponent(output_buffer* pbuffer, std::int64_t mantissa, int exponent, conversion_specification const& cs)
 {
-    if(std::signbit(value)) {
-        value = -value;
-        char* s = pbuffer->reserve(1);
-        *s = '-';
-        pbuffer->commit(1);
+    char exponent_sign = '+';
+    if(exponent < 0) {
+        exponent_sign = '-';
+        exponent = -exponent;
     }
+    int exponent_digits;
+    // Apparently stdio never prints less than two digits for the exponent,
+    // so we'll do the same to stay consistent.
+    if(exponent < 100)
+        exponent_digits = 2;
+    else
+        exponent_digits = 3;
 
-    auto category = std::fpclassify(value);
-    if(category == FP_NAN) {
-        char* s = pbuffer->reserve(3);
-        s[0] = 'n';
-        s[1] = 'a';
-        s[2] = 'n';
-        pbuffer->commit(3);
-        return;
-    } else if(category == FP_INFINITE) {
-        char* s = pbuffer->reserve(3);
-        s[0] = 'i';
-        s[1] = 'n';
-        s[2] = 'f';
-        pbuffer->commit(3);
-        return;
-    } else if(category == FP_ZERO) {
-        char* s = pbuffer->reserve(1);
-        *s = '0';
-        pbuffer->commit(1);
-        return;
+    int dot = significant_digits > 1;
+
+    int size = significant_digits + dot + 2 + exponent_digits;
+    char* s = pbuffer->reserve(size);
+    utoa_generic_base10_preallocated(s, size, unsigned_cast(exponent), exponent_digits);
+    s[size-exponent_digits-1] = exponent_sign;
+    s[size-exponent_digits-2] = 'e';
+    if(dot) {
+        ivalue = utoa_generic_base10_preallocated(s, size-exponent_digits-2, ivalue, significant_digits-1);
+        s[1] = '.';
     }
+    s[0] = '0' + static_cast<char>(ivalue);
+    pbuffer->commit(size);
+}
 
-    std::uint_fast64_t ivalue;
-    int exponent = descale(value, significant_digits, ivalue);
+void ftoa_base10(output_buffer* pbuffer, double value, unsigned significant_digits, conversion_specification const& cs)
+{
+    int const minimum_exponent = -4;
+    int maximum_exponent = cs.precision;
+    int exponent;
+    auto mantissa_signed = binary64_to_decimal18(value, &exponent);
 
-    if(exponent < minimum_exponent || exponent > maximum_exponent) {
-        char exponent_sign = '+';
-        if(exponent < 0) {
-            exponent_sign = '-';
-            exponent = -exponent;
-        }
-        int exponent_digits;
-        // Apparently stdio never prints less than two digits for the exponent,
-        // so we'll do the same to stay consistent.
-        if(exponent < 100)
-            exponent_digits = 2;
-        else
-            exponent_digits = 3;
-
-        int dot = significant_digits > 1;
-
-        int size = significant_digits + dot + 2 + exponent_digits;
-        char* s = pbuffer->reserve(size);
-        utoa_generic_base10_preallocated(s, size, unsigned_cast(exponent), exponent_digits);
-        s[size-exponent_digits-1] = exponent_sign;
-        s[size-exponent_digits-2] = 'e';
-        if(dot) {
-            ivalue = utoa_generic_base10_preallocated(s, size-exponent_digits-2, ivalue, significant_digits-1);
-            s[1] = '.';
-        }
-        s[0] = '0' + static_cast<char>(ivalue);
-        pbuffer->commit(size);
-    } else if(exponent < 0) {
-        unsigned zeroes = unsigned_cast(-exponent - 1);
+    if(exponent < minimum_exponent || exponent > maximum_exponent)
+        return ftoa_base10_exponent(pbuffer, mantissa_signed, exponent, cs);
+    
+    bool sign;
+    std::uint64_t mantissa;
+    if(mantissa_signed<0) {
+        mantissa = unsigned_cast(-mantissa_signed);
+        sign = '-';
+    } else {
+        mantissa = unsigned_cast(mantissa_signed);
+        sign = cs.plus_sign != 0;
+    }
+    
+    if(exponent < 0) {
+        // No digits before the dot.
+        // We have either
+        // [sign] [zeroes]
+        unsigned zeroes_after_dot = unsigned_cast(-exponent - 1);
         unsigned size = 2 + zeroes + significant_digits;
+        
         char* str = pbuffer->reserve(size);
         utoa_generic_base10_preallocated(str, size, ivalue);
         std::memset(str+2, '0', zeroes);
@@ -674,8 +667,8 @@ void ftoa_base10_precision(output_buffer* pbuffer, double value, unsigned precis
         mantissa = unsigned_cast(-mantissa_signed);
     }
 
-    // Disregarding the dot, any decimal number can be represented as a set of
-    // prefix zeroes, 0-18 mantissa digits, and a set of suffix zeroes.
+    // Disregarding the dot, any decimal number can be represented as 
+    // [prefix zeroes] [0-18 mantissa digits] [suffix zeroes]
     // To avoid many different control paths that are difficult to verify and
     // understand, we'll try to quantify each part first and the position of
     // the dot. Then we can use these to fairly easily perform the conversion.
@@ -1015,6 +1008,7 @@ public:
 
     void special()
     {
+        TEST(convert(-0.0 == "-0");
         TEST(convert(std::numeric_limits<double>::quiet_NaN()) == "nan");
         TEST(convert(std::numeric_limits<double>::signaling_NaN()) == "nan");
         TEST(convert(std::nan("1")) == "nan");
@@ -1030,7 +1024,7 @@ public:
         TEST(convert(1.2345e-10, -4, 5, 6) == "1.23450e-10");
         TEST(convert(1.2345e+10, -4, 5, 6) == "1.23450e+10");
         TEST(convert(1.2345e+10, -4, 5, 1) == "1e+10");
-        TEST(convert(1.6345e+10, -4, 5, 1) == "2e+10");
+        T:EST(convert(1.6345e+10, -4, 5, 1) == "2e+10");
         TEST(convert(1.6645e+10, -4, 5, 2) == "1.7e+10");
         TEST(convert(1.6645e+10, -4, 5, 2) == "1.7e+10");
         TEST(convert(1.7976931348623157e308, -4, 5, 5) == "1.7977e+308");
