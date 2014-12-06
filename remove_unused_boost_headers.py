@@ -6,6 +6,7 @@
 # when adding new boost sources or changing boost version, and will require
 # manual cleanup afterwards.
 
+# FIXME this needs to be updated to use tup instead of waf, since the wscript is gone
 import subprocess
 import re
 import os

@@ -573,6 +573,12 @@ void itoa_base16(output_buffer* pbuffer, long value, bool uppercase, char const*
 
 void ftoa_base10_exponent(output_buffer* pbuffer, std::int64_t mantissa, int exponent, conversion_specification const& cs)
 {
+    // Implement this after ftoa_base10 is done
+    (void) pbuffer;
+    (void) mantissa;
+    (void) exponent;
+    (void) cs;
+#if 0
     char exponent_sign = '+';
     if(exponent < 0) {
         exponent_sign = '-';
@@ -599,6 +605,7 @@ void ftoa_base10_exponent(output_buffer* pbuffer, std::int64_t mantissa, int exp
     }
     s[0] = '0' + static_cast<char>(ivalue);
     pbuffer->commit(size);
+#endif
 }
 
 void ftoa_base10(output_buffer* pbuffer, double value, unsigned significant_digits, conversion_specification const& cs)
@@ -624,7 +631,13 @@ void ftoa_base10(output_buffer* pbuffer, double value, unsigned significant_digi
     if(exponent < 0) {
         // No digits before the dot.
         // We have either
-        // [sign] [zeroes]
+        // [sign] '.' [zeroes] [digits] [padding]
+        //        [---precision---]
+        // [--------------size--------------]
+        // or
+        // [padding] [sign] [zeroes] [digits]
+        //                  [---precision---]
+        // [--------------size--------------]
         unsigned zeroes_after_dot = unsigned_cast(-exponent - 1);
         unsigned size = 2 + zeroes + significant_digits;
         
