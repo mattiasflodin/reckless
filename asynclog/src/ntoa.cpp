@@ -614,7 +614,7 @@ void ftoa_base10_exponent(output_buffer* pbuffer, std::int64_t mantissa, int exp
 // not enough to represent all the digits up to the dot (i.e. it is higher than
 // the number's exponent), then %e notation is used instead.
 // 
-// If the number of significant digits 
+// The full number of requested digits will onlyh be present if there are no trailing zeroes in the fraction.
 void ftoa_base10(output_buffer* pbuffer, double value, conversion_specification const& cs)
 {
     auto significant_digits = cs.precision;
