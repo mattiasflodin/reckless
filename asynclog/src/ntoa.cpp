@@ -608,13 +608,32 @@ void ftoa_base10_exponent(output_buffer* pbuffer, std::int64_t mantissa, int exp
 #endif
 }
 
+unsigned count_trailing_zeroes(unsigned exponent, unsigned mantissa)
+{
+    unsigned max_to_remove = 18 - exponent;
+    unsigned low = 0;
+    unsigned high = max_to_remove;
+    while(low < high) {
+        unsigned pos = (low + high)/2;
+        if(mantissa % power_lut[pos] == 0)
+            low = pos + 1;
+        else
+            high = pos;
+    }
+
+    return low;
+}
+
 // Corresponds to %g.
 // The idea of %g is that the precision says how many significant digits we
 // want in the string representation. If the number of significant digits is
 // not enough to represent all the digits up to the dot (i.e. it is higher than
 // the number's exponent), then %e notation is used instead.
 // 
-// The full number of requested digits will onlyh be present if there are no trailing zeroes in the fraction.
+// If there are trailing zeroes in the fraction then those will be removed,
+// unless alternative mode is requested. Alternative mode also means that the
+// period stays, no matter if there are any fractional decimals remaining or
+// not.
 void ftoa_base10(output_buffer* pbuffer, double value, conversion_specification const& cs)
 {
     auto significant_digits = cs.precision;
@@ -641,11 +660,15 @@ void ftoa_base10(output_buffer* pbuffer, double value, conversion_specification 
     // or
     // [padding] [sign] [zeroes] [digits_before_dot] [dot] [digits_after_dot]
     // depending on if it's left-justified or not.
-    // 
-    // The number of 
+    
     unsigned digits_before_dot = exponent>0? unsigned_cast(exponent) : 0u;
-    unsigned digits_after_dot = 18 - digits_before_dot;
-    unsigned size = std::max(cs.minimum_field_width, sign + zeroes + digits_before_dot + dot + 
+    //unsigned digits_after_dot = 18 - digits_before_dot;
+    unsigned trailing_zeroes = count_trailing_zeroes(exponent, mantissa);
+    unsigned digits = std::min(18u - trailing_zeroes, ;
+    digits = std::min(digits, 
+    unsigned size = std::max(cs.minimum_field_width,
+            sign + zeroes + digits_before_dot + dot + digits_after_dot);
+    unsigned padding = size - sign - precision;
 }
 
 void ftoa_base10_precision(output_buffer* pbuffer, double value, unsigned precision)
