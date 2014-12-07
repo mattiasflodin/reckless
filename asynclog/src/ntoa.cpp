@@ -608,8 +608,16 @@ void ftoa_base10_exponent(output_buffer* pbuffer, std::int64_t mantissa, int exp
 #endif
 }
 
-void ftoa_base10(output_buffer* pbuffer, double value, unsigned significant_digits, conversion_specification const& cs)
+// Corresponds to %g.
+// The idea of %g is that the precision says how many significant digits we
+// want in the string representation. If the number of significant digits is
+// not enough to represent all the digits up to the dot (i.e. it is higher than
+// the number's exponent), then %e notation is used instead.
+// 
+// If the number of significant digits 
+void ftoa_base10(output_buffer* pbuffer, double value, conversion_specification const& cs)
 {
+    auto significant_digits = cs.precision;
     int const minimum_exponent = -4;
     int maximum_exponent = cs.precision;
     int exponent;
@@ -627,43 +635,17 @@ void ftoa_base10(output_buffer* pbuffer, double value, unsigned significant_digi
         mantissa = unsigned_cast(mantissa_signed);
         sign = cs.plus_sign != 0;
     }
-    
-    if(exponent < 0) {
-        // No digits before the dot.
-        // We have either
-        // [sign] '.' [zeroes] [digits] [padding]
-        //        [---precision---]
-        // [--------------size--------------]
-        // or
-        // [padding] [sign] [zeroes] [digits]
-        //                  [---precision---]
-        // [--------------size--------------]
-        unsigned zeroes_after_dot = unsigned_cast(-exponent - 1);
-        unsigned size = 2 + zeroes + significant_digits;
-        
-        char* str = pbuffer->reserve(size);
-        utoa_generic_base10_preallocated(str, size, ivalue);
-        std::memset(str+2, '0', zeroes);
-        str[1] = '.';
-        str[0] = '0';
-        pbuffer->commit(size);
-    } else if(unsigned_cast(exponent+1) >= significant_digits) {
-        unsigned zeroes = exponent+1 - significant_digits;
-        unsigned size = zeroes + significant_digits;
-        char* str = pbuffer->reserve(size);
-        std::memset(str + significant_digits, '0', zeroes);
-        utoa_generic_base10_preallocated(str, significant_digits, ivalue);
-        pbuffer->commit(size);
-    } else {
-        unsigned before_dot = unsigned_cast(exponent)+1;
-        unsigned after_dot = significant_digits - before_dot;
-        unsigned size = before_dot + 1 + after_dot;
-        char* str = pbuffer->reserve(size);
-        ivalue = utoa_generic_base10_preallocated(str, size, ivalue, after_dot);
-        str[before_dot] = '.';
-        utoa_generic_base10_preallocated(str, before_dot, ivalue);
-        pbuffer->commit(size);
-    }
+
+    // We have either
+    // [sign] [zeroes] [digits_before_dot] [dot] [digits_after_dot] [padding]
+    // or
+    // [padding] [sign] [zeroes] [digits_before_dot] [dot] [digits_after_dot]
+    // depending on if it's left-justified or not.
+    // 
+    // The number of 
+    unsigned digits_before_dot = exponent>0? unsigned_cast(exponent) : 0u;
+    unsigned digits_after_dot = 18 - digits_before_dot;
+    unsigned size = std::max(cs.minimum_field_width, sign + zeroes + digits_before_dot + dot + 
 }
 
 void ftoa_base10_precision(output_buffer* pbuffer, double value, unsigned precision)
@@ -679,6 +661,14 @@ void ftoa_base10_precision(output_buffer* pbuffer, double value, unsigned precis
         pbuffer->commit(1);
         mantissa = unsigned_cast(-mantissa_signed);
     }
+    
+    // TODO we should have a symbolic constant for 18 but so far I can't think
+    // of a name that doesn't make the code more confusing (for the record,
+    // it's how many digits there are in the mantissa produced by
+    // binary64_to_decimal18). DECIMAL_MANTISSA_DIGITS is my best name so far,
+    // but in the same code block we deal with the count of requested mantissa
+    // digits in the output string representation, and it just becomes easier
+    // to confuse the two.
 
     // Disregarding the dot, any decimal number can be represented as 
     // [prefix zeroes] [0-18 mantissa digits] [suffix zeroes]
