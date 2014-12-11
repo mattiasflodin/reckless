@@ -610,6 +610,8 @@ void ftoa_base10_exponent(output_buffer* pbuffer, std::int64_t mantissa, int exp
 
 unsigned count_trailing_zeroes(unsigned exponent, unsigned mantissa)
 {
+    if(exponent>18)
+        return 0;
     unsigned max_to_remove = 18 - exponent;
     unsigned low = 0;
     unsigned high = max_to_remove;
@@ -636,7 +638,6 @@ unsigned count_trailing_zeroes(unsigned exponent, unsigned mantissa)
 // not.
 void ftoa_base10(output_buffer* pbuffer, double value, conversion_specification const& cs)
 {
-    auto significant_digits = cs.precision;
     int const minimum_exponent = -4;
     int maximum_exponent = cs.precision;
     int exponent;
@@ -649,26 +650,72 @@ void ftoa_base10(output_buffer* pbuffer, double value, conversion_specification 
     std::uint64_t mantissa;
     if(mantissa_signed<0) {
         mantissa = unsigned_cast(-mantissa_signed);
-        sign = '-';
+        sign = true;
     } else {
         mantissa = unsigned_cast(mantissa_signed);
         sign = cs.plus_sign != 0;
     }
 
     // We have either
-    // [sign] [zeroes] [digits_before_dot] [dot] [digits_after_dot] [padding]
+    // [sign] [digits_before_dot] [zeroes] [dot] [digits_after_dot] [padding]
     // or
-    // [padding] [sign] [zeroes] [digits_before_dot] [dot] [digits_after_dot]
+    // [padding] [sign] [pad_zeroes] [digits_before_dot] [zeroes] [dot] [digits_after_dot]
     // depending on if it's left-justified or not.
     
     unsigned digits_before_dot = exponent>0? unsigned_cast(exponent) : 0u;
-    //unsigned digits_after_dot = 18 - digits_before_dot;
-    unsigned trailing_zeroes = count_trailing_zeroes(exponent, mantissa);
-    unsigned digits = std::min(18u - trailing_zeroes, ;
-    digits = std::min(digits, 
-    unsigned size = std::max(cs.minimum_field_width,
-            sign + zeroes + digits_before_dot + dot + digits_after_dot);
-    unsigned padding = size - sign - precision;
+    unsigned zeroes = 0;
+    if(digits_before_dot>18)
+        zeroes = digits_before_dot - 18;
+    bool dot;
+    unsigned digits_after_dot;
+    unsigned padding;
+    if(cs.alternative_form) {
+        digits_after_dot = cs.precision - digits_before_dot;
+        dot = true;
+    } else {
+        // requested_digits_after_dot is always >= 0 since we delegate to
+        // ftoa_base10_exponent otherwise.
+        unsigned requested_digits_after_dot = cs.precision - digits_before_dot;
+        unsigned trailing_zeroes = count_trailing_zeroes(exponent, mantissa);
+        unsigned available_digits_after_dot = 18u - trailing_zeroes;
+        digits_after_dot = std::min(available_digits_after_dot, requested_digits_after_dot);
+        dot = digits_after_dot != 0;
+    }
+    unsigned content_size = sign + pad_zeroes + digits_before_dot + dot + digits_after_dot;
+    unsigned size = std::max(cs.minimum_field_width, content_size);
+    unsigned padding = size - content_size;
+    
+    // Get rid of digits we don't want.
+    unsigned significant_digits = digits_before_dot + digits_after_dot;
+    auto divisor = power_lut[18-significant_digits];
+    mantissa = (mantissa + divisor/2) / divisor;
+    
+    char* str = pbuffer->reserve(size);
+    
+    auto pos = size;
+    if(cs.left_justify) {
+        pos -= padding;
+        std::memset(str+pos, ' ', padding);
+    }
+    if(dot) {
+        mantissa = utoa_generic_base10_preallocated(str, pos, mantissa,
+                digits_after_dot);
+        --pos;
+        str[pos] = '.';
+    }
+    pos -= zeroes;
+    std::memset(str+pos, '0', zeroes);
+    mantissa = utoa_generic_base10_preallocated(str, pos, mantissa,
+            digits_after_dot);
+    pos -= padding_zeroes;
+    std::memset(str+pos, '0', padding_zeroes);
+    if(sign)
+        str[0] = negative? '-' : cs.plus_sign;
+
+    if(!cs.left_justify) {
+        pos -= padding;
+        std::memset(str+pos, ' ', padding);
+    }
 }
 
 void ftoa_base10_precision(output_buffer* pbuffer, double value, unsigned precision)
