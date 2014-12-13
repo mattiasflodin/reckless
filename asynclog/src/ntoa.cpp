@@ -1195,8 +1195,17 @@ private:
 
     std::string convert(double number, int minimum_exponent=-1000, int maximum_exponent=1000, int significant_digits=17)
     {
+        (void) minimum_exponent;
+        (void) maximum_exponent;
+        conversion_specification cs;
+        cs.left_justify = false;
+        cs.alternative_form = false;
+        cs.pad_with_zeroes = false;
+        cs.plus_sign = 0;
+        cs.minimum_field_width = 0;
+        cs.precision = significant_digits;
         writer_.reset();
-        ftoa_base10(&output_buffer_, number, significant_digits);
+        ftoa_base10(&output_buffer_, number, cs);
         output_buffer_.flush();
         return writer_.str();
     }
