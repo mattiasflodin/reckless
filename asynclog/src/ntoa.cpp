@@ -608,13 +608,15 @@ void ftoa_base10_exponent(output_buffer* pbuffer, std::int64_t mantissa, int exp
 #endif
 }
 
-unsigned count_trailing_zeroes(unsigned exponent, unsigned mantissa)
+unsigned count_trailing_zeroes_after_dot(unsigned exponent, std::uint64_t mantissa)
 {
-    if(exponent>18)
+    if(exponent+1>18)
         return 0;
-    unsigned max_to_remove = 18 - exponent;
+    unsigned max_trailing_zeroes = 18 - (exponent+1);
     unsigned low = 0;
-    unsigned high = max_to_remove;
+    unsigned high = max_trailing_zeroes+1;
+    // Find the lowest x such that mantissa % 10^x != 0.
+    // Then the number of trailing zeroes is x-1.
     while(low < high) {
         unsigned pos = (low + high)/2;
         if(mantissa % power_lut[pos] == 0)
@@ -623,7 +625,7 @@ unsigned count_trailing_zeroes(unsigned exponent, unsigned mantissa)
             high = pos;
     }
 
-    return low;
+    return low - 1;
 }
 
 // Corresponds to %g.
@@ -662,10 +664,12 @@ void ftoa_base10(output_buffer* pbuffer, double value, conversion_specification 
     // [padding] [sign] [pad_zeroes] [digits_before_dot] [zeroes] [dot] [digits_after_dot]
     // depending on if it's left-justified or not.
     
-    unsigned digits_before_dot = exponent>0? unsigned_cast(exponent) : 0u;
+    unsigned digits_before_dot = exponent>=0? unsigned_cast(exponent)+1 : 0u;
     unsigned zeroes = 0;
-    if(digits_before_dot>18)
+    if(digits_before_dot>18) {
         zeroes = digits_before_dot - 18;
+        digits_before_dot = 18;
+    }
     bool dot;
     unsigned digits_after_dot;
     if(cs.alternative_form) {
@@ -676,8 +680,8 @@ void ftoa_base10(output_buffer* pbuffer, double value, conversion_specification 
         // requested_digits_after_dot is always >= 0 since we delegate to
         // ftoa_base10_exponent otherwise.
         unsigned requested_digits_after_dot = cs.precision - digits_before_dot;
-        unsigned trailing_zeroes = count_trailing_zeroes(exponent, mantissa);
-        unsigned available_digits_after_dot = 18u - trailing_zeroes;
+        unsigned trailing_zeroes = count_trailing_zeroes_after_dot(exponent, mantissa);
+        unsigned available_digits_after_dot = 18u - digits_before_dot - trailing_zeroes;
         digits_after_dot = std::min(available_digits_after_dot, requested_digits_after_dot);
         dot = digits_after_dot != 0;
     }
@@ -691,7 +695,7 @@ void ftoa_base10(output_buffer* pbuffer, double value, conversion_specification 
         padding = 0;
     }
     
-    // Get rid of digits we don't want.
+    // Get rid of digits we don't want in the mantissa.
     unsigned significant_digits = digits_before_dot + digits_after_dot;
     auto divisor = power_lut[18-significant_digits];
     mantissa = (mantissa + divisor/2) / divisor;
@@ -711,8 +715,7 @@ void ftoa_base10(output_buffer* pbuffer, double value, conversion_specification 
     }
     pos -= zeroes;
     std::memset(str+pos, '0', zeroes);
-    mantissa = utoa_generic_base10_preallocated(str, pos, mantissa,
-            digits_after_dot);
+    pos = utoa_generic_base10_preallocated(str, pos, mantissa);
     pos -= pad_zeroes;
     std::memset(str+pos, '0', pad_zeroes);
     if(sign)
@@ -722,6 +725,8 @@ void ftoa_base10(output_buffer* pbuffer, double value, conversion_specification 
         pos -= padding;
         std::memset(str+pos, ' ', padding);
     }
+    pbuffer->commit(size);
+    assert(pos == 0);
 }
 
 void ftoa_base10_precision(output_buffer* pbuffer, double value, unsigned precision)
