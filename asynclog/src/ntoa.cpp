@@ -573,6 +573,12 @@ void itoa_base16(output_buffer* pbuffer, long value, bool uppercase, char const*
 
 void ftoa_base10_exponent(output_buffer* pbuffer, std::int64_t mantissa, int exponent, conversion_specification const& cs)
 {
+    // We have either
+    // [sign] [digit][dot][[digits_before_dot] [zeroes] [dot] [digits_after_dot] [padding]
+    // or
+    // [padding] [sign] [pad_zeroes] [digits_before_dot] [zeroes] [dot] [digits_after_dot]
+    // depending on if it's left-justified or not.
+    //
     // Implement this after ftoa_base10 is done
     (void) pbuffer;
     (void) mantissa;
@@ -610,9 +616,16 @@ void ftoa_base10_exponent(output_buffer* pbuffer, std::int64_t mantissa, int exp
 
 unsigned count_trailing_zeroes_after_dot(unsigned exponent, std::uint64_t mantissa)
 {
-    if(exponent+1>18)
+    // We need to get rid of the least significant digit because a double can't
+    // represent all possible decimal-digit values in that position.
+    // (e.g. 123.456 becomes 123.456000000000003).
+    mantissa = (mantissa+5)/10;
+    unsigned digits_before_dot = exponent+1;
+    if(digits_before_dot>17) {
+        // All significant digits are in front of the dots. No trailing zeroes
         return 0;
-    unsigned max_trailing_zeroes = 18 - (exponent+1);
+    }
+    unsigned max_trailing_zeroes = 17 - digits_before_dot;
     unsigned low = 0;
     unsigned high = max_trailing_zeroes+1;
     // Find the lowest x such that mantissa % 10^x != 0.
@@ -625,7 +638,9 @@ unsigned count_trailing_zeroes_after_dot(unsigned exponent, std::uint64_t mantis
             high = pos;
     }
 
-    return low - 1;
+    // +1 because we always treat the list significant digit (that we stripped
+    // at function entry as if it were zero).
+    return low-1 + 1;
 }
 
 // Corresponds to %g.
@@ -710,8 +725,8 @@ void ftoa_base10(output_buffer* pbuffer, double value, conversion_specification 
     if(dot) {
         mantissa = utoa_generic_base10_preallocated(str, pos, mantissa,
                 digits_after_dot);
-        --pos;
-        str[pos] = '.';
+        pos -= digits_after_dot;
+        str[--pos] = '.';
     }
     pos -= zeroes;
     std::memset(str+pos, '0', zeroes);
