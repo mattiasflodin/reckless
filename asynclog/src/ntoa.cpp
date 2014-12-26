@@ -574,9 +574,9 @@ void itoa_base16(output_buffer* pbuffer, long value, bool uppercase, char const*
 void ftoa_base10_exponent(output_buffer* pbuffer, std::int64_t mantissa, int exponent, conversion_specification const& cs)
 {
     // We have either
-    // [sign] [digit][dot][[digits_before_dot] [zeroes] [dot] [digits_after_dot] [padding]
+    // [sign] [digit] [dot] [digits_after_dot] [e] [exponent_digits] [padding]
     // or
-    // [padding] [sign] [pad_zeroes] [digits_before_dot] [zeroes] [dot] [digits_after_dot]
+    // [padding] [sign] [zero_padding] [digit] [dot] [digits_after_dot] [e] [exponent_digits]
     // depending on if it's left-justified or not.
     //
     // Implement this after ftoa_base10 is done
@@ -638,8 +638,8 @@ unsigned count_trailing_zeroes_after_dot(unsigned exponent, std::uint64_t mantis
             high = pos;
     }
 
-    // +1 because we always treat the list significant digit (that we stripped
-    // at function entry as if it were zero).
+    // +1 because we always treat the least significant digit (that we stripped
+    // at function entry) as if it were zero.
     return low-1 + 1;
 }
 
