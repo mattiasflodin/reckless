@@ -420,7 +420,7 @@ std::int64_t binary64_to_decimal18(double input, int* pexponent)
     (void) p;
     m10 = m2*powl(10, e10f + 16);
     std::int64_t mantissa = std::llrint(m10);
-    if(mantissa < 100000000000000000)
+    if(std::abs(mantissa) < 100000000000000000)
         mantissa *= 10;
     else
         e10i += 1.0L;
@@ -1144,6 +1144,17 @@ public:
         //TEST_FTOA(1.7976931348623158e308);
     }
 
+    void less_than_one()
+    {
+        TEST_FTOA(0.1);
+        TEST_FTOA(0.1);
+        TEST_FTOA(0.0);
+        TEST_FTOA(-0.0);
+        TEST_FTOA(-0.1);
+        TEST_FTOA(-1.0);
+        TEST_FTOA(-123.456);
+    }
+    
     void subnormals()
     {
         TEST_FTOA(2.2250738585072009e-308);
@@ -1302,11 +1313,12 @@ private:
 };
 
 unit_test::suite<ftoa> tests = {
-    TESTCASE(ftoa::precision),
     TESTCASE(ftoa::greater_than_one),
+    TESTCASE(ftoa::less_than_one),
     TESTCASE(ftoa::subnormals),
     TESTCASE(ftoa::special),
     TESTCASE(ftoa::scientific),
+    TESTCASE(ftoa::precision),
     TESTCASE(ftoa::random)
 };
 
