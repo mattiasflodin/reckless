@@ -387,8 +387,8 @@ std::int64_t binary64_to_decimal18(double input, int* pexponent)
     //   1 <= 10^e2f < 10.
     //   1 <= m2 * 10^e2f < 20.
     //   
-    // We can adjust for m2 * 10^e2f >= 10 by shifting it to the right and
-    // increasing e10 by one. Hence, with D = e2*log(2)/log(10) we have
+    // We can adjust for m2 * 10^e2f >= 10 by dividing m2 by 10 and increasing
+    // e10 by one. Hence, with D = e2*log(2)/log(10) we have
     //   m10 = m2 * 10^(frac(D))
     //   e10 = trunc(D).
     // when m2*10^(frac(D)) < 10, or
@@ -571,47 +571,90 @@ void itoa_base16(output_buffer* pbuffer, long value, bool uppercase, char const*
     itoa_generic_base16(pbuffer, value, uppercase, prefix);
 }
 
-void ftoa_base10_exponent(output_buffer* pbuffer, std::int64_t mantissa, int exponent, conversion_specification const& cs)
+void ftoa_base10_exponent(output_buffer* pbuffer, std::int64_t mantissa_signed,
+    int exponent_signed, conversion_specification const& cs)
 {
     // We have either
-    // [sign] [digit] [dot] [digits_after_dot] [e] [exponent_digits] [padding]
+    // [sign] [digit] [dot] [digits_after_dot] [e] [exponent sign] [exponent_digits] [padding]
     // or
-    // [padding] [sign] [zero_padding] [digit] [dot] [digits_after_dot] [e] [exponent_digits]
+    // [padding] [sign] [zero_padding] [digit] [dot] [digits_after_dot] [e] [exponent sign] [exponent_digits]
     // depending on if it's left-justified or not.
-    //
-    // Implement this after ftoa_base10 is done
-    (void) pbuffer;
-    (void) mantissa;
-    (void) exponent;
-    (void) cs;
-#if 0
-    char exponent_sign = '+';
-    if(exponent < 0) {
-        exponent_sign = '-';
-        exponent = -exponent;
+    
+    bool sign;
+    std::uint64_t mantissa;
+    if(mantissa_signed<0) {
+        mantissa = unsigned_cast(-mantissa_signed);
+        sign = true;
+    } else {
+        mantissa = unsigned_cast(mantissa_signed);
+        sign = cs.plus_sign != 0;
     }
+
+    char exponent_sign;
+    unsigned exponent;
+    if(exponent_signed < 0) {
+        exponent_sign = '-';
+        exponent = unsigned_cast(-exponent_signed);
+    } else {
+        exponent_sign = '+';
+        exponent = unsigned_cast(exponent_signed);
+    }
+    unsigned digits_after_dot = cs.precision - 1;
+    int dot = digits_after_dot!=0 || cs.alternative_form;
+    
     int exponent_digits;
     // Apparently stdio never prints less than two digits for the exponent,
-    // so we'll do the same to stay consistent.
+    // so we'll do the same to stay consistent. Maximum value of the exponent
+    // in a double is 308 so we won't get more than 3 digits.
     if(exponent < 100)
         exponent_digits = 2;
     else
         exponent_digits = 3;
 
-    int dot = significant_digits > 1;
-
-    int size = significant_digits + dot + 2 + exponent_digits;
-    char* s = pbuffer->reserve(size);
-    utoa_generic_base10_preallocated(s, size, unsigned_cast(exponent), exponent_digits);
-    s[size-exponent_digits-1] = exponent_sign;
-    s[size-exponent_digits-2] = 'e';
-    if(dot) {
-        ivalue = utoa_generic_base10_preallocated(s, size-exponent_digits-2, ivalue, significant_digits-1);
-        s[1] = '.';
+    unsigned content_size = sign + 1 + dot + digits_after_dot + 1 + 1 + exponent_digits;
+    unsigned size = std::max(cs.minimum_field_width, content_size);
+    unsigned padding = size - content_size;
+    unsigned pad_zeroes = 0;
+    if(cs.pad_with_zeroes) {
+        pad_zeroes = padding;
+        padding = 0;
     }
-    s[0] = '0' + static_cast<char>(ivalue);
+    
+    // Get rid of digits we don't want in the mantissa.
+    auto divisor = power_lut[18-cs.precision];
+    mantissa = (mantissa + divisor/2) / divisor;
+    
+    char* str = pbuffer->reserve(size);
+
+    unsigned pos = size;
+    if(cs.left_justify) {
+        pos -= padding;
+        std::memset(str+pos, ' ', padding);
+    }
+
+    utoa_generic_base10_preallocated(str, pos, exponent);
+    pos -= exponent_digits;
+    str[--pos] = exponent_sign;
+    str[--pos] = 'e';
+
+    utoa_generic_base10_preallocated(str, pos, digits_after_dot);
+    pos -= digits_after_dot;
+    
+    if(dot)
+        str[--pos] = '.';
+
+    str[pos] = '0' + static_cast<char>(mantissa);
+
+    pos -= pad_zeroes;
+    std::memset(str+pos, '0', pad_zeroes);
+    if(sign)
+        str[0] = mantissa_signed<0? '-' : cs.plus_sign;
+    
+    if(!cs.left_justify) {
+        pos -= padding;
+        std::memset(str+pos, ' ', padding);
+    }
     pbuffer->commit(size);
-#endif
 }
 
 unsigned count_trailing_zeroes_after_dot(unsigned exponent, std::uint64_t mantissa)
