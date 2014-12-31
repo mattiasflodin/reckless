@@ -758,7 +758,16 @@ void ftoa_base10(output_buffer* pbuffer, double value, conversion_specification 
     // Get rid of digits we don't want in the mantissa.
     unsigned significant_digits = digits_before_dot + digits_after_dot;
     auto divisor = power_lut[18-significant_digits];
-    mantissa = (mantissa + divisor/2) / divisor;
+    if(mantissa_signed>=0) {
+        // +divisor/2 to turn truncation into rounding.
+        mantissa = (mantissa + divisor/2) / divisor;
+    } else {
+        // This is the same rounding as above but we must pretend that the
+        // mantissa is negative and reproduce the same rounding. Adding
+        // divisor-1 turns the flooring behavior of integer division into a
+        // ceiling behavior.
+        mantissa = (mantissa + (divisor-1) - divisor/2) / divisor;
+    }
     
     char* str = pbuffer->reserve(size);
     
