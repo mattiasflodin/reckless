@@ -367,6 +367,10 @@ inline std::uint_fast64_t u64_rint(Float value)
 // It is simpler and more rigorously documented.
 std::int64_t binary64_to_decimal18(double input, int* pexponent)
 {
+    //if(input == 0.0) {
+    //    *pexponent = 0;
+    //    return 0;
+    //}
     long double e2;
     long double m2 = fxtract(static_cast<long double>(input), &e2);
 
@@ -642,8 +646,7 @@ void ftoa_base10_exponent(output_buffer* pbuffer, std::int64_t mantissa_signed,
     }
     
     // Get rid of digits we don't want in the mantissa.
-    auto divisor = power_lut[18-cs.precision];
-    mantissa = (mantissa + divisor/2) / divisor;
+    mantissa = rounded_rshift(mantissa_signed<0, mantissa, 18-cs.precision);
     
     char* str = pbuffer->reserve(size);
 
@@ -653,7 +656,7 @@ void ftoa_base10_exponent(output_buffer* pbuffer, std::int64_t mantissa_signed,
         std::memset(str+pos, ' ', padding);
     }
 
-    utoa_generic_base10_preallocated(str, pos, exponent);
+    utoa_generic_base10_preallocated(str, pos, exponent, exponent_digits);
     pos -= exponent_digits;
     str[--pos] = exponent_sign;
     str[--pos] = 'e';
@@ -719,53 +722,75 @@ unsigned count_trailing_zeroes_after_dot(bool sign, std::uint64_t mantissa, unsi
 // not.
 void ftoa_base10(output_buffer* pbuffer, double value, conversion_specification const& cs)
 {
-    int const minimum_exponent = -4;
-    int maximum_exponent = cs.precision;
-    int exponent;
-    auto mantissa_signed = binary64_to_decimal18(value, &exponent);
-
-    if(exponent < minimum_exponent || exponent > maximum_exponent)
-        return ftoa_base10_exponent(pbuffer, mantissa_signed, exponent, cs);
-    
-    bool sign;
-    std::uint64_t mantissa;
-    if(mantissa_signed<0) {
-        mantissa = unsigned_cast(-mantissa_signed);
-        sign = true;
-    } else {
-        mantissa = unsigned_cast(mantissa_signed);
-        sign = cs.plus_sign != 0;
-    }
-
     // We have either
     // [sign] [digits_before_dot] [zeroes] [dot] [digits_after_dot] [padding]
     // or
     // [padding] [sign] [pad_zeroes] [digits_before_dot] [zeroes] [dot] [digits_after_dot]
     // depending on if it's left-justified or not.
+    // 
+    // If value == 0 then binary64_to_decimal18 generates an infinite exponent,
+    // and utoa_generic_base10_preallocated will not generate any digits at all
+    // for a zero mantissa (it considers this a state of "nothing more to
+    // output"), so we can't use the normal path for zeroes. Instead we encode
+    // the zero digit in the [zeroes] component (normally used for filler
+    // zeroes when the number's magnitude is larger than the number of
+    // significant digits).
     
-    unsigned digits_before_dot = exponent>=0? unsigned_cast(exponent)+1 : 0u;
-    unsigned zeroes = 0;
-    if(digits_before_dot>18) {
-        zeroes = digits_before_dot - 18;
-        digits_before_dot = 18;
-    } else if(digits_before_dot == 0) {
-        zeroes = 1;
-    }
+    std::uint64_t mantissa;
+    bool is_negative;
+    unsigned digits_before_dot;
+    unsigned zeroes;
     bool dot;
     unsigned digits_after_dot;
-    if(cs.alternative_form) {
-        digits_after_dot = cs.precision - digits_before_dot;
-        dot = true;
-        // TODO
+    if(value == 0) {
+        mantissa = 0;
+        digits_before_dot = 0;
+        zeroes = 1;
+        // TODO alternative_form
+        dot = false;
+        digits_after_dot = 0;
     } else {
-        // requested_digits_after_dot is always >= 0 since we delegate to
-        // ftoa_base10_exponent otherwise.
-        unsigned requested_digits_after_dot = cs.precision - digits_before_dot;
-        unsigned trailing_zeroes = count_trailing_zeroes_after_dot(mantissa_signed<0, mantissa, exponent);
-        unsigned available_digits_after_dot = 18u - digits_before_dot - trailing_zeroes;
-        digits_after_dot = std::min(available_digits_after_dot, requested_digits_after_dot);
-        dot = digits_after_dot != 0;
+        int const minimum_exponent = -4;
+        int maximum_exponent = cs.precision;
+        int exponent;
+        auto mantissa_signed = binary64_to_decimal18(value, &exponent);
+
+        if(exponent < minimum_exponent || exponent > maximum_exponent)
+            return ftoa_base10_exponent(pbuffer, mantissa_signed, exponent, cs);
+
+        if(mantissa_signed<0) {
+            mantissa = unsigned_cast(-mantissa_signed);
+            is_negative = true;
+        } else {
+            mantissa = unsigned_cast(mantissa_signed);
+            is_negative = false;
+        }
+        
+        digits_before_dot = exponent>=0? unsigned_cast(exponent)+1 : 0u;
+        zeroes = 0;
+        if(digits_before_dot>18) {
+            zeroes = digits_before_dot - 18;
+            digits_before_dot = 18;
+        } else if(digits_before_dot == 0) {
+            zeroes = 1;
+        }
+        
+        if(cs.alternative_form) {
+            digits_after_dot = cs.precision - digits_before_dot;
+            dot = true;
+            // TODO
+        } else {
+            // requested_digits_after_dot is always >= 0 since we delegate to
+            // ftoa_base10_exponent otherwise.
+            unsigned requested_digits_after_dot = cs.precision - digits_before_dot;
+            unsigned trailing_zeroes = count_trailing_zeroes_after_dot(mantissa_signed<0, mantissa, exponent);
+            unsigned available_digits_after_dot = 18u - digits_before_dot - trailing_zeroes;
+            digits_after_dot = std::min(available_digits_after_dot, requested_digits_after_dot);
+            dot = digits_after_dot != 0;
+        }
     }
+    
+    bool sign = (negative || cs.plus_sign != 0);
     unsigned content_size = sign + digits_before_dot + zeroes + dot + digits_after_dot;
     unsigned size = std::max(cs.minimum_field_width, content_size);
 
@@ -858,9 +883,8 @@ void ftoa_base10_precision(output_buffer* pbuffer, double value, unsigned precis
     }
     
     // Reduce the mantissa part to the requested number of digits.
-    auto divisor = power_lut[18-mantissa_digits];
+    mantissa = rounded_rshift(mantissa_signed<0, mantissa, 18-mantissa_digits);
     auto order = power_lut[mantissa_digits];
-    mantissa = (mantissa + divisor/2)/divisor;
     bool carry = mantissa >= order;
     if(carry) {
         // When reducing the mantissa, rounding caused it to overflow.
@@ -1167,12 +1191,17 @@ public:
     void less_than_one()
     {
         TEST_FTOA(0.1);
-        TEST_FTOA(0.1);
         TEST_FTOA(0.0);
+        TEST_FTOA(0.123456);
+        TEST_FTOA(0.00000000000000000123456);
+        TEST_FTOA(0.0000000000000000012345678901234567890);
         TEST_FTOA(-0.0);
         TEST_FTOA(-0.1);
         TEST_FTOA(-1.0);
         TEST_FTOA(-123.456);
+        TEST_FTOA(-123456);
+        TEST_FTOA(-12345678901234567890.0);
+        TEST_FTOA(-1.23456789e300);
     }
     
     void subnormals()
@@ -1198,15 +1227,32 @@ public:
 
     void scientific()
     {
-        TEST(convert(1.2345e-8, -4, 5, 6) == "1.23450e-08");
-        TEST(convert(1.2345e-10, -4, 5, 6) == "1.23450e-10");
-        TEST(convert(1.2345e+10, -4, 5, 6) == "1.23450e+10");
-        TEST(convert(1.2345e+10, -4, 5, 1) == "1e+10");
-        TEST(convert(1.6345e+10, -4, 5, 1) == "2e+10");
-        TEST(convert(1.6645e+10, -4, 5, 2) == "1.7e+10");
-        TEST(convert(1.6645e+10, -4, 5, 2) == "1.7e+10");
-        TEST(convert(1.7976931348623157e308, -4, 5, 5) == "1.7977e+308");
-        TEST(convert(4.9406564584124654e-324, -4, 5, 5) == "4.9407e-324");
+        TEST(convert(1.2345e-8, 6) == "1.23450e-08");
+        TEST(convert(1.2345e-10, 6) == "1.23450e-10");
+        TEST(convert(1.2345e+10, 6) == "1.23450e+10");
+        TEST(convert(1.2345e+10, 1) == "1e+10");
+        TEST(convert(1.6345e+10, 1) == "2e+10");
+        TEST(convert(1.6645e+10, 2) == "1.7e+10");
+        TEST(convert(1.6645e+10, 2) == "1.7e+10");
+        TEST(convert(1.7976931348623157e308, 5) == "1.7977e+308");
+        TEST(convert(4.9406564584124654e-324, 5) == "4.9407e-324");
+    }
+
+    void padding()
+    {
+        conversion_specification cs;
+        cs.left_justify = false;
+        cs.alternative_form = false;
+        cs.pad_with_zeroes = true;
+        cs.plus_sign = 0;
+        cs.minimum_field_width = 5;
+        cs.precision = 3;
+
+        TEST(convert(0, cs) == "00000");
+        TEST(convert(1, cs) == "00001");
+        TEST(convert(999, cs) == "00999");
+        TEST(convert(1000, cs) == "01000");
+        TEST(convert(0.01, cs) == "00.01");
     }
 
     void precision()
@@ -1292,10 +1338,16 @@ private:
         return PERFECT_QUALITY;
     }
 
-    std::string convert(double number, int minimum_exponent=-1000, int maximum_exponent=1000, int significant_digits=17)
+    std::string convert(double number, conversion_specification const& cs)
     {
-        (void) minimum_exponent;
-        (void) maximum_exponent;
+        writer_.reset();
+        ftoa_base10(&output_buffer_, number, cs);
+        output_buffer_.flush();
+        return writer_.str();
+    }
+    
+    std::string convert(double number, int significant_digits=17)
+    {
         conversion_specification cs;
         cs.left_justify = false;
         cs.alternative_form = false;
@@ -1303,10 +1355,7 @@ private:
         cs.plus_sign = 0;
         cs.minimum_field_width = 0;
         cs.precision = significant_digits;
-        writer_.reset();
-        ftoa_base10(&output_buffer_, number, cs);
-        output_buffer_.flush();
-        return writer_.str();
+        return convert(number, cs);
     }
 
     std::string convert_prec(double number, unsigned precision)
@@ -1338,6 +1387,7 @@ unit_test::suite<ftoa> tests = {
     TESTCASE(ftoa::subnormals),
     TESTCASE(ftoa::special),
     TESTCASE(ftoa::scientific),
+    TESTCASE(ftoa::padding),
     TESTCASE(ftoa::precision),
     TESTCASE(ftoa::random)
 };
