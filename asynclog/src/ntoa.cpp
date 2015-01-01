@@ -454,6 +454,25 @@ std::uint64_t const power_lut[] = {
     1000000000000000000   // 18
 };
 
+std::uint64_t rounded_divide(bool sign, std::uint64_t value, std::uint64_t divisor)
+{
+    if(!sign) {
+        // +divisor/2 to turn truncation into rounding.
+        return (value + divisor/2) / divisor;
+    } else {
+        // This is the same rounding as above but we must pretend that the
+        // value is negative and reproduce the corresponding behavior.
+        // Adding divisor-1 turns the flooring behavior of integer division
+        // into a ceiling behavior.
+        return (value + (divisor-1) - divisor/2) / divisor;
+    }
+}
+std::uint64_t rounded_rshift(bool sign, std::uint64_t value, unsigned digits)
+{
+    return rounded_divide(sign, value, power_lut[digits]);
+}
+
+
 int descale_normal(long double value, int e2, unsigned significant_digits, std::uint_fast64_t& ivalue)
 {
     static long double const C = 0.3010299956639811952137388947244L; // log(2)/log(10)
@@ -659,12 +678,12 @@ void ftoa_base10_exponent(output_buffer* pbuffer, std::int64_t mantissa_signed,
     pbuffer->commit(size);
 }
 
-unsigned count_trailing_zeroes_after_dot(unsigned exponent, std::uint64_t mantissa)
+unsigned count_trailing_zeroes_after_dot(bool sign, std::uint64_t mantissa, unsigned exponent)
 {
     // We need to get rid of the least significant digit because a double can't
     // represent all possible decimal-digit values in that position.
     // (e.g. 123.456 becomes 123.456000000000003).
-    mantissa = (mantissa+5)/10;
+    mantissa = rounded_divide(sign, mantissa, 10);
     unsigned digits_before_dot = exponent+1;
     if(digits_before_dot>17) {
         // All significant digits are in front of the dots. No trailing zeroes
@@ -729,6 +748,8 @@ void ftoa_base10(output_buffer* pbuffer, double value, conversion_specification 
     if(digits_before_dot>18) {
         zeroes = digits_before_dot - 18;
         digits_before_dot = 18;
+    } else if(digits_before_dot == 0) {
+        zeroes = 1;
     }
     bool dot;
     unsigned digits_after_dot;
@@ -740,12 +761,12 @@ void ftoa_base10(output_buffer* pbuffer, double value, conversion_specification 
         // requested_digits_after_dot is always >= 0 since we delegate to
         // ftoa_base10_exponent otherwise.
         unsigned requested_digits_after_dot = cs.precision - digits_before_dot;
-        unsigned trailing_zeroes = count_trailing_zeroes_after_dot(exponent, mantissa);
+        unsigned trailing_zeroes = count_trailing_zeroes_after_dot(mantissa_signed<0, mantissa, exponent);
         unsigned available_digits_after_dot = 18u - digits_before_dot - trailing_zeroes;
         digits_after_dot = std::min(available_digits_after_dot, requested_digits_after_dot);
         dot = digits_after_dot != 0;
     }
-    unsigned content_size = sign + digits_before_dot + dot + digits_after_dot;
+    unsigned content_size = sign + digits_before_dot + zeroes + dot + digits_after_dot;
     unsigned size = std::max(cs.minimum_field_width, content_size);
 
     unsigned padding = size - content_size;
@@ -757,22 +778,7 @@ void ftoa_base10(output_buffer* pbuffer, double value, conversion_specification 
     
     // Get rid of digits we don't want in the mantissa.
     unsigned significant_digits = digits_before_dot + digits_after_dot;
-    auto divisor = power_lut[18-significant_digits];
-    rounded_rshift(mantissa_signed < 0, mantissa, 18-significant_digits);
-std::uint64_t rounded_rshift(bool sign, std::uint64_t value, unsigned digits)
-{
-    auto divisor = 
-    if(!sign) {
-        // +divisor/2 to turn truncation into rounding.
-        return (value + divisor/2) / divisor;
-    } else {
-        // This is the same rounding as above but we must pretend that the
-        // mantissa is negative and reproduce the corresponding behavior.
-        // Adding divisor-1 turns the flooring behavior of integer division
-        // into a ceiling behavior.
-        mantissa = (mantissa + (divisor-1) - divisor/2) / divisor;
-    }
-}
+    mantissa = rounded_rshift(mantissa_signed < 0, mantissa, 18-significant_digits);
     
     char* str = pbuffer->reserve(size);
     
@@ -793,7 +799,7 @@ std::uint64_t rounded_rshift(bool sign, std::uint64_t value, unsigned digits)
     pos -= pad_zeroes;
     std::memset(str+pos, '0', pad_zeroes);
     if(sign)
-        str[0] = mantissa_signed<0? '-' : cs.plus_sign;
+        str[--pos] = mantissa_signed<0? '-' : cs.plus_sign;
 
     if(!cs.left_justify) {
         pos -= padding;
