@@ -681,10 +681,10 @@ void ftoa_base10_exponent(output_buffer* pbuffer, std::int64_t mantissa_signed,
     pbuffer->commit(size);
 }
 
-unsigned count_trailing_zeroes_after_dot(bool sign, std::uint64_t mantissa, unsigned exponent)
+unsigned count_trailing_zeroes_after_dot(bool sign, std::uint64_t mantissa, int exponent)
 {
     // We need to get rid of the least significant digit because a double can't
-    // represent all possible decimal-digit values in that position.
+    // always represent a zero digit at that position.
     // (e.g. 123.456 becomes 123.456000000000003).
     mantissa = rounded_divide(sign, mantissa, 10);
     unsigned digits_before_dot = exponent+1;
@@ -737,7 +737,7 @@ void ftoa_base10(output_buffer* pbuffer, double value, conversion_specification 
     // significant digits).
     
     std::uint64_t mantissa;
-    bool is_negative;
+    bool negative;
     unsigned digits_before_dot;
     unsigned zeroes;
     bool dot;
@@ -760,10 +760,10 @@ void ftoa_base10(output_buffer* pbuffer, double value, conversion_specification 
 
         if(mantissa_signed<0) {
             mantissa = unsigned_cast(-mantissa_signed);
-            is_negative = true;
+            negative = true;
         } else {
             mantissa = unsigned_cast(mantissa_signed);
-            is_negative = false;
+            negative = false;
         }
         
         digits_before_dot = exponent>=0? unsigned_cast(exponent)+1 : 0u;
@@ -803,7 +803,7 @@ void ftoa_base10(output_buffer* pbuffer, double value, conversion_specification 
     
     // Get rid of digits we don't want in the mantissa.
     unsigned significant_digits = digits_before_dot + digits_after_dot;
-    mantissa = rounded_rshift(mantissa_signed < 0, mantissa, 18-significant_digits);
+    mantissa = rounded_rshift(negative, mantissa, 18-significant_digits);
     
     char* str = pbuffer->reserve(size);
     
@@ -824,7 +824,7 @@ void ftoa_base10(output_buffer* pbuffer, double value, conversion_specification 
     pos -= pad_zeroes;
     std::memset(str+pos, '0', pad_zeroes);
     if(sign)
-        str[--pos] = mantissa_signed<0? '-' : cs.plus_sign;
+        str[--pos] = negative? '-' : cs.plus_sign;
 
     if(!cs.left_justify) {
         pos -= padding;
