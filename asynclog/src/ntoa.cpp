@@ -687,8 +687,7 @@ unsigned count_trailing_zeroes_after_dot(bool sign, std::uint64_t mantissa, int 
     // always represent a zero digit at that position.
     // (e.g. 123.456 becomes 123.456000000000003).
     mantissa = rounded_divide(sign, mantissa, 10);
-    int digits_before_dot = exponent+1;
-    unsigned max_trailing_zeroes;
+    unsigned digits_before_dot = unsigned_cast(std::max(0, exponent+1));
     if(digits_before_dot>17) {
         // All significant digits are in front of the dots. No trailing zeroes
         return 0;
@@ -1192,8 +1191,11 @@ public:
     void less_than_one()
     {
         TEST_FTOA(0.1);
+        TEST_FTOA(0.01);
+        TEST_FTOA(0.001);
         TEST_FTOA(0.0);
         TEST_FTOA(0.123456);
+        TEST_FTOA(0.00000123456);
         TEST_FTOA(0.00000000000000000123456);
         TEST_FTOA(0.0000000000000000012345678901234567890);
         TEST_FTOA(-0.0);
