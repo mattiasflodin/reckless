@@ -687,12 +687,13 @@ unsigned count_trailing_zeroes_after_dot(bool sign, std::uint64_t mantissa, int 
     // always represent a zero digit at that position.
     // (e.g. 123.456 becomes 123.456000000000003).
     mantissa = rounded_divide(sign, mantissa, 10);
-    unsigned digits_before_dot = exponent+1;
+    int digits_before_dot = exponent+1;
+    unsigned max_trailing_zeroes;
     if(digits_before_dot>17) {
         // All significant digits are in front of the dots. No trailing zeroes
         return 0;
     }
-    unsigned max_trailing_zeroes = 17 - digits_before_dot;
+    unsigned max_trailing_zeroes = unsigned_cast(17 - digits_before_dot);
     unsigned low = 0;
     unsigned high = max_trailing_zeroes+1;
     // Find the lowest x such that mantissa % 10^x != 0.
