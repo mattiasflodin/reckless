@@ -723,31 +723,40 @@ unsigned count_trailing_zeroes_after_dot(bool sign, std::uint64_t mantissa, int 
 void ftoa_base10(output_buffer* pbuffer, double value, conversion_specification const& cs)
 {
     // We have either
-    // [sign] [digits_before_dot] [zeroes] [dot] [digits_after_dot] [padding]
+    // [sign] [digits_before_dot] [zeroes_before_dot] [dot] [zeroes_after_dot] [digits_after_dot] [padding]
     // or
-    // [padding] [sign] [pad_zeroes] [digits_before_dot] [zeroes] [dot] [digits_after_dot]
+    // [padding] [sign] [pad_zeroes] [digits_before_dot] [zeroes_before_dot] [dot] [zeroes_after_dot] [digits_after_dot]
     // depending on if it's left-justified or not.
     // 
+    // zeroes_before_dot is used for filler zeroes when the number's magnitude
+    // is larger than the number of available digits in the mantissa.
+    // zeroes_after_dot is used when the number's magnitude is less than -1
+    // (such as for 0.01). If zeroes_before_dot is nonzero then both
+    // zeroes_after_dot and digits_after_dot are zero. Conversely, if
+    // zeroes_after_dot is nonzero then digits_before_dot and zeroes_before_dot
+    // will both be zero.
+    //
     // If value == 0 then binary64_to_decimal18 generates an infinite exponent,
     // and utoa_generic_base10_preallocated will not generate any digits at all
     // for a zero mantissa (it considers this a state of "nothing more to
-    // output"), so we can't use the normal path for zeroes. Instead we encode
-    // the zero digit in the [zeroes] component (normally used for filler
-    // zeroes when the number's magnitude is larger than the number of
-    // significant digits).
+    // output"). So we can't use the normal path for zeroes. Instead, we encode
+    // the zero digit in the [zeroes_before_dot] component .
     
     std::uint64_t mantissa;
     bool negative;
     unsigned digits_before_dot;
-    unsigned zeroes;
+    unsigned zeroes_before_dot;
     bool dot;
+    unsigned zeroes_after_dot;
     unsigned digits_after_dot;
     if(value == 0) {
         mantissa = 0;
+        negative = value<0;
         digits_before_dot = 0;
-        zeroes = 1;
+        zeroes_before_dot = 1;
         // TODO alternative_form
         dot = false;
+        zeroes_after_dot = 0;
         digits_after_dot = 0;
     } else {
         int const minimum_exponent = -4;
@@ -766,15 +775,22 @@ void ftoa_base10(output_buffer* pbuffer, double value, conversion_specification 
             negative = false;
         }
         
-        digits_before_dot = exponent>=0? unsigned_cast(exponent)+1 : 0u;
-        zeroes = 0;
-        if(digits_before_dot>18) {
-            zeroes = digits_before_dot - 18;
+        if(exponent>=17) {
             digits_before_dot = 18;
-        } else if(digits_before_dot == 0) {
-            zeroes = 1;
+            zeroes_before_dot = unsigned_cast(exponent)+1 - 18;
+            zeroes_after_dot = 0;
+        } else if(exponent < -1) {
+            digits_before_dot = 0;
+            zeroes_before_dot = 1;
+            zeroes_after_dot = unsigned_cast(-exponent)-1;
+        } else {
+            digits_before_dot = unsigned_cast(exponent+1);
+            // If there are no mantissa digits before the dot, put a filler
+            // zero there so we get "0.1" instead of ".1"
+            zeroes_before_dot = digits_before_dot == 0? 1 : 0;
+            zeroes_after_dot = 0;
         }
-        
+
         if(cs.alternative_form) {
             digits_after_dot = cs.precision - digits_before_dot;
             dot = true;
@@ -791,7 +807,7 @@ void ftoa_base10(output_buffer* pbuffer, double value, conversion_specification 
     }
     
     bool sign = (negative || cs.plus_sign != 0);
-    unsigned content_size = sign + digits_before_dot + zeroes + dot + digits_after_dot;
+    unsigned content_size = sign + digits_before_dot + zeroes_before_dot + dot + zeroes_after_dot + digits_after_dot;
     unsigned size = std::max(cs.minimum_field_width, content_size);
 
     unsigned padding = size - content_size;
@@ -816,10 +832,13 @@ void ftoa_base10(output_buffer* pbuffer, double value, conversion_specification 
         mantissa = utoa_generic_base10_preallocated(str, pos, mantissa,
                 digits_after_dot);
         pos -= digits_after_dot;
+        
+        pos -= zeroes_after_dot;
+        std::memset(str+pos, '0', zeroes_after_dot);
         str[--pos] = '.';
     }
-    pos -= zeroes;
-    std::memset(str+pos, '0', zeroes);
+    pos -= zeroes_before_dot;
+    std::memset(str+pos, '0', zeroes_before_dot);
     pos = utoa_generic_base10_preallocated(str, pos, mantissa);
     pos -= pad_zeroes;
     std::memset(str+pos, '0', pad_zeroes);
@@ -1180,10 +1199,10 @@ public:
         TEST_FTOA(123456);
         TEST_FTOA(12345678901234567890.0);
         TEST_FTOA(1.23456789e300);
+        TEST_FTOA(1.2345678901234567e308);
         // TODO these conversions lose some precision but we might be able to
         // fix that, because they have worked before in other iterations of the
         // code.
-        //TEST_FTOA(1.2345678901234567e308);
         //TEST_FTOA(1.7976931348623157e308);
         //TEST_FTOA(1.7976931348623158e308);
     }
