@@ -751,7 +751,7 @@ void ftoa_base10(output_buffer* pbuffer, double value, conversion_specification 
     unsigned digits_after_dot;
     if(value == 0) {
         mantissa = 0;
-        negative = value<0;
+        negative = std::signbit(value);
         digits_before_dot = 0;
         zeroes_before_dot = 1;
         // TODO alternative_form
@@ -1207,7 +1207,7 @@ public:
         //TEST_FTOA(1.7976931348623158e308);
     }
 
-    void less_than_one()
+    void fractional()
     {
         TEST_FTOA(0.1);
         TEST_FTOA(0.01);
@@ -1219,6 +1219,10 @@ public:
         TEST_FTOA(0.0000000000000000012345678901234567890);
         TEST_FTOA(-0.0);
         TEST_FTOA(-0.1);
+    }
+
+    void negative()
+    {
         TEST_FTOA(-1.0);
         TEST_FTOA(-123.456);
         TEST_FTOA(-123456);
@@ -1237,14 +1241,14 @@ public:
 
     void special()
     {
-        //TEST(convert(-0.0 == "-0");
-        //TEST(convert(std::numeric_limits<double>::quiet_NaN()) == "nan");
-        //TEST(convert(std::numeric_limits<double>::signaling_NaN()) == "nan");
-        //TEST(convert(std::nan("1")) == "nan");
-        //TEST(convert(std::nan("2")) == "nan");
-        //TEST(convert(-std::numeric_limits<double>::quiet_NaN()) == "-nan");
-        //TEST(convert(std::numeric_limits<double>::infinity()) == "inf");
-        //TEST(convert(-std::numeric_limits<double>::infinity()) == "-inf");
+        TEST(convert(-0.0) == "-0");
+        TEST(convert(std::numeric_limits<double>::quiet_NaN()) == "nan");
+        TEST(convert(std::numeric_limits<double>::signaling_NaN()) == "nan");
+        TEST(convert(std::nan("1")) == "nan");
+        TEST(convert(std::nan("2")) == "nan");
+        TEST(convert(-std::numeric_limits<double>::quiet_NaN()) == "-nan");
+        TEST(convert(std::numeric_limits<double>::infinity()) == "inf");
+        TEST(convert(-std::numeric_limits<double>::infinity()) == "-inf");
     }
 
     void scientific()
@@ -1405,7 +1409,8 @@ private:
 
 unit_test::suite<ftoa> tests = {
     TESTCASE(ftoa::greater_than_one),
-    TESTCASE(ftoa::less_than_one),
+    TESTCASE(ftoa::fractional),
+    TESTCASE(ftoa::negative),
     TESTCASE(ftoa::subnormals),
     TESTCASE(ftoa::special),
     TESTCASE(ftoa::scientific),
