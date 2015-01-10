@@ -1220,11 +1220,11 @@ unit_test::suite<itoa_base10_suite> itoa_base10_tests = {
 
 #define TEST_FTOA(number) test_conversion_quality(number, __FILE__, __LINE__)
 
-class ftoa
+class ftoa_base10
 {
 public:
     static std::size_t const PERFECT_QUALITY = std::numeric_limits<std::size_t>::max();
-    ftoa() :
+    ftoa_base10() :
         output_buffer_(&writer_, 1024)
     {
     }
@@ -1338,37 +1338,9 @@ public:
         TEST(convert(0.01, cs) == "00.01");
     }
 
-    void precision()
-    {
-        TEST(convert_prec(1.5, 2) == "1.50");
-        TEST(convert_prec(1.234567890, 4) == "1.2346");
-        TEST(convert_prec(1.2345678901234567, 16) == "1.2345678901234567");
-        TEST(convert_prec(1.2345678901234567, 17) == "1.23456789012345670");
-        TEST(convert_prec(1.2345678901234567, 25) == "1.2345678901234567000000000");
-        TEST(convert_prec(1.7976931348623157e308, 3) == "179769313486231563000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000.000");
-        TEST(convert_prec(1234.5678, 0) == "1235");
-        TEST(convert_prec(1234.5678, 1) == "1234.6");
-
-        TEST(convert_prec(0.3, 1) == "0.3");
-        TEST(convert_prec(0.3, 2) == "0.30");
-        TEST(convert_prec(0.3, 20) == "0.29999999999999999000");
-
-        TEST(convert_prec(1.2345e20, 5) == "123450000000000000000.00000");
-        TEST(convert_prec(1.2345e20, 0) == "123450000000000000000");
-        TEST(convert_prec(1.2345e2, 5) == "123.45000");
-        TEST(convert_prec(1.2345e-20, 5) == "0.00000");
-        TEST(convert_prec(0.5, 0) == "1");
-        TEST(convert_prec(0.05, 1) == "0.1");
-        TEST(convert_prec(9.9, 0) == "10");
-        TEST(convert_prec(0, 0) == "0");
-        TEST(convert_prec(1.23456789012345670, 20) == "1.23456789012345670000");
-        TEST(convert_prec(0.123456789012345670, 20) == "0.12345678901234566300");
-        
-        TEST(convert_prec(0.000123, 6) == "0.000123");
-    }
-
     void random()
     {
+        return;
         std::mt19937_64 rng;
         int const total = 10000000;
         int perfect = 0;
@@ -1424,7 +1396,7 @@ private:
     std::string convert(double number, conversion_specification const& cs)
     {
         writer_.reset();
-        ftoa_base10(&output_buffer_, number, cs);
+        asynclog::ftoa_base10(&output_buffer_, number, cs);
         output_buffer_.flush();
         return writer_.str();
     }
@@ -1441,15 +1413,6 @@ private:
         return convert(number, cs);
     }
 
-    std::string convert_prec(double number, unsigned precision)
-    {
-        writer_.reset();
-        ftoa_base10_precision(&output_buffer_, number, precision);
-        output_buffer_.flush();
-        //std::cout << '[' << writer_.str() << ']' << std::endl;
-        return writer_.str();
-    }
-
     void test_conversion_quality(double number, char const* file, int line)
     {
         if(get_conversion_quality(number) != PERFECT_QUALITY)
@@ -1464,16 +1427,69 @@ private:
     output_buffer output_buffer_;
 };
 
-unit_test::suite<ftoa> tests = {
-    TESTCASE(ftoa::greater_than_one),
-    TESTCASE(ftoa::fractional),
-    TESTCASE(ftoa::negative),
-    TESTCASE(ftoa::subnormals),
-    TESTCASE(ftoa::special),
-    TESTCASE(ftoa::scientific),
-    TESTCASE(ftoa::padding),
-    TESTCASE(ftoa::precision),
-    TESTCASE(ftoa::random)
+unit_test::suite<ftoa_base10> ftoa_base10_tests = {
+    TESTCASE(ftoa_base10::greater_than_one),
+    TESTCASE(ftoa_base10::fractional),
+    TESTCASE(ftoa_base10::negative),
+    TESTCASE(ftoa_base10::subnormals),
+    TESTCASE(ftoa_base10::special),
+    TESTCASE(ftoa_base10::scientific),
+    TESTCASE(ftoa_base10::padding),
+    TESTCASE(ftoa_base10::random)
+};
+
+class ftoa_base10_precision
+{
+public:
+    ftoa_base10_precision() :
+        output_buffer_(&writer_, 1024)
+    {
+    }
+    
+    void normal()
+    {
+        TEST(convert_prec(1.5, 2) == "1.50");
+        TEST(convert_prec(1.234567890, 4) == "1.2346");
+        TEST(convert_prec(1.2345678901234567, 16) == "1.2345678901234567");
+        TEST(convert_prec(1.2345678901234567, 17) == "1.23456789012345670");
+        TEST(convert_prec(1.2345678901234567, 25) == "1.2345678901234567000000000");
+        TEST(convert_prec(1.7976931348623157e308, 3) == "179769313486231563000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000.000");
+        TEST(convert_prec(1234.5678, 0) == "1235");
+        TEST(convert_prec(1234.5678, 1) == "1234.6");
+
+        TEST(convert_prec(0.3, 1) == "0.3");
+        TEST(convert_prec(0.3, 2) == "0.30");
+        TEST(convert_prec(0.3, 20) == "0.29999999999999999000");
+
+        TEST(convert_prec(1.2345e20, 5) == "123450000000000000000.00000");
+        TEST(convert_prec(1.2345e20, 0) == "123450000000000000000");
+        TEST(convert_prec(1.2345e2, 5) == "123.45000");
+        TEST(convert_prec(1.2345e-20, 5) == "0.00000");
+        TEST(convert_prec(0.5, 0) == "1");
+        TEST(convert_prec(0.05, 1) == "0.1");
+        TEST(convert_prec(9.9, 0) == "10");
+        TEST(convert_prec(0, 0) == "0");
+        TEST(convert_prec(1.23456789012345670, 20) == "1.23456789012345670000");
+        TEST(convert_prec(0.123456789012345670, 20) == "0.12345678901234566300");
+        
+        TEST(convert_prec(0.000123, 6) == "0.000123");
+    }
+
+    std::string convert_prec(double number, unsigned precision)
+    {
+        writer_.reset();
+        asynclog::ftoa_base10_precision(&output_buffer_, number, precision);
+        output_buffer_.flush();
+        //std::cout << '[' << writer_.str() << ']' << std::endl;
+        return writer_.str();
+    }
+
+    string_writer writer_;
+    output_buffer output_buffer_;
+};
+
+unit_test::suite<ftoa_base10_precision> ftoa_base10_precision_tests = {
+    TESTCASE(ftoa_base10_precision::precision),
 };
 
 }   // namespace detail
