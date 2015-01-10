@@ -710,6 +710,40 @@ unsigned count_trailing_zeroes_after_dot(bool sign, std::uint64_t mantissa, int 
     return low-1 + 1;
 }
 
+void write_special_category(output_buffer* pbuffer, double value, conversion_specification const& cs, char const* category)
+{
+    char sign = std::signbit(value)? '-' : cs.plus_sign;
+    unsigned content_size = 3 + (sign? 1 : 0);
+    unsigned size = std::max(content_size, cs.minimum_field_width);
+    unsigned padding = size - content_size;
+    char* str = pbuffer->reserve(size);
+    unsigned pos = 0;
+    if(cs.left_justify) {
+        if(sign)
+            str[pos++] = sign;
+        memcpy(str+pos, category, 3);
+        pos += 3;
+        std::memset(str+pos, ' ', padding);
+    } else {
+        std::memset(str, ' ', padding);
+        pos += padding;
+        if(sign)
+            str[pos++] = sign;
+        memcpy(str+pos, category, 3);
+    }
+    pbuffer->commit(size);
+}
+
+void write_nan(output_buffer* pbuffer, double value, conversion_specification const& cs)
+{
+    return write_special_category(pbuffer, value, cs, "nan");
+}
+
+void write_inf(output_buffer* pbuffer, double value, conversion_specification const& cs)
+{
+    return write_special_category(pbuffer, value, cs, "inf");
+}
+
 // Corresponds to %g.
 // The idea of %g is that the precision says how many significant digits we
 // want in the string representation. If the number of significant digits is
@@ -743,18 +777,21 @@ void ftoa_base10(output_buffer* pbuffer, double value, conversion_specification 
     // the zero digit in the [zeroes_before_dot] component .
     
     std::uint64_t mantissa;
-    bool negative;
+    bool negative = std::signbit(value);
     unsigned digits_before_dot;
     unsigned zeroes_before_dot;
     bool dot;
     unsigned zeroes_after_dot;
     unsigned digits_after_dot;
+    bool sign = (negative || cs.plus_sign != 0);
 
     auto category = std::fpclassify(value);
-    if(category 
-    if(value == 0) {
+    if(category == FP_NAN) {
+        return write_nan(pbuffer, value, cs);
+    } else if(category == FP_INFINITE) {
+        return write_inf(pbuffer, value, cs);
+    } else if(category == FP_ZERO) {
         mantissa = 0;
-        negative = std::signbit(value);
         digits_before_dot = 0;
         zeroes_before_dot = 1;
         // TODO alternative_form
@@ -809,7 +846,6 @@ void ftoa_base10(output_buffer* pbuffer, double value, conversion_specification 
         }
     }
     
-    bool sign = (negative || cs.plus_sign != 0);
     unsigned content_size = sign + digits_before_dot + zeroes_before_dot + dot + zeroes_after_dot + digits_after_dot;
     unsigned size = std::max(cs.minimum_field_width, content_size);
 
@@ -1252,6 +1288,24 @@ public:
         TEST(convert(-std::numeric_limits<double>::quiet_NaN()) == "-nan");
         TEST(convert(std::numeric_limits<double>::infinity()) == "inf");
         TEST(convert(-std::numeric_limits<double>::infinity()) == "-inf");
+
+        conversion_specification cs;
+        cs.left_justify = false;
+        cs.alternative_form = false;
+        cs.pad_with_zeroes = false;
+        cs.plus_sign = 0;
+        cs.minimum_field_width = 6;
+        cs.precision = 0;
+        
+        TEST(convert(-std::numeric_limits<double>::quiet_NaN(), cs) == "  -nan");
+        TEST(convert(std::numeric_limits<double>::quiet_NaN(), cs) == "   nan");
+        cs.left_justify = true;
+        TEST(convert(-std::numeric_limits<double>::quiet_NaN(), cs) == "-nan  ");
+        TEST(convert(std::numeric_limits<double>::quiet_NaN(), cs) == "nan   ");
+        cs.plus_sign = '+';
+        TEST(convert(std::numeric_limits<double>::quiet_NaN(), cs) == "+nan  ");
+        cs.left_justify = false;
+        TEST(convert(std::numeric_limits<double>::quiet_NaN(), cs) == "  +nan");
     }
 
     void scientific()
