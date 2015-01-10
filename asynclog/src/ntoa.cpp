@@ -749,6 +749,9 @@ void ftoa_base10(output_buffer* pbuffer, double value, conversion_specification 
     bool dot;
     unsigned zeroes_after_dot;
     unsigned digits_after_dot;
+
+    auto category = std::fpclassify(value);
+    if(category 
     if(value == 0) {
         mantissa = 0;
         negative = std::signbit(value);
