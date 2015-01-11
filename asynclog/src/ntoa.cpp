@@ -806,6 +806,7 @@ void ftoa_base10(output_buffer* pbuffer, double value, conversion_specification 
 
         if(exponent < minimum_exponent || exponent > maximum_exponent)
             return ftoa_base10_exponent(pbuffer, mantissa_signed, exponent, cs);
+        
 
         if(mantissa_signed<0) {
             mantissa = unsigned_cast(-mantissa_signed);
@@ -890,6 +891,36 @@ void ftoa_base10(output_buffer* pbuffer, double value, conversion_specification 
     }
     pbuffer->commit(size);
     assert(pos == 0);
+}
+
+
+void ftoa_base10_f_normal(output_buffer* pbuffer, bool signbit, std::uint64_t mantissa,
+    int exponent, int precision, conversion_specification const& cs)
+{
+    char sign = signbit? '-' : cs.plus_sign;
+    unsigned digits_before_dot;
+    unsigned zeroes_before_dot;
+    bool dot;
+    unsigned zeroes_after_dot;
+    unsigned digits_after_dot;
+    
+    if(exponent>=17) {
+        digits_before_dot = 18;
+        zeroes_before_dot = unsigned_cast(exponent)+1 - 18;
+        zeroes_after_dot = precision;
+        dot = cs.alternative_form || (zeroes_after_dot != 0);
+        digits_after_dot = 0;
+    } else if(exponent < 0) {
+        digits_before_dot = 0;
+        zeroes_before_dot = 1;
+        zeroes_after_dot = std::min(unsigned_cast(-exponent)-1, precision);
+        digits_after_dot = precision - zeroes_after_dot;
+    } else {
+        digits_before_dot = unsigned_cast(exponent+1);
+        zeroes_before_dot = 0;
+        zeroes_after_dot = 0;
+        digits_after_dot = precision
+    }
 }
 
 void ftoa_base10_precision(output_buffer* pbuffer, double value, unsigned precision)
