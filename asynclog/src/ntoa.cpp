@@ -900,26 +900,57 @@ void ftoa_base10_f_normal(output_buffer* pbuffer, bool signbit, std::uint64_t ma
     char sign = signbit? '-' : cs.plus_sign;
     unsigned digits_before_dot;
     unsigned zeroes_before_dot;
-    bool dot;
     unsigned zeroes_after_dot;
     unsigned digits_after_dot;
+    unsigned suffix_zeroes;
     
     if(exponent>=17) {
+        // All digits from the mantissa are on the left-hand side of the dot.
         digits_before_dot = 18;
         zeroes_before_dot = unsigned_cast(exponent)+1 - 18;
         zeroes_after_dot = precision;
-        dot = cs.alternative_form || (zeroes_after_dot != 0);
         digits_after_dot = 0;
     } else if(exponent < 0) {
+        // All digits from the mantissa are on the right-hand side of the dot.
         digits_before_dot = 0;
         zeroes_before_dot = 1;
         zeroes_after_dot = std::min(unsigned_cast(-exponent)-1, precision);
         digits_after_dot = precision - zeroes_after_dot;
     } else {
+        // There are digits from the mantissa both on the left- and right-hand
+        // sides of the dot.
         digits_before_dot = unsigned_cast(exponent+1);
         zeroes_before_dot = 0;
         zeroes_after_dot = 0;
         digits_after_dot = precision
+    }
+    
+    bool dot = cs.alternative_form || (zeroes_after_dot != 0);
+
+    // Reduce the mantissa part to the requested number of digits.
+    auto mantissa_digits = digits_before_dot + digits_after_dot;
+    mantissa = rounded_rshift(signbit, mantissa, 18-mantissa_digits);
+    auto order = power_lut[mantissa_digits];
+    bool carry = mantissa >= order;
+    if(carry) {
+        // When reducing the mantissa, rounding caused it to overflow. For
+        // example, when formatting 0.095 with precision=2, we have
+        // zeroes_before_dot=1, zeroes_after_dot=1, mantissa_digits=1 and
+        // suffix_zeroes=0. When trying to reduce the mantissa to 1 digit we
+        // end up not with 9, but with 10 due to rounding. In this case we need
+        // to make room for an extra digit from the mantissa, which we'll take
+        // from the prefix zeroes or by moving the dot forward.
+        if(zeroes_after_dot) {
+            --zeroes_after_dot;
+            ++digits_after_dot;
+        } else {
+            ++digits_before_dot;
+        }
+        mantissa_digits += 1;
+        if(prefix_zeroes>0)
+            prefix_zeroes -= 1;
+        else
+            dot_position += 1;
     }
 }
 
