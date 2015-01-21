@@ -893,16 +893,18 @@ void ftoa_base10(output_buffer* pbuffer, double value, conversion_specification 
     assert(pos == 0);
 }
 
-
+// NEXT the point of this is to get rid of the lengthy implementation of '%g'
+// and simply have one for %e and one of %f. This replaces most of the _prec
+// variant.
 void ftoa_base10_f_normal(output_buffer* pbuffer, bool signbit, std::uint64_t mantissa,
     int exponent, int precision, conversion_specification const& cs)
 {
+    // [sign] [digits_before_dot] [zeroes_before_dot] [dot] [zeroes_after_dot] [digits_after_dot] [suffix_zeroes]
     char sign = signbit? '-' : cs.plus_sign;
     unsigned digits_before_dot;
     unsigned zeroes_before_dot;
     unsigned zeroes_after_dot;
     unsigned digits_after_dot;
-    unsigned suffix_zeroes;
     
     if(exponent>=17) {
         // All digits from the mantissa are on the left-hand side of the dot.
@@ -922,8 +924,9 @@ void ftoa_base10_f_normal(output_buffer* pbuffer, bool signbit, std::uint64_t ma
         digits_before_dot = unsigned_cast(exponent+1);
         zeroes_before_dot = 0;
         zeroes_after_dot = 0;
-        digits_after_dot = precision
+        digits_after_dot = std::min(18 - digits_before_dot, precision);
     }
+    unsigned suffix_zeroes = precision - (zeroes_after_dot + digits_after_dot);
     
     bool dot = cs.alternative_form || (zeroes_after_dot != 0);
 
