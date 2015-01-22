@@ -790,14 +790,6 @@ void ftoa_base10(output_buffer* pbuffer, double value, conversion_specification 
         return write_nan(pbuffer, value, cs);
     } else if(category == FP_INFINITE) {
         return write_inf(pbuffer, value, cs);
-    } else if(category == FP_ZERO) {
-        mantissa = 0;
-        digits_before_dot = 0;
-        zeroes_before_dot = 1;
-        // TODO alternative_form
-        dot = false;
-        zeroes_after_dot = 0;
-        digits_after_dot = 0;
     } else {
         int const minimum_exponent = -4;
         int maximum_exponent = cs.precision;
@@ -806,6 +798,9 @@ void ftoa_base10(output_buffer* pbuffer, double value, conversion_specification 
 
         if(exponent < minimum_exponent || exponent > maximum_exponent)
             return ftoa_base10_exponent(pbuffer, mantissa_signed, exponent, cs);
+        else
+            NEXT call this properly
+            return ftoa_base10_f_normal(pbuffer, signbit, mantissa, 
         
 
         if(mantissa_signed<0) {
@@ -900,7 +895,6 @@ void ftoa_base10_f_normal(output_buffer* pbuffer, bool signbit, std::uint64_t ma
     int exponent, int precision, conversion_specification const& cs)
 {
     // [sign] [digits_before_dot] [zeroes_before_dot] [dot] [zeroes_after_dot] [digits_after_dot] [suffix_zeroes]
-    char sign = signbit? '-' : cs.plus_sign;
     unsigned digits_before_dot;
     unsigned zeroes_before_dot;
     unsigned zeroes_after_dot;
@@ -949,12 +943,49 @@ void ftoa_base10_f_normal(output_buffer* pbuffer, bool signbit, std::uint64_t ma
         } else {
             ++digits_before_dot;
         }
-        mantissa_digits += 1;
-        if(prefix_zeroes>0)
-            prefix_zeroes -= 1;
-        else
-            dot_position += 1;
+        ++mantissa_digits;
     }
+
+    unsigned content_size = signbit + digits_before_dot + zeroes_before_dot
+        + dot + zeroes_after_dot + digits_after_dot + suffix_zeroes;
+    unsigned size = std::max(cs.minimum_field_width, content_size);
+    unsigned padding = size - content_size;
+    if(cs.pad_with_zeroes) {
+        pad_zeroes = padding;
+        padding = 0;
+    }
+
+    char* str = pbuffer->reserve(size);
+    unsigned pos = size;
+    if(cs.left_justify) {
+        pos -= padding;
+        std::memset(str+pos, ' ', padding);
+    }
+
+    if(dot) {
+        mantissa = utoa_generic_base10_preallocated(str, pos, mantissa,
+                digits_after_dot);
+        pos -= digits_after_dot;
+        
+        pos -= zeroes_after_dot;
+        std::memset(str+pos, '0', zeroes_after_dot);
+        str[--pos] = '.';
+    }
+
+    pos -= zeroes_before_dot;
+    std::memset(str+pos, '0', zeroes_before_dot);
+    pos = utoa_generic_base10_preallocated(str, pos, mantissa);
+    pos -= pad_zeroes;
+    std::memset(str+pos, '0', pad_zeroes);
+    if(signbit)
+        str[--pos] = negative? '-' : cs.plus_sign;
+
+    if(!cs.left_justify) {
+        pos -= padding;
+        std::memset(str+pos, ' ', padding);
+    }
+    pbuffer->commit(size);
+    assert(pos == 0);
 }
 
 void ftoa_base10_precision(output_buffer* pbuffer, double value, unsigned precision)
@@ -971,7 +1002,7 @@ void ftoa_base10_precision(output_buffer* pbuffer, double value, unsigned precis
         mantissa = unsigned_cast(-mantissa_signed);
     }
     
-    / TODO we should have a symbolic constant for 18 but so far I can't think
+    // TODO we should have a symbolic constant for 18 but so far I can't think
     // of a name that doesn't make the code more confusing (for the record,
     // it's how many digits there are in the mantissa produced by
     // binary64_to_decimal18). DECIMAL_MANTISSA_DIGITS is my best name so far,
