@@ -602,15 +602,177 @@ void itoa_base16(output_buffer* pbuffer, long value, bool uppercase, char const*
     itoa_generic_base16(pbuffer, value, uppercase, prefix);
 }
 
-void ftoa_base10_exponent(output_buffer* pbuffer, std::int64_t mantissa_signed,
-    int exponent_signed, conversion_specification const& cs)
+unsigned count_trailing_zeroes_after_dot(bool sign, std::uint64_t mantissa, int exponent)
+{
+    // We need to get rid of the least significant digit because a double can't
+    // always represent a zero digit at that position.
+    // (e.g. 123.456 becomes 123.456000000000003).
+    mantissa = rounded_divide(sign, mantissa, 10);
+    unsigned digits_before_dot = unsigned_cast(std::max(0, exponent+1));
+    if(digits_before_dot>17) {
+        // All significant digits are in front of the dots. No trailing zeroes
+        return 0;
+    }
+    unsigned max_trailing_zeroes = unsigned_cast(17 - digits_before_dot);
+    unsigned low = 0;
+    unsigned high = max_trailing_zeroes+1;
+    // Find the lowest x such that mantissa % 10^x != 0.
+    // Then the number of trailing zeroes is x-1.
+    while(low < high) {
+        unsigned pos = (low + high)/2;
+        if(mantissa % power_lut[pos] == 0)
+            low = pos + 1;
+        else
+            high = pos;
+    }
+
+    // +1 because we always treat the least significant digit (that we stripped
+    // at function entry) as if it were zero.
+    return low-1 + 1;
+}
+
+void write_special_category(output_buffer* pbuffer, double value, conversion_specification const& cs, char const* category)
+{
+    char sign = std::signbit(value)? '-' : cs.plus_sign;
+    unsigned content_size = 3 + (sign? 1 : 0);
+    unsigned size = std::max(content_size, cs.minimum_field_width);
+    unsigned padding = size - content_size;
+    char* str = pbuffer->reserve(size);
+    unsigned pos = 0;
+    if(cs.left_justify) {
+        if(sign)
+            str[pos++] = sign;
+        memcpy(str+pos, category, 3);
+        pos += 3;
+        std::memset(str+pos, ' ', padding);
+    } else {
+        std::memset(str, ' ', padding);
+        pos += padding;
+        if(sign)
+            str[pos++] = sign;
+        memcpy(str+pos, category, 3);
+    }
+    pbuffer->commit(size);
+}
+
+void write_nan(output_buffer* pbuffer, double value, conversion_specification const& cs)
+{
+    return write_special_category(pbuffer, value, cs, "nan");
+}
+
+void write_inf(output_buffer* pbuffer, double value, conversion_specification const& cs)
+{
+    return write_special_category(pbuffer, value, cs, "inf");
+}
+
+// NEXT the point of this is to get rid of the lengthy implementation of '%g'
+// and simply have one for %e and one of %f. This replaces most of the _prec
+// variant.
+void ftoa_base10_f_normal(output_buffer* pbuffer, decimal18 dv, int precision, conversion_specification const& cs)
+{
+    // [sign] [digits_before_dot] [zeroes_before_dot] [dot] [zeroes_after_dot] [digits_after_dot] [suffix_zeroes]
+    unsigned digits_before_dot;
+    unsigned zeroes_before_dot;
+    unsigned zeroes_after_dot;
+    unsigned digits_after_dot;
+    
+    if(dv.exponent>=17) {
+        // All digits from the mantissa are on the left-hand side of the dot.
+        digits_before_dot = 18;
+        zeroes_before_dot = unsigned_cast(dv.exponent)+1 - 18;
+        zeroes_after_dot = precision;
+        digits_after_dot = 0;
+    } else if(dv.exponent < 0) {
+        // All digits from the mantissa are on the right-hand side of the dot.
+        digits_before_dot = 0;
+        zeroes_before_dot = 1;
+        zeroes_after_dot = std::min(unsigned_cast(-dv.exponent)-1, precision);
+        digits_after_dot = precision - zeroes_after_dot;
+    } else {
+        // There are digits from the mantissa both on the left- and right-hand
+        // sides of the dot.
+        digits_before_dot = unsigned_cast(dv.exponent+1);
+        zeroes_before_dot = 0;
+        zeroes_after_dot = 0;
+        digits_after_dot = std::min(18 - digits_before_dot, precision);
+    }
+    unsigned suffix_zeroes = precision - (zeroes_after_dot + digits_after_dot);
+    
+    bool dot = cs.alternative_form || (zeroes_after_dot != 0);
+
+    // Reduce the mantissa part to the requested number of digits.
+    auto mantissa_digits = digits_before_dot + digits_after_dot;
+    std::uint64_t mantissa = rounded_rshift(dv.sign, dv.mantissa, 18-mantissa_digits);
+    auto order = power_lut[mantissa_digits];
+    bool carry = mantissa >= order;
+    if(carry) {
+        // When reducing the mantissa, rounding caused it to overflow. For
+        // example, when formatting 0.095 with precision=2, we have
+        // zeroes_before_dot=1, zeroes_after_dot=1, mantissa_digits=1 and
+        // suffix_zeroes=0. When trying to reduce the mantissa to 1 digit we
+        // end up not with 9, but with 10 due to rounding. In this case we need
+        // to make room for an extra digit from the mantissa, which we'll take
+        // from the prefix zeroes or by moving the dot forward.
+        if(zeroes_after_dot) {
+            --zeroes_after_dot;
+            ++digits_after_dot;
+        } else {
+            ++digits_before_dot;
+        }
+        ++mantissa_digits;
+    }
+
+    unsigned content_size = dv.sign + digits_before_dot + zeroes_before_dot
+        + dot + zeroes_after_dot + digits_after_dot + suffix_zeroes;
+    unsigned size = std::max(cs.minimum_field_width, content_size);
+    unsigned padding = size - content_size;
+    if(cs.pad_with_zeroes) {
+        pad_zeroes = padding;
+        padding = 0;
+    }
+
+    char* str = pbuffer->reserve(size);
+    unsigned pos = size;
+    if(cs.left_justify) {
+        pos -= padding;
+        std::memset(str+pos, ' ', padding);
+    }
+
+    if(dot) {
+        mantissa = utoa_generic_base10_preallocated(str, pos, mantissa,
+                digits_after_dot);
+        pos -= digits_after_dot;
+        
+        pos -= zeroes_after_dot;
+        std::memset(str+pos, '0', zeroes_after_dot);
+        str[--pos] = '.';
+    }
+
+    pos -= zeroes_before_dot;
+    std::memset(str+pos, '0', zeroes_before_dot);
+    pos = utoa_generic_base10_preallocated(str, pos, mantissa);
+    pos -= pad_zeroes;
+    std::memset(str+pos, '0', pad_zeroes);
+    if(dv.sign)
+        str[--pos] = negative? '-' : cs.plus_sign;
+
+    if(!cs.left_justify) {
+        pos -= padding;
+        std::memset(str+pos, ' ', padding);
+    }
+    pbuffer->commit(size);
+    assert(pos == 0);
+}
+
+void ftoa_base10_exponent(output_buffer* pbuffer, decimal18 dv,
+        conversion_specification const& cs)
 {
     // We have either
     // [sign] [digit] [dot] [digits_after_dot] [e] [exponent sign] [exponent_digits] [padding]
     // or
     // [padding] [sign] [zero_padding] [digit] [dot] [digits_after_dot] [e] [exponent sign] [exponent_digits]
     // depending on if it's left-justified or not.
-    
+#if 0
     bool sign;
     std::uint64_t mantissa;
     if(mantissa_signed<0) {
@@ -685,69 +847,7 @@ void ftoa_base10_exponent(output_buffer* pbuffer, std::int64_t mantissa_signed,
         std::memset(str+pos, ' ', padding);
     }
     pbuffer->commit(size);
-}
-
-unsigned count_trailing_zeroes_after_dot(bool sign, std::uint64_t mantissa, int exponent)
-{
-    // We need to get rid of the least significant digit because a double can't
-    // always represent a zero digit at that position.
-    // (e.g. 123.456 becomes 123.456000000000003).
-    mantissa = rounded_divide(sign, mantissa, 10);
-    unsigned digits_before_dot = unsigned_cast(std::max(0, exponent+1));
-    if(digits_before_dot>17) {
-        // All significant digits are in front of the dots. No trailing zeroes
-        return 0;
-    }
-    unsigned max_trailing_zeroes = unsigned_cast(17 - digits_before_dot);
-    unsigned low = 0;
-    unsigned high = max_trailing_zeroes+1;
-    // Find the lowest x such that mantissa % 10^x != 0.
-    // Then the number of trailing zeroes is x-1.
-    while(low < high) {
-        unsigned pos = (low + high)/2;
-        if(mantissa % power_lut[pos] == 0)
-            low = pos + 1;
-        else
-            high = pos;
-    }
-
-    // +1 because we always treat the least significant digit (that we stripped
-    // at function entry) as if it were zero.
-    return low-1 + 1;
-}
-
-void write_special_category(output_buffer* pbuffer, double value, conversion_specification const& cs, char const* category)
-{
-    char sign = std::signbit(value)? '-' : cs.plus_sign;
-    unsigned content_size = 3 + (sign? 1 : 0);
-    unsigned size = std::max(content_size, cs.minimum_field_width);
-    unsigned padding = size - content_size;
-    char* str = pbuffer->reserve(size);
-    unsigned pos = 0;
-    if(cs.left_justify) {
-        if(sign)
-            str[pos++] = sign;
-        memcpy(str+pos, category, 3);
-        pos += 3;
-        std::memset(str+pos, ' ', padding);
-    } else {
-        std::memset(str, ' ', padding);
-        pos += padding;
-        if(sign)
-            str[pos++] = sign;
-        memcpy(str+pos, category, 3);
-    }
-    pbuffer->commit(size);
-}
-
-void write_nan(output_buffer* pbuffer, double value, conversion_specification const& cs)
-{
-    return write_special_category(pbuffer, value, cs, "nan");
-}
-
-void write_inf(output_buffer* pbuffer, double value, conversion_specification const& cs)
-{
-    return write_special_category(pbuffer, value, cs, "inf");
+#endif
 }
 
 // Corresponds to %g.
@@ -802,194 +902,10 @@ void ftoa_base10(output_buffer* pbuffer, double value, conversion_specification 
         decimal18 dv = binary64_to_decimal18(value, &exponent);
 
         if(dv.exponent < minimum_exponent || dv.exponent > maximum_exponent)
-            return ftoa_base10_exponent(pbuffer, mantissa_signed, exponent, cs);
+            return ftoa_base10_exponent(pbuffer, dv, cs);
         else
-            return ftoa_base10_f_normal(pbuffer, signbit, mantissa, 
-        
-
-        if(mantissa_signed<0) {
-            mantissa = unsigned_cast(-mantissa_signed);
-            negative = true;
-        } else {
-            mantissa = unsigned_cast(mantissa_signed);
-            negative = false;
-        }
-        
-        if(exponent>=17) {
-            digits_before_dot = 18;
-            zeroes_before_dot = unsigned_cast(exponent)+1 - 18;
-            zeroes_after_dot = 0;
-        } else if(exponent < -1) {
-            digits_before_dot = 0;
-            zeroes_before_dot = 1;
-            zeroes_after_dot = unsigned_cast(-exponent)-1;
-        } else {
-            digits_before_dot = unsigned_cast(exponent+1);
-            // If there are no mantissa digits before the dot, put a filler
-            // zero there so we get "0.1" instead of ".1"
-            zeroes_before_dot = digits_before_dot == 0? 1 : 0;
-            zeroes_after_dot = 0;
-        }
-
-        if(cs.alternative_form) {
-            digits_after_dot = cs.precision - digits_before_dot;
-            dot = true;
-            // TODO
-        } else {
-            // requested_digits_after_dot is always >= 0 since we delegate to
-            // ftoa_base10_exponent otherwise.
-            unsigned requested_digits_after_dot = cs.precision - digits_before_dot;
-            unsigned trailing_zeroes = count_trailing_zeroes_after_dot(mantissa_signed<0, mantissa, exponent);
-            unsigned available_digits_after_dot = 18u - digits_before_dot - trailing_zeroes;
-            digits_after_dot = std::min(available_digits_after_dot, requested_digits_after_dot);
-            dot = digits_after_dot != 0;
-        }
+            return ftoa_base10_f_normal(pbuffer, dv, cs);
     }
-    
-    unsigned content_size = sign + digits_before_dot + zeroes_before_dot + dot + zeroes_after_dot + digits_after_dot;
-    unsigned size = std::max(cs.minimum_field_width, content_size);
-
-    unsigned padding = size - content_size;
-    unsigned pad_zeroes = 0;
-    if(cs.pad_with_zeroes) {
-        pad_zeroes = padding;
-        padding = 0;
-    }
-    
-    // Get rid of digits we don't want in the mantissa.
-    unsigned significant_digits = digits_before_dot + digits_after_dot;
-    mantissa = rounded_rshift(negative, mantissa, 18-significant_digits);
-    
-    char* str = pbuffer->reserve(size);
-    
-    auto pos = size;
-    if(cs.left_justify) {
-        pos -= padding;
-        std::memset(str+pos, ' ', padding);
-    }
-    if(dot) {
-        mantissa = utoa_generic_base10_preallocated(str, pos, mantissa,
-                digits_after_dot);
-        pos -= digits_after_dot;
-        
-        pos -= zeroes_after_dot;
-        std::memset(str+pos, '0', zeroes_after_dot);
-        str[--pos] = '.';
-    }
-    pos -= zeroes_before_dot;
-    std::memset(str+pos, '0', zeroes_before_dot);
-    pos = utoa_generic_base10_preallocated(str, pos, mantissa);
-    pos -= pad_zeroes;
-    std::memset(str+pos, '0', pad_zeroes);
-    if(sign)
-        str[--pos] = negative? '-' : cs.plus_sign;
-
-    if(!cs.left_justify) {
-        pos -= padding;
-        std::memset(str+pos, ' ', padding);
-    }
-    pbuffer->commit(size);
-    assert(pos == 0);
-}
-
-// NEXT the point of this is to get rid of the lengthy implementation of '%g'
-// and simply have one for %e and one of %f. This replaces most of the _prec
-// variant.
-void ftoa_base10_f_normal(output_buffer* pbuffer, bool signbit, std::uint64_t mantissa,
-    int exponent, int precision, conversion_specification const& cs)
-{
-    // [sign] [digits_before_dot] [zeroes_before_dot] [dot] [zeroes_after_dot] [digits_after_dot] [suffix_zeroes]
-    unsigned digits_before_dot;
-    unsigned zeroes_before_dot;
-    unsigned zeroes_after_dot;
-    unsigned digits_after_dot;
-    
-    if(exponent>=17) {
-        // All digits from the mantissa are on the left-hand side of the dot.
-        digits_before_dot = 18;
-        zeroes_before_dot = unsigned_cast(exponent)+1 - 18;
-        zeroes_after_dot = precision;
-        digits_after_dot = 0;
-    } else if(exponent < 0) {
-        // All digits from the mantissa are on the right-hand side of the dot.
-        digits_before_dot = 0;
-        zeroes_before_dot = 1;
-        zeroes_after_dot = std::min(unsigned_cast(-exponent)-1, precision);
-        digits_after_dot = precision - zeroes_after_dot;
-    } else {
-        // There are digits from the mantissa both on the left- and right-hand
-        // sides of the dot.
-        digits_before_dot = unsigned_cast(exponent+1);
-        zeroes_before_dot = 0;
-        zeroes_after_dot = 0;
-        digits_after_dot = std::min(18 - digits_before_dot, precision);
-    }
-    unsigned suffix_zeroes = precision - (zeroes_after_dot + digits_after_dot);
-    
-    bool dot = cs.alternative_form || (zeroes_after_dot != 0);
-
-    // Reduce the mantissa part to the requested number of digits.
-    auto mantissa_digits = digits_before_dot + digits_after_dot;
-    mantissa = rounded_rshift(signbit, mantissa, 18-mantissa_digits);
-    auto order = power_lut[mantissa_digits];
-    bool carry = mantissa >= order;
-    if(carry) {
-        // When reducing the mantissa, rounding caused it to overflow. For
-        // example, when formatting 0.095 with precision=2, we have
-        // zeroes_before_dot=1, zeroes_after_dot=1, mantissa_digits=1 and
-        // suffix_zeroes=0. When trying to reduce the mantissa to 1 digit we
-        // end up not with 9, but with 10 due to rounding. In this case we need
-        // to make room for an extra digit from the mantissa, which we'll take
-        // from the prefix zeroes or by moving the dot forward.
-        if(zeroes_after_dot) {
-            --zeroes_after_dot;
-            ++digits_after_dot;
-        } else {
-            ++digits_before_dot;
-        }
-        ++mantissa_digits;
-    }
-
-    unsigned content_size = signbit + digits_before_dot + zeroes_before_dot
-        + dot + zeroes_after_dot + digits_after_dot + suffix_zeroes;
-    unsigned size = std::max(cs.minimum_field_width, content_size);
-    unsigned padding = size - content_size;
-    if(cs.pad_with_zeroes) {
-        pad_zeroes = padding;
-        padding = 0;
-    }
-
-    char* str = pbuffer->reserve(size);
-    unsigned pos = size;
-    if(cs.left_justify) {
-        pos -= padding;
-        std::memset(str+pos, ' ', padding);
-    }
-
-    if(dot) {
-        mantissa = utoa_generic_base10_preallocated(str, pos, mantissa,
-                digits_after_dot);
-        pos -= digits_after_dot;
-        
-        pos -= zeroes_after_dot;
-        std::memset(str+pos, '0', zeroes_after_dot);
-        str[--pos] = '.';
-    }
-
-    pos -= zeroes_before_dot;
-    std::memset(str+pos, '0', zeroes_before_dot);
-    pos = utoa_generic_base10_preallocated(str, pos, mantissa);
-    pos -= pad_zeroes;
-    std::memset(str+pos, '0', pad_zeroes);
-    if(signbit)
-        str[--pos] = negative? '-' : cs.plus_sign;
-
-    if(!cs.left_justify) {
-        pos -= padding;
-        std::memset(str+pos, ' ', padding);
-    }
-    pbuffer->commit(size);
-    assert(pos == 0);
 }
 
 void ftoa_base10_precision(output_buffer* pbuffer, double value, unsigned precision)
