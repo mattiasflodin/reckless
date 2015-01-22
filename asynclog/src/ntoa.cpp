@@ -363,9 +363,16 @@ inline std::uint_fast64_t u64_rint(Float value)
         return static_cast<std::uint_fast64_t>(std::llrint(value));
 }
 
+struct decimal18
+{
+    bool sign;
+    std::uint64_t mantissa;
+    int exponent;
+};
+
 // TODO some day we should probably use this everywhere instead of descale().
 // It is simpler and more rigorously documented.
-std::int64_t binary64_to_decimal18(double input, int* pexponent)
+decimal18 binary64_to_decimal18(double input, int* pexponent)
 {
     //if(input == 0.0) {
     //    *pexponent = 0;
@@ -423,6 +430,7 @@ std::int64_t binary64_to_decimal18(double input, int* pexponent)
     long double p = powl(10, e10f + 16);
     (void) p;
     m10 = m2*powl(10, e10f + 16);
+    NEXT need unsigned here and return struct instead
     std::int64_t mantissa = std::llrint(m10);
     if(std::abs(mantissa) < 100000000000000000)
         mantissa *= 10;
@@ -795,11 +803,11 @@ void ftoa_base10(output_buffer* pbuffer, double value, conversion_specification 
         int maximum_exponent = cs.precision;
         int exponent;
         auto mantissa_signed = binary64_to_decimal18(value, &exponent);
+        std::
 
         if(exponent < minimum_exponent || exponent > maximum_exponent)
             return ftoa_base10_exponent(pbuffer, mantissa_signed, exponent, cs);
         else
-            NEXT call this properly
             return ftoa_base10_f_normal(pbuffer, signbit, mantissa, 
         
 
