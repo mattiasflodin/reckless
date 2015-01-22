@@ -971,7 +971,7 @@ void ftoa_base10_precision(output_buffer* pbuffer, double value, unsigned precis
         mantissa = unsigned_cast(-mantissa_signed);
     }
     
-    // TODO we should have a symbolic constant for 18 but so far I can't think
+    / TODO we should have a symbolic constant for 18 but so far I can't think
     // of a name that doesn't make the code more confusing (for the record,
     // it's how many digits there are in the mantissa produced by
     // binary64_to_decimal18). DECIMAL_MANTISSA_DIGITS is my best name so far,
