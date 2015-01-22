@@ -372,7 +372,7 @@ struct decimal18
 
 // TODO some day we should probably use this everywhere instead of descale().
 // It is simpler and more rigorously documented.
-decimal18 binary64_to_decimal18(double input, int* pexponent)
+decimal18 binary64_to_decimal18(double input)
 {
     //if(input == 0.0) {
     //    *pexponent = 0;
@@ -430,9 +430,8 @@ decimal18 binary64_to_decimal18(double input, int* pexponent)
     long double p = powl(10, e10f + 16);
     (void) p;
     m10 = m2*powl(10, e10f + 16);
-    NEXT need unsigned here and return struct instead
-    std::int64_t mantissa = std::llrint(m10);
-    if(std::abs(mantissa) < 100000000000000000)
+    std::uint64_t mantissa = static_cast<std::uint64_t>(std::llrint(std::abs(m10)));
+    if(mantissa < 100000000000000000u)
         mantissa *= 10;
     else
         e10i += 1.0L;
@@ -440,8 +439,7 @@ decimal18 binary64_to_decimal18(double input, int* pexponent)
     // adjust again in that case. But try to reproduce this scenario first so
     // we know it's needed.
 
-    *pexponent = static_cast<int>(e10i);
-    return mantissa;
+    return {std::signbit(value), mantissa, static_cast<int>(e10i)};
 }
 
 std::uint64_t const power_lut[] = {
@@ -801,11 +799,9 @@ void ftoa_base10(output_buffer* pbuffer, double value, conversion_specification 
     } else {
         int const minimum_exponent = -4;
         int maximum_exponent = cs.precision;
-        int exponent;
-        auto mantissa_signed = binary64_to_decimal18(value, &exponent);
-        std::
+        decimal18 dv = binary64_to_decimal18(value, &exponent);
 
-        if(exponent < minimum_exponent || exponent > maximum_exponent)
+        if(dv.exponent < minimum_exponent || dv.exponent > maximum_exponent)
             return ftoa_base10_exponent(pbuffer, mantissa_signed, exponent, cs);
         else
             return ftoa_base10_f_normal(pbuffer, signbit, mantissa, 
