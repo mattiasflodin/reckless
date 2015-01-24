@@ -95,11 +95,13 @@ namespace {
     template <typename T>
     char const* generic_format_float(output_buffer* pbuffer, char const* pformat, T v)
     {
+        conversion_specification cs;
+        pformat = parse_conversion_specification(&cs, pformat);
         char f = *pformat;
-        if(f != 'd')
+        if(f != 'f')
             return nullptr;
-
-        ftoa_base10_precision(pbuffer, v, 6u);
+        
+        ftoa_base10_f(pbuffer, v, cs);
         return pformat + 1;
     }
 

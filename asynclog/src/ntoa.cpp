@@ -372,19 +372,15 @@ struct decimal18
 
 // TODO some day we should probably use this everywhere instead of descale().
 // It is simpler and more rigorously documented.
-decimal18 binary64_to_decimal18(double input)
+decimal18 binary64_to_decimal18(double v)
 {
-    //if(input == 0.0) {
-    //    *pexponent = 0;
-    //    return 0;
-    //}
     long double e2;
-    long double m2 = fxtract(static_cast<long double>(input), &e2);
+    long double m2 = fxtract(static_cast<long double>(v), &e2);
 
     // We have
-    //   input = m2 * 2^e2  [1 <= m2 < 2] (1)
+    //   v = m2 * 2^e2  [1 <= m2 < 2] (1)
     // and want a new representation
-    //   input = m10 * 10^e10  [1 <= m10 < 10].
+    //   v = m10 * 10^e10  [1 <= m10 < 10].
     //   
     // (1) can be rewritten as
     //   m2 * 10^(C*e2)  [C = log(2)/log(10)] =
@@ -439,7 +435,7 @@ decimal18 binary64_to_decimal18(double input)
     // adjust again in that case. But try to reproduce this scenario first so
     // we know it's needed.
 
-    return {std::signbit(value), mantissa, static_cast<int>(e10i)};
+    return {std::signbit(v), mantissa, static_cast<int>(e10i)};
 }
 
 std::uint64_t const power_lut[] = {
@@ -668,9 +664,10 @@ void write_inf(output_buffer* pbuffer, double value, conversion_specification co
 // NEXT the point of this is to get rid of the lengthy implementation of '%g'
 // and simply have one for %e and one of %f. This replaces most of the _prec
 // variant.
-void ftoa_base10_f_normal(output_buffer* pbuffer, decimal18 dv, int precision, conversion_specification const& cs)
+void ftoa_base10_f_normal(output_buffer* pbuffer, decimal18 dv, unsigned precision, conversion_specification const& cs)
 {
     // [sign] [digits_before_dot] [zeroes_before_dot] [dot] [zeroes_after_dot] [digits_after_dot] [suffix_zeroes]
+    char sign = dv.sign? '-' : cs.plus_sign;
     unsigned digits_before_dot;
     unsigned zeroes_before_dot;
     unsigned zeroes_after_dot;
@@ -722,10 +719,11 @@ void ftoa_base10_f_normal(output_buffer* pbuffer, decimal18 dv, int precision, c
         ++mantissa_digits;
     }
 
-    unsigned content_size = dv.sign + digits_before_dot + zeroes_before_dot
+    unsigned content_size = !!sign + digits_before_dot + zeroes_before_dot
         + dot + zeroes_after_dot + digits_after_dot + suffix_zeroes;
     unsigned size = std::max(cs.minimum_field_width, content_size);
     unsigned padding = size - content_size;
+    unsigned pad_zeroes = 0;
     if(cs.pad_with_zeroes) {
         pad_zeroes = padding;
         padding = 0;
@@ -753,8 +751,8 @@ void ftoa_base10_f_normal(output_buffer* pbuffer, decimal18 dv, int precision, c
     pos = utoa_generic_base10_preallocated(str, pos, mantissa);
     pos -= pad_zeroes;
     std::memset(str+pos, '0', pad_zeroes);
-    if(dv.sign)
-        str[--pos] = negative? '-' : cs.plus_sign;
+    if(sign)
+        str[--pos] = sign;
 
     if(!cs.left_justify) {
         pos -= padding;
@@ -764,35 +762,25 @@ void ftoa_base10_f_normal(output_buffer* pbuffer, decimal18 dv, int precision, c
     assert(pos == 0);
 }
 
-void ftoa_base10_exponent(output_buffer* pbuffer, decimal18 dv,
-        conversion_specification const& cs)
+void ftoa_base10_e_normal(output_buffer* pbuffer, decimal18 dv,
+        unsigned precision, conversion_specification const& cs)
 {
     // We have either
     // [sign] [digit] [dot] [digits_after_dot] [e] [exponent sign] [exponent_digits] [padding]
     // or
     // [padding] [sign] [zero_padding] [digit] [dot] [digits_after_dot] [e] [exponent sign] [exponent_digits]
     // depending on if it's left-justified or not.
-#if 0
-    bool sign;
-    std::uint64_t mantissa;
-    if(mantissa_signed<0) {
-        mantissa = unsigned_cast(-mantissa_signed);
-        sign = true;
-    } else {
-        mantissa = unsigned_cast(mantissa_signed);
-        sign = cs.plus_sign != 0;
-    }
 
     char exponent_sign;
     unsigned exponent;
-    if(exponent_signed < 0) {
+    if(dv.exponent < 0) {
         exponent_sign = '-';
-        exponent = unsigned_cast(-exponent_signed);
+        exponent = unsigned_cast(-dv.exponent);
     } else {
         exponent_sign = '+';
-        exponent = unsigned_cast(exponent_signed);
+        exponent = unsigned_cast(dv.exponent);
     }
-    unsigned digits_after_dot = cs.precision - 1;
+    unsigned digits_after_dot = precision - 1;
     int dot = digits_after_dot!=0 || cs.alternative_form;
     
     int exponent_digits;
@@ -804,7 +792,8 @@ void ftoa_base10_exponent(output_buffer* pbuffer, decimal18 dv,
     else
         exponent_digits = 3;
 
-    unsigned content_size = sign + 1 + dot + digits_after_dot + 1 + 1 + exponent_digits;
+    char sign = dv.sign? '-' : cs.plus_sign;
+    unsigned content_size = !!sign + 1 + dot + digits_after_dot + 1 + 1 + exponent_digits;
     unsigned size = std::max(cs.minimum_field_width, content_size);
     unsigned padding = size - content_size;
     unsigned pad_zeroes = 0;
@@ -814,7 +803,7 @@ void ftoa_base10_exponent(output_buffer* pbuffer, decimal18 dv,
     }
     
     // Get rid of digits we don't want in the mantissa.
-    mantissa = rounded_rshift(mantissa_signed<0, mantissa, 18-cs.precision);
+    std::uint64_t mantissa = rounded_rshift(dv.sign, dv.mantissa, 18-precision);
     
     char* str = pbuffer->reserve(size);
 
@@ -840,14 +829,27 @@ void ftoa_base10_exponent(output_buffer* pbuffer, decimal18 dv,
     pos -= pad_zeroes;
     std::memset(str+pos, '0', pad_zeroes);
     if(sign)
-        str[0] = mantissa_signed<0? '-' : cs.plus_sign;
+        str[0] = sign;
     
     if(!cs.left_justify) {
         pos -= padding;
         std::memset(str+pos, ' ', padding);
     }
     pbuffer->commit(size);
-#endif
+}
+
+void ftoa_base10_f(output_buffer* pbuffer, double value, conversion_specification const& cs)
+{
+    auto category = std::fpclassify(value);
+    if(category == FP_NAN) {
+        return write_nan(pbuffer, value, cs);
+    } else if(category == FP_INFINITE) {
+        return write_inf(pbuffer, value, cs);
+    } else {
+        decimal18 dv = binary64_to_decimal18(value);
+        int p = cs.precision == UNSPECIFIED_PRECISION? 6 : cs.precision;
+        return ftoa_base10_f_normal(pbuffer, dv, p, cs);
+    }
 }
 
 // Corresponds to %g.
@@ -860,7 +862,7 @@ void ftoa_base10_exponent(output_buffer* pbuffer, decimal18 dv,
 // unless alternative mode is requested. Alternative mode also means that the
 // period stays, no matter if there are any fractional decimals remaining or
 // not.
-void ftoa_base10(output_buffer* pbuffer, double value, conversion_specification const& cs)
+void ftoa_base10_g(output_buffer* pbuffer, double value, conversion_specification const& cs)
 {
     // We have either
     // [sign] [digits_before_dot] [zeroes_before_dot] [dot] [zeroes_after_dot] [digits_after_dot] [padding]
@@ -882,15 +884,6 @@ void ftoa_base10(output_buffer* pbuffer, double value, conversion_specification 
     // output"). So we can't use the normal path for zeroes. Instead, we encode
     // the zero digit in the [zeroes_before_dot] component .
     
-    std::uint64_t mantissa;
-    bool negative = std::signbit(value);
-    unsigned digits_before_dot;
-    unsigned zeroes_before_dot;
-    bool dot;
-    unsigned zeroes_after_dot;
-    unsigned digits_after_dot;
-    bool sign = (negative || cs.plus_sign != 0);
-
     auto category = std::fpclassify(value);
     if(category == FP_NAN) {
         return write_nan(pbuffer, value, cs);
@@ -899,19 +892,27 @@ void ftoa_base10(output_buffer* pbuffer, double value, conversion_specification 
     } else {
         int const minimum_exponent = -4;
         int maximum_exponent = cs.precision;
-        decimal18 dv = binary64_to_decimal18(value, &exponent);
+        decimal18 dv = binary64_to_decimal18(value);
 
-        if(dv.exponent < minimum_exponent || dv.exponent > maximum_exponent)
-            return ftoa_base10_exponent(pbuffer, dv, cs);
+        int p;
+        if(cs.precision == UNSPECIFIED_PRECISION)
+            p = 6;
+        else if(cs.precision == 0)
+            p = 1;
         else
-            return ftoa_base10_f_normal(pbuffer, dv, cs);
+            p = cs.precision;
+        if(dv.exponent < minimum_exponent || dv.exponent > maximum_exponent)
+            return ftoa_base10_e_normal(pbuffer, dv, p - 1, cs);
+        else
+            return ftoa_base10_f_normal(pbuffer, dv, p - 1 - dv.exponent, cs);
     }
 }
 
+#if 0
 void ftoa_base10_precision(output_buffer* pbuffer, double value, unsigned precision)
 {
     int exponent;
-    auto mantissa_signed = binary64_to_decimal18(value, &exponent);
+    auto mantissa_signed = binary64_to_decimal18(value);
     std::uint64_t mantissa;
     if(mantissa_signed>=0) {
         mantissa = unsigned_cast(mantissa_signed);
@@ -1015,6 +1016,7 @@ void ftoa_base10_precision(output_buffer* pbuffer, double value, unsigned precis
     assert(pos == 0);
     pbuffer->commit(size);
 }
+#endif
 
 }   // namespace asynclog
 
@@ -1412,7 +1414,7 @@ private:
     std::string convert(double number, conversion_specification const& cs)
     {
         writer_.reset();
-        asynclog::ftoa_base10(&output_buffer_, number, cs);
+        asynclog::ftoa_base10_g(&output_buffer_, number, cs);
         output_buffer_.flush();
         return writer_.str();
     }
@@ -1493,20 +1495,27 @@ public:
 
     void padding()
     {
-        conversion_specification cs;
-        cs.left_justify = false;
-        cs.alternative_form = false;
-        cs.pad_with_zeroes = true;
-        cs.plus_sign = 0;
-        cs.minimum_field_width = 5;
-        cs.precision = 3;
-        TEST(convert(0.3, 
+        //conversion_specification cs;
+        //cs.left_justify = false;
+        //cs.alternative_form = false;
+        //cs.pad_with_zeroes = true;
+        //cs.plus_sign = 0;
+        //cs.minimum_field_width = 5;
+        //cs.precision = 3;
+        //TEST(convert(0.3, 
     }
 
     std::string convert(double number, unsigned precision)
     {
         writer_.reset();
-        asynclog::ftoa_base10_precision(&output_buffer_, number, precision);
+        conversion_specification cs;
+        cs.left_justify = false;
+        cs.alternative_form = false;
+        cs.pad_with_zeroes = false;
+        cs.plus_sign = 0;
+        cs.minimum_field_width = 0;
+        cs.precision = precision;
+        asynclog::ftoa_base10_f(&output_buffer_, number, cs);
         output_buffer_.flush();
         //std::cout << '[' << writer_.str() << ']' << std::endl;
         return writer_.str();
@@ -1517,7 +1526,7 @@ public:
 };
 
 unit_test::suite<ftoa_base10_precision> ftoa_base10_precision_tests = {
-    TESTCASE(ftoa_base10_precision::precision),
+    TESTCASE(ftoa_base10_precision::normal),
 };
 
 }   // namespace detail
