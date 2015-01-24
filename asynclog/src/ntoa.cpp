@@ -695,7 +695,8 @@ void ftoa_base10_f_normal(output_buffer* pbuffer, decimal18 dv, unsigned precisi
     }
     unsigned suffix_zeroes = precision - (zeroes_after_dot + digits_after_dot);
     
-    bool dot = cs.alternative_form || (zeroes_after_dot != 0);
+    bool dot = cs.alternative_form
+        || (zeroes_after_dot + digits_after_dot + suffix_zeroes != 0);
 
     // Reduce the mantissa part to the requested number of digits.
     auto mantissa_digits = digits_before_dot + digits_after_dot;
@@ -1419,7 +1420,7 @@ private:
         return writer_.str();
     }
     
-    std::string convert(double number, int significant_digits=17)
+    std::string convert(double number, int significant_digits=18)
     {
         conversion_specification cs;
         cs.left_justify = false;
