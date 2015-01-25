@@ -374,6 +374,9 @@ struct decimal18
 // It is simpler and more rigorously documented.
 decimal18 binary64_to_decimal18(double v)
 {
+    if(v == 0)
+        return {std::signbit(v), 0, 0};
+    
     long double e2;
     long double m2 = fxtract(static_cast<long double>(v), &e2);
 
@@ -688,10 +691,20 @@ void ftoa_base10_f_normal(output_buffer* pbuffer, decimal18 dv, unsigned precisi
     } else {
         // There are digits from the mantissa both on the left- and right-hand
         // sides of the dot.
-        digits_before_dot = unsigned_cast(dv.exponent+1);
-        zeroes_before_dot = 0;
-        zeroes_after_dot = 0;
-        digits_after_dot = std::min(18 - digits_before_dot, precision);
+        if(dv.mantissa == 0) {
+            // Special case for +-0: utoa_generic_base10_preallocated does not
+            // output any digits for a zero value, so we need to fake it in by
+            // using zeroes_before_dot instead.
+            digits_before_dot = 0;
+            zeroes_before_dot = 0;
+            zeroes_after_dot = 1;
+            digits_after_dot = 0;
+        } else {
+            digits_before_dot = unsigned_cast(dv.exponent+1);
+            zeroes_before_dot = 0;
+            zeroes_after_dot = 0;
+            digits_after_dot = std::min(18 - digits_before_dot, precision);
+        }
     }
     unsigned suffix_zeroes = precision - (zeroes_after_dot + digits_after_dot);
     
@@ -1275,6 +1288,7 @@ public:
 
     void fractional()
     {
+        // TODO test zero with precision>0 etc
         TEST_FTOA(0.1);
         TEST_FTOA(0.01);
         TEST_FTOA(0.001);
