@@ -783,7 +783,7 @@ void ftoa_base10_e_normal(output_buffer* pbuffer, decimal18 dv,
         exponent_sign = '+';
         exponent = unsigned_cast(dv.exponent);
     }
-    unsigned digits_after_dot = precision - 1;
+    unsigned digits_after_dot = precision;
     int dot = digits_after_dot!=0 || cs.alternative_form;
     
     int exponent_digits;
@@ -806,7 +806,8 @@ void ftoa_base10_e_normal(output_buffer* pbuffer, decimal18 dv,
     }
     
     // Get rid of digits we don't want in the mantissa.
-    std::uint64_t mantissa = rounded_rshift(dv.sign, dv.mantissa, 18-precision);
+    std::uint64_t mantissa = rounded_rshift(dv.sign, dv.mantissa,
+            18-(digits_after_dot+1));
     
     char* str = pbuffer->reserve(size);
 
