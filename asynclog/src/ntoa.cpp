@@ -598,13 +598,13 @@ void itoa_base16(output_buffer* pbuffer, long value, bool uppercase, char const*
     itoa_generic_base16(pbuffer, value, uppercase, prefix);
 }
 
-unsigned count_trailing_zeroes_after_dot(bool sign, std::uint64_t mantissa, int exponent)
+unsigned count_trailing_zeroes_after_dot(decimal18 const& dv)
 {
     // We need to get rid of the least significant digit because a double can't
     // always represent a zero digit at that position.
     // (e.g. 123.456 becomes 123.456000000000003).
-    mantissa = rounded_divide(sign, mantissa, 10);
-    unsigned digits_before_dot = unsigned_cast(std::max(0, exponent+1));
+    std::uint64_t mantissa = rounded_divide(dv.sign, dv.mantissa, 10);
+    unsigned digits_before_dot = unsigned_cast(std::max(0, dv.exponent+1));
     if(digits_before_dot>17) {
         // All significant digits are in front of the dots. No trailing zeroes
         return 0;
@@ -738,6 +738,8 @@ void ftoa_base10_f_normal(output_buffer* pbuffer, decimal18 dv, unsigned precisi
     }
 
     if(dot) {
+        std::memset(str+pos, '0', suffix_zeroes);
+        pos -= suffix_zeroes;
         mantissa = utoa_generic_base10_preallocated(str, pos, mantissa,
                 digits_after_dot);
         pos -= digits_after_dot;
@@ -904,8 +906,13 @@ void ftoa_base10_g(output_buffer* pbuffer, double value, conversion_specificatio
             p = cs.precision;
         if(dv.exponent < minimum_exponent || dv.exponent > maximum_exponent)
             return ftoa_base10_e_normal(pbuffer, dv, p - 1, cs);
-        else
-            return ftoa_base10_f_normal(pbuffer, dv, p - 1 - dv.exponent, cs);
+        else {
+            unsigned trailing_zeroes = 0;
+            if(!cs.alternative_form)
+                trailing_zeroes = count_trailing_zeroes_after_dot(dv);
+            return ftoa_base10_f_normal(pbuffer, dv,
+                    p - 1 - dv.exponent - trailing_zeroes, cs);
+        }
     }
 }
 
