@@ -684,10 +684,12 @@ void ftoa_base10_f_normal(output_buffer* pbuffer, decimal18 dv, unsigned precisi
         digits_after_dot = 0;
     } else if(dv.exponent < 0) {
         // All digits from the mantissa are on the right-hand side of the dot.
+        // We set zeroes_before_dot=1 to generate a zero on the left-hand side,
+        // since this is what people expect and it's what stdio does.
         digits_before_dot = 0;
         zeroes_before_dot = 1;
         zeroes_after_dot = std::min(unsigned_cast(-dv.exponent)-1, precision);
-        digits_after_dot = precision - zeroes_after_dot;
+        digits_after_dot = std::min(18u, precision - zeroes_after_dot);
     } else {
         // There are digits from the mantissa both on the left- and right-hand
         // sides of the dot.
@@ -724,11 +726,21 @@ void ftoa_base10_f_normal(output_buffer* pbuffer, decimal18 dv, unsigned precisi
         // end up not with 9, but with 10 due to rounding. In this case we need
         // to make room for an extra digit from the mantissa, which we'll take
         // from the prefix zeroes or by moving the dot forward.
+        // 
+        // Logically this can only happen if there are actual digits from the
+        // mantissa on the right-hand side of the dot. If all the digits are on
+        // the left-hand side then no reduction will take place, because only
+        // the number of fractional digits are user-controllable. So, if
+        // zeroes_before_dot is nonzero then that's only to generate a filler
+        // zero (see if clause hen dv.exponent < 0). If the overflow now
+        // produces a digit on the left-hand side of the dot then we must
+        // cancel out that zero by setting zeroes_before_dot=0.
         if(zeroes_after_dot) {
             --zeroes_after_dot;
             ++digits_after_dot;
         } else {
             ++digits_before_dot;
+            zeroes_before_dot = 0;
         }
         ++mantissa_digits;
     }
@@ -751,8 +763,8 @@ void ftoa_base10_f_normal(output_buffer* pbuffer, decimal18 dv, unsigned precisi
     }
 
     if(dot) {
-        std::memset(str+pos, '0', suffix_zeroes);
         pos -= suffix_zeroes;
+        std::memset(str+pos, '0', suffix_zeroes);
         mantissa = utoa_generic_base10_preallocated(str, pos, mantissa,
                 digits_after_dot);
         pos -= digits_after_dot;
