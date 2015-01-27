@@ -696,8 +696,8 @@ void ftoa_base10_f_normal(output_buffer* pbuffer, decimal18 dv, unsigned precisi
             // output any digits for a zero value, so we need to fake it in by
             // using zeroes_before_dot instead.
             digits_before_dot = 0;
-            zeroes_before_dot = 0;
-            zeroes_after_dot = 1;
+            zeroes_before_dot = 1;
+            zeroes_after_dot = 0;
             digits_after_dot = 0;
         } else {
             digits_before_dot = unsigned_cast(dv.exponent+1);
