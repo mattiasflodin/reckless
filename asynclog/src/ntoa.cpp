@@ -732,8 +732,8 @@ void ftoa_base10_f_normal(output_buffer* pbuffer, decimal18 dv, unsigned precisi
         // the left-hand side then no reduction will take place, because only
         // the number of fractional digits are user-controllable. So, if
         // zeroes_before_dot is nonzero then that's only to generate a filler
-        // zero (see if clause hen dv.exponent < 0). If the overflow now
-        // produces a digit on the left-hand side of the dot then we must
+        // zero (see if clause above where dv.exponent < 0). If the overflow
+        // now produces a digit on the left-hand side of the dot then we must
         // cancel out that zero by setting zeroes_before_dot=0.
         if(zeroes_after_dot) {
             --zeroes_after_dot;
