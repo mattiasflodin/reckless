@@ -920,7 +920,6 @@ void ftoa_base10_g(output_buffer* pbuffer, double value, conversion_specificatio
         return write_inf(pbuffer, value, cs);
     } else {
         int const minimum_exponent = -4;
-        int maximum_exponent = cs.precision;
         decimal18 dv = binary64_to_decimal18(value);
 
         int p;
@@ -930,14 +929,21 @@ void ftoa_base10_g(output_buffer* pbuffer, double value, conversion_specificatio
             p = 1;
         else
             p = cs.precision;
-        if(dv.exponent < minimum_exponent || dv.exponent > maximum_exponent)
-            return ftoa_base10_e_normal(pbuffer, dv, p - 1, cs);
-        else {
+        if(p > dv.exponent && dv.exponent >= minimum_exponent) {
             unsigned trailing_zeroes = 0;
             if(!cs.alternative_form)
                 trailing_zeroes = count_trailing_zeroes_after_dot(dv);
-            return ftoa_base10_f_normal(pbuffer, dv,
-                    p - 1 - dv.exponent - trailing_zeroes, cs);
+            p = p - 1 - dv.exponent - trailing_zeroes;
+            p = std::max(0, p);
+            return ftoa_base10_f_normal(pbuffer, dv, p, cs);
+        } else {
+            // TODO need to limit number of trailing zeroes here too, right?
+            
+            unsigned trailing_zeroes = 0;
+            if(!cs.alternative_form)
+                trailing_zeroes = count_trailing_zeroes_after_dot(dv);
+            p = p - 1 - trailing_zeroes;
+            return ftoa_base10_e_normal(pbuffer, dv, p - 1, cs);
         }
     }
 }
@@ -1387,7 +1393,7 @@ public:
         TEST(convert(0, cs) == "00000");
         TEST(convert(1, cs) == "00001");
         TEST(convert(999, cs) == "00999");
-        TEST(convert(1000, cs) == "01000");
+        TEST(convert(1000, cs) == "1e+03");
         TEST(convert(0.01, cs) == "00.01");
     }
 
