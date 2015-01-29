@@ -601,6 +601,29 @@ void itoa_base16(output_buffer* pbuffer, long value, bool uppercase, char const*
     itoa_generic_base16(pbuffer, value, uppercase, prefix);
 }
 
+unsigned count_trailing_zeroes(decimal18 const& dv)
+{
+    // We need to get rid of the least significant digit because a double can't
+    // always represent a zero digit at that position.
+    // (e.g. 123.456 becomes 123.456000000000003).
+    std::uint64_t mantissa = rounded_divide(dv.sign, dv.mantissa, 10);
+    unsigned low = 0;
+    unsigned high = 18u;
+    // Find the lowest x such that mantissa % 10^x != 0.
+    // Then the number of trailing zeroes is x-1.
+    while(low < high) {
+        unsigned pos = (low + high)/2;
+        if(mantissa % power_lut[pos] == 0)
+            low = pos + 1;
+        else
+            high = pos;
+    }
+
+    // +1 because we always treat the least significant digit (that we stripped
+    // at function entry) as if it were zero.
+    return low-1 + 1;
+}
+
 unsigned count_trailing_zeroes_after_dot(decimal18 const& dv)
 {
     // We need to get rid of the least significant digit because a double can't
@@ -927,23 +950,40 @@ void ftoa_base10_g(output_buffer* pbuffer, double value, conversion_specificatio
             p = 6;
         else if(cs.precision == 0)
             p = 1;
-        else
+        else {
             p = cs.precision;
+            if(!cs.alternative_form) {
+                // We are supposed to remove trailing zeroes, so we can't ever
+                // get more than 18 digits because the rest will be zero
+                // anyway, as this is the number of digits in the mantissa.
+                p = std::min(p, 18);
+            }
+        }
+        unsigned truncated_digits = 18 - p;
+        
         if(p > dv.exponent && dv.exponent >= minimum_exponent) {
             unsigned trailing_zeroes = 0;
-            if(!cs.alternative_form)
+            if(!cs.alternative_form) {
                 trailing_zeroes = count_trailing_zeroes_after_dot(dv);
+                if(trailing_zeroes > truncated_digits)
+                    trailing_zeroes -= truncated_digits;
+                else
+                    trailing_zeroes = 0;
+            }
             p = p - 1 - dv.exponent - trailing_zeroes;
             p = std::max(0, p);
             return ftoa_base10_f_normal(pbuffer, dv, p, cs);
         } else {
-            // TODO need to limit number of trailing zeroes here too, right?
-            
             unsigned trailing_zeroes = 0;
-            if(!cs.alternative_form)
-                trailing_zeroes = count_trailing_zeroes_after_dot(dv);
+            if(!cs.alternative_form) {
+                trailing_zeroes = count_trailing_zeroes(dv);
+                if(trailing_zeroes > truncated_digits)
+                    trailing_zeroes -= truncated_digits;
+                else
+                    trailing_zeroes = 0;
+            }
             p = p - 1 - trailing_zeroes;
-            return ftoa_base10_e_normal(pbuffer, dv, p - 1, cs);
+            return ftoa_base10_e_normal(pbuffer, dv, p, cs);
         }
     }
 }
