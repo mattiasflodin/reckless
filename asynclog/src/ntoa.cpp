@@ -2,27 +2,15 @@
 
 #include "asynclog/detail/utility.hpp"
 
+#include <algorithm>    // max, min
 #include <type_traits>  // is_unsigned
 #include <cassert>
 #include <cstring>      // memset
 #include <cmath>        // lrint, llrint
-#include <iomanip>
 
 namespace asynclog {
 namespace {
-
-template <typename T>
-typename std::make_unsigned<T>::type unsigned_cast(T v)
-{
-    return static_cast<typename std::make_unsigned<T>::type>(v);
-}
-
-template <typename T>
-typename std::make_signed<T>::type signed_cast(T v)
-{
-    return static_cast<typename std::make_signed<T>::type>(v);
-}
-
+    
 char const decimal_digits[] =
     "00010203040506070809"
     "10111213141516171819"
@@ -35,10 +23,42 @@ char const decimal_digits[] =
     "80818283848586878889"
     "90919293949596979899";
 
+std::uint64_t const power_lut[] = {
+    1,  // 0
+    10,  // 1
+    100,  // 2
+    1000,  // 3
+    10000,  // 4
+    100000,  // 5
+    1000000,  // 6
+    10000000,  // 7
+    100000000,  // 8
+    1000000000,  // 9
+    10000000000,  // 10
+    100000000000,  // 11
+    1000000000000,  // 12
+    10000000000000,  // 13
+    100000000000000,  // 14
+    1000000000000000,  // 15
+    10000000000000000,  // 16
+    100000000000000000,  // 17
+    1000000000000000000   // 18
+};
+
+
+template <typename T>
+typename std::make_unsigned<T>::type unsigned_cast(T v)
+{
+    return static_cast<typename std::make_unsigned<T>::type>(v);
+}
 
 void prefetch_digits()
 {
     detail::prefetch(decimal_digits, sizeof(decimal_digits));
+}
+void prefetch_power_lut()
+{
+    detail::prefetch(power_lut, sizeof(power_lut));
 }
 
 template <typename Unsigned>
@@ -110,7 +130,6 @@ utoa_generic_base16_preallocated(char* str, unsigned pos, Unsigned value)
     }
     return pos;   
 }
-
 
 unsigned log2(std::uint32_t v)
 {
@@ -294,7 +313,6 @@ itoa_generic_base16(output_buffer* pbuffer, Unsigned value, bool uppercase, char
         pbuffer->commit(len);
     }
             
-    value = 0x186a200;
     unsigned size = log16(value);
     char* str = pbuffer->reserve(size);
     if(uppercase)
@@ -325,32 +343,11 @@ itoa_generic_base16(output_buffer* pbuffer, Signed value, bool uppercase, char c
     }
 }
 
-// TODO this should probably be removed in favor of fxtract. When we replace
-// descale with binary64_to_decimal18 we won't need naive_ilogb anymore.
-int naive_ilogb(double v)
-{
-    std::uint16_t const* pv = reinterpret_cast<std::uint16_t const*>(&v);
-    // Highest 16 bits is seeeeeee eeeemmmm. We want the e part which is the
-    // exponent.
-    unsigned exponent = pv[3];
-    exponent = (exponent >> 4) & 0x7ff;
-    return static_cast<int>(exponent) - 1023;
-}
-
 template <typename Float>
 Float fxtract(Float v, Float* exp)
 {
     Float significand;
     asm("fxtract" : "=t"(significand), "=u"(*exp) : "0"(v));
-    return significand;
-}
-
-template <typename Float>
-Float fxtract(Float v, int* exp)
-{
-    Float exponent;
-    Float significand = fxtract(v, &exponent);
-    *exp = static_cast<int>(exponent);
     return significand;
 }
 
@@ -441,28 +438,6 @@ decimal18 binary64_to_decimal18(double v)
     return {std::signbit(v), mantissa, static_cast<int>(e10i)};
 }
 
-std::uint64_t const power_lut[] = {
-    1,  // 0
-    10,  // 1
-    100,  // 2
-    1000,  // 3
-    10000,  // 4
-    100000,  // 5
-    1000000,  // 6
-    10000000,  // 7
-    100000000,  // 8
-    1000000000,  // 9
-    10000000000,  // 10
-    100000000000,  // 11
-    1000000000000,  // 12
-    10000000000000,  // 13
-    100000000000000,  // 14
-    1000000000000000,  // 15
-    10000000000000000,  // 16
-    100000000000000000,  // 17
-    1000000000000000000   // 18
-};
-
 std::uint64_t rounded_divide(bool sign, std::uint64_t value, std::uint64_t divisor)
 {
     if(!sign) {
@@ -479,126 +454,6 @@ std::uint64_t rounded_divide(bool sign, std::uint64_t value, std::uint64_t divis
 std::uint64_t rounded_rshift(bool sign, std::uint64_t value, unsigned digits)
 {
     return rounded_divide(sign, value, power_lut[digits]);
-}
-
-
-int descale_normal(long double value, int e2, unsigned significant_digits, std::uint_fast64_t& ivalue)
-{
-    static long double const C = 0.3010299956639811952137388947244L; // log(2)/log(10)
-    int e10;
-    // 1.0*2^-10
-    // 1.9999*2^-10 ~= 2*2^-10 = 1.0*2^-9
-    // Increasing x means increasing exponent.
-    //
-    // x=9.0256105364686323*10^-285
-    // log2(x) = 943.58...
-    // mantissa = 1.3421..., exponent = -944
-    // Increasing mantissa eventually leads to higher value for e10.
-    // e10 = -944*log(2)/log(10) = -284.17...
-    // e10 = -945*log(2)/log(10) = -284.47...
-    // We need to truncate -284.47 downwards, to 285. But cast to int truncates
-    // upwards.
-    e2 -= 1;
-    if(e2 < 0)
-        e10 = static_cast<int>(C*e2) - 1;
-    else
-        e10 = static_cast<int>(C*e2);
-    int shift = -e10 + static_cast<int>(significant_digits - 1);
-    long double descaled = value;
-    long double factor = powl(10.0L, shift);
-    descaled *= factor;
-
-    ivalue = u64_rint(descaled);
-
-    auto power = power_lut[significant_digits];
-    while(ivalue >= power)
-    {
-        descaled /= 10.0;
-        ivalue = u64_rint(descaled);
-        e10 += 1;
-    }
-    assert(ivalue >= power/10 && ivalue < power);
-    return static_cast<int>(e10);
-}
-
-int descale_subnormal(double value, unsigned significant_digits, std::uint_fast64_t& ivalue)
-{
-    std::uint64_t const* pv = reinterpret_cast<std::uint64_t const*>(&value);
-    // seeeeeee eeeemmmm mmmmmmmm mmmmmmmm mmmmmmmm mmmmmmmm mmmmmmmm mmmmmmmm
-    std::uint64_t m = *pv & 0xfffffffffffff;
-    long double x = m;
-    x *= (2.2250738585072013831L / 0x10000000000000); // 2^(1-1023)
-    int e2;
-    fxtract(x, &e2);
-    return -308 + descale_normal(x, e2, significant_digits, ivalue);
-}
-
-int descale(double value, unsigned significant_digits, std::uint_fast64_t& ivalue)
-{
-    if(value == 0.0) {
-        ivalue = 0;
-        return 0;
-    }
-
-    auto e2 = naive_ilogb(value);
-    if(e2 == -1023)
-        return descale_subnormal(value, significant_digits, ivalue);
-    else
-        return descale_normal(value, e2, significant_digits, ivalue);
-}
-
-unsigned zero_digits(char* s, unsigned pos, unsigned count)
-{
-    unsigned start = pos-count;
-    while(count != 0)
-    {
-        --count;
-        s[start+count] = '0';
-    }
-    return start;
-}
-
-}   // anonymous namespace
-
-// TODO define these for more integer sizes
-void itoa_base10(output_buffer* pbuffer, int value, conversion_specification const& cs)
-{
-    itoa_generic_base10(pbuffer, value, cs);
-}
-
-void itoa_base10(output_buffer* pbuffer, unsigned int value, conversion_specification const& cs)
-{
-    itoa_generic_base10(pbuffer, value, cs);
-}
-
-void itoa_base10(output_buffer* pbuffer, long value, conversion_specification const& cs)
-{
-    itoa_generic_base10(pbuffer, value, cs);
-}
-
-void itoa_base10(output_buffer* pbuffer, unsigned long value, conversion_specification const& cs)
-{
-    itoa_generic_base10(pbuffer, value, cs);
-}
-
-void itoa_base10(output_buffer* pbuffer, long long value, conversion_specification const& cs)
-{
-    itoa_generic_base10(pbuffer, value, cs);
-}
-
-void itoa_base10(output_buffer* pbuffer, unsigned long long value, conversion_specification const& cs)
-{
-    itoa_generic_base10(pbuffer, value, cs);
-}
-
-void itoa_base16(output_buffer* pbuffer, unsigned long value, bool uppercase, char const* prefix)
-{
-    itoa_generic_base16(pbuffer, value, uppercase, prefix);
-}
-
-void itoa_base16(output_buffer* pbuffer, long value, bool uppercase, char const* prefix)
-{
-    itoa_generic_base16(pbuffer, value, uppercase, prefix);
 }
 
 unsigned count_trailing_zeroes(decimal18 const& dv, std::uint64_t truncated_digits)
@@ -682,9 +537,6 @@ void write_inf(output_buffer* pbuffer, double value, conversion_specification co
     return write_special_category(pbuffer, value, cs, "inf");
 }
 
-// NEXT the point of this is to get rid of the lengthy implementation of '%g'
-// and simply have one for %e and one of %f. This replaces most of the _prec
-// variant.
 void ftoa_base10_f_normal(output_buffer* pbuffer, decimal18 dv, unsigned precision, conversion_specification const& cs)
 {
     // [sign] [digits_before_dot] [zeroes_before_dot] [dot] [zeroes_after_dot] [digits_after_dot] [suffix_zeroes]
@@ -812,7 +664,7 @@ void ftoa_base10_e_normal(output_buffer* pbuffer, decimal18 dv,
         unsigned precision, conversion_specification const& cs)
 {
     // We have either
-    // [sign] [digit] [dot] [digits_after_dot] [e] [exponent sign] [exponent_digits] [padding]
+    // [sign] [digit] [dot] [digits_after_dot] [e] [exponent sign] [exponent_digits]
     // or
     // [padding] [sign] [zero_padding] [digit] [dot] [digits_after_dot] [e] [exponent sign] [exponent_digits]
     // depending on if it's left-justified or not.
@@ -885,8 +737,53 @@ void ftoa_base10_e_normal(output_buffer* pbuffer, decimal18 dv,
     pbuffer->commit(size);
 }
 
+}   // anonymous namespace
+
+// TODO define these for more integer sizes
+void itoa_base10(output_buffer* pbuffer, int value, conversion_specification const& cs)
+{
+    itoa_generic_base10(pbuffer, value, cs);
+}
+
+void itoa_base10(output_buffer* pbuffer, unsigned int value, conversion_specification const& cs)
+{
+    itoa_generic_base10(pbuffer, value, cs);
+}
+
+void itoa_base10(output_buffer* pbuffer, long value, conversion_specification const& cs)
+{
+    itoa_generic_base10(pbuffer, value, cs);
+}
+
+void itoa_base10(output_buffer* pbuffer, unsigned long value, conversion_specification const& cs)
+{
+    itoa_generic_base10(pbuffer, value, cs);
+}
+
+void itoa_base10(output_buffer* pbuffer, long long value, conversion_specification const& cs)
+{
+    itoa_generic_base10(pbuffer, value, cs);
+}
+
+void itoa_base10(output_buffer* pbuffer, unsigned long long value, conversion_specification const& cs)
+{
+    itoa_generic_base10(pbuffer, value, cs);
+}
+
+void itoa_base16(output_buffer* pbuffer, unsigned long value, bool uppercase, char const* prefix)
+{
+    itoa_generic_base16(pbuffer, value, uppercase, prefix);
+}
+
+void itoa_base16(output_buffer* pbuffer, long value, bool uppercase, char const* prefix)
+{
+    itoa_generic_base16(pbuffer, value, uppercase, prefix);
+}
+
 void ftoa_base10_f(output_buffer* pbuffer, double value, conversion_specification const& cs)
 {
+    prefetch_digits();
+    prefetch_power_lut();
     auto category = std::fpclassify(value);
     if(category == FP_NAN) {
         return write_nan(pbuffer, value, cs);
@@ -899,38 +796,20 @@ void ftoa_base10_f(output_buffer* pbuffer, double value, conversion_specificatio
     }
 }
 
-// Corresponds to %g.
-// The idea of %g is that the precision says how many significant digits we
-// want in the string representation. If the number of significant digits is
-// not enough to represent all the digits up to the dot (i.e. it is higher than
-// the number's exponent), then %e notation is used instead.
-// 
-// If there are trailing zeroes in the fraction then those will be removed,
-// unless alternative mode is requested. Alternative mode also means that the
-// period stays, no matter if there are any fractional decimals remaining or
-// not.
 void ftoa_base10_g(output_buffer* pbuffer, double value, conversion_specification const& cs)
 {
-    // We have either
-    // [sign] [digits_before_dot] [zeroes_before_dot] [dot] [zeroes_after_dot] [digits_after_dot] [padding]
-    // or
-    // [padding] [sign] [pad_zeroes] [digits_before_dot] [zeroes_before_dot] [dot] [zeroes_after_dot] [digits_after_dot]
-    // depending on if it's left-justified or not.
+    // The idea of %g is that the precision says how many significant digits we
+    // want in the string representation. If the number of significant digits is
+    // not enough to represent all the digits up to the dot (i.e. it is higher than
+    // the number's exponent), then %e notation is used instead.
     // 
-    // zeroes_before_dot is used for filler zeroes when the number's magnitude
-    // is larger than the number of available digits in the mantissa.
-    // zeroes_after_dot is used when the number's magnitude is less than -1
-    // (such as for 0.01). If zeroes_before_dot is nonzero then both
-    // zeroes_after_dot and digits_after_dot are zero. Conversely, if
-    // zeroes_after_dot is nonzero then digits_before_dot and zeroes_before_dot
-    // will both be zero.
-    //
-    // If value == 0 then binary64_to_decimal18 generates an infinite exponent,
-    // and utoa_generic_base10_preallocated will not generate any digits at all
-    // for a zero mantissa (it considers this a state of "nothing more to
-    // output"). So we can't use the normal path for zeroes. Instead, we encode
-    // the zero digit in the [zeroes_before_dot] component .
-    
+    // A special feature of %g which is not present in %e and %f is that if there
+    // are trailing zeroes in the fraction then those will be removed, unless
+    // alternative mode is requested. Alternative mode also means that the period
+    // stays, no matter if there are any fractional decimals remaining or
+    // not.
+    prefetch_digits();
+    prefetch_power_lut();
     auto category = std::fpclassify(value);
     if(category == FP_NAN) {
         return write_nan(pbuffer, value, cs);
@@ -977,116 +856,6 @@ void ftoa_base10_g(output_buffer* pbuffer, double value, conversion_specificatio
         }
     }
 }
-
-#if 0
-void ftoa_base10_precision(output_buffer* pbuffer, double value, unsigned precision)
-{
-    int exponent;
-    auto mantissa_signed = binary64_to_decimal18(value);
-    std::uint64_t mantissa;
-    if(mantissa_signed>=0) {
-        mantissa = unsigned_cast(mantissa_signed);
-    } else {
-        char* s = pbuffer->reserve(1);
-        *s = '-';
-        pbuffer->commit(1);
-        mantissa = unsigned_cast(-mantissa_signed);
-    }
-    
-    // TODO we should have a symbolic constant for 18 but so far I can't think
-    // of a name that doesn't make the code more confusing (for the record,
-    // it's how many digits there are in the mantissa produced by
-    // binary64_to_decimal18). DECIMAL_MANTISSA_DIGITS is my best name so far,
-    // but in the same code block we deal with the count of requested mantissa
-    // digits in the output string representation, and it just becomes easier
-    // to confuse the two.
-
-    // Disregarding the dot, any decimal number can be represented as 
-    // [prefix zeroes] [0-18 mantissa digits] [suffix zeroes]
-    // To avoid many different control paths that are difficult to verify and
-    // understand, we'll try to quantify each part first and the position of
-    // the dot. Then we can use these to fairly easily perform the conversion.
-    unsigned prefix_zeroes;
-    unsigned mantissa_digits;
-    unsigned suffix_zeroes;
-    unsigned dot_position;
-    if(exponent+1 > 0) {
-        // exponent+1 digits before the dot.
-        dot_position = unsigned_cast(exponent+1);
-        unsigned total_digits = dot_position + precision;
-        prefix_zeroes = 0;
-        mantissa_digits = std::min(18u, total_digits);
-        suffix_zeroes = total_digits - mantissa_digits;
-    } else {
-        // No digits before the dot. -(exponent+1) zeroes before the first
-        // significant digit.
-        prefix_zeroes = std::min(precision, unsigned_cast(-(exponent+1)));
-        mantissa_digits = std::min(18u, precision - prefix_zeroes);
-        suffix_zeroes = precision - prefix_zeroes - mantissa_digits;
-        prefix_zeroes += 1;  // For the additional zero before the dot.
-        dot_position = 1;
-    }
-    
-    // Reduce the mantissa part to the requested number of digits.
-    mantissa = rounded_rshift(mantissa_signed<0, mantissa, 18-mantissa_digits);
-    auto order = power_lut[mantissa_digits];
-    bool carry = mantissa >= order;
-    if(carry) {
-        // When reducing the mantissa, rounding caused it to overflow.
-        // For example, when formatting 0.095 with precision=2, we have
-        // prefix_zeroes=2, mantissa_digits=1 and suffix_zeroes=0. When trying
-        // to reduce the mantissa to 1 digit we end up not with 9, but with 10
-        // due to rounding. In this case we need to make room for an extra
-        // digit from the mantissa, which we'll take from the prefix zeroes or
-        // by moving the dot forward.
-        mantissa_digits += 1;
-        if(prefix_zeroes>0)
-            prefix_zeroes -= 1;
-        else
-            dot_position += 1;
-    }
-
-    unsigned size = prefix_zeroes + mantissa_digits + suffix_zeroes;
-    unsigned digits_left_to_dot = size - dot_position;
-    if(dot_position != size)
-        size += 1;
-
-    char* s = pbuffer->reserve(size);
-    unsigned pos = size;
-
-    auto fill_zeroes = [&](unsigned zeroes)
-    {
-        if(digits_left_to_dot <= zeroes && digits_left_to_dot != 0) {
-            pos = zero_digits(s, pos, digits_left_to_dot);
-            s[--pos] = '.';
-            pos = zero_digits(s, pos, zeroes - digits_left_to_dot);
-            digits_left_to_dot = 0;
-        } else {
-            pos = zero_digits(s, pos, zeroes);
-            digits_left_to_dot -= zeroes;
-        }
-    };
-    
-    fill_zeroes(suffix_zeroes);
-
-    if(digits_left_to_dot != 0 && digits_left_to_dot <= mantissa_digits) {
-        mantissa = utoa_generic_base10_preallocated(s, pos, mantissa, digits_left_to_dot);
-        pos -= digits_left_to_dot;
-        s[--pos] = '.';
-        if(mantissa_digits != digits_left_to_dot)
-            pos = utoa_generic_base10_preallocated(s, pos, mantissa);
-        digits_left_to_dot = 0;
-    } else if(mantissa_digits != 0) {
-        pos = utoa_generic_base10_preallocated(s, pos, mantissa);
-        digits_left_to_dot -= mantissa_digits;
-    }
-
-    fill_zeroes(prefix_zeroes);
-
-    assert(pos == 0);
-    pbuffer->commit(size);
-}
-#endif
 
 }   // namespace asynclog
 
@@ -1426,7 +1195,7 @@ public:
 
     void random()
     {
-        return;
+        //return;
         std::mt19937_64 rng;
         int const total = 10000000;
         int perfect = 0;
@@ -1497,9 +1266,9 @@ private:
         cs.minimum_field_width = 0;
         cs.precision = significant_digits;
         auto str = convert(number, cs);
-        char buf[128];
-        std::sprintf(buf, "%.*g", significant_digits, number);
-        std::cout << str << '\t' << buf << std::endl;
+        //char buf[128];
+        //std::sprintf(buf, "%.*g", significant_digits, number);
+        //std::cout << str << '\t' << buf << std::endl;
         return str;
     }
 
