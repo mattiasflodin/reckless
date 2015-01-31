@@ -1327,11 +1327,8 @@ public:
         TEST_FTOA(12345678901234567890.0);
         TEST_FTOA(1.23456789e300);
         TEST_FTOA(1.2345678901234567e308);
-        // TODO these conversions lose some precision but we might be able to
-        // fix that, because they have worked before in other iterations of the
-        // code.
-        //TEST_FTOA(1.7976931348623157e308);
-        //TEST_FTOA(1.7976931348623158e308);
+        TEST_FTOA(1.7976931348623157e308);
+        TEST_FTOA(std::nextafter(1.7976931348623157e308, 2.0));
     }
 
     void fractional()
@@ -1499,7 +1496,11 @@ private:
         cs.plus_sign = 0;
         cs.minimum_field_width = 0;
         cs.precision = significant_digits;
-        return convert(number, cs);
+        auto str = convert(number, cs);
+        char buf[128];
+        std::sprintf(buf, "%.*g", significant_digits, number);
+        std::cout << str << '\t' << buf << std::endl;
+        return str;
     }
 
     void test_conversion_quality(double number, char const* file, int line)
