@@ -147,24 +147,6 @@ unsigned log2(std::uint32_t v)
     return r+1;
 }
 
-unsigned log10(std::uint64_t x)
-{
-    // 19 digits
-    if(x <= 0xffffffffu)
-        return log10(static_cast<std::uint32_t>(x));
-    // ABCDEFGHJL
-    // ABC DEFGHJL
-    // A BC DEF GHJL
-    //   B C D EF GH JL
-    //         E F G H J L 
-    if(x < 1000000000000)
-
-    {
-    }
-    else
-    {
-    }
-}
 unsigned log10(std::uint32_t x)
 {
     // If we partition evenly (i.e. on 6) we get:
@@ -198,7 +180,7 @@ unsigned log10(std::uint32_t x)
             return x != 0;
         } else {
             // It's 2 or 3.
-            if( x < 100u) {
+            if(x < 100u) {
                 // It's 2.
                 return 2u;
             } else {
@@ -242,6 +224,124 @@ unsigned log10(std::uint32_t x)
                 } else {
                     // It's 10.
                     return 10;
+                }
+            }
+        }
+    }
+}
+
+unsigned log10(std::uint64_t x)
+{
+    // Same principle as for the uint32_t overload, but now we have
+    // A through L meaning 10 to 20 digits. Split-even approach gives us:
+    // 123456789ABCDEFGHJKL
+    // 123456789A BCDEFGHJKL
+    // 12345 6789A BCDEF GHJKL
+    // 12 345 67 89A BC DEF GH JKL
+    // 1 2 3 45 6 7 8 9A B C D EF G H J KL
+    //       4 5      9 A      E        K L
+    // 
+    // Splitting on 4 in the first call gives us:
+    // 123 456789ABCDEFGHJKL
+    // 1 23 456789AB CDEFGHJKL
+    //   2 3 4567 89AB CDEF GHJKL
+    //       45 67 89 AB CD EF GH JKL
+    //       4 5 6 7 8 9 A B C D E F G H J KL
+    //                                     K L
+    if(x < 1000u) {
+        // It's 1, 2 or 3.
+        if(x < 10u) {
+            // It's 0 or 1.
+            return x != 0;
+        } else {
+            // It's 2 or 3.
+            if(x < 100u) {
+                // It's 2.
+                return 2u;
+            } else {
+                // It's 3.
+                return 3u;
+            }
+        }
+    } else {
+        // It's 4 through 20.
+        if(x < 100000000000u) {
+            // It's 4, 5, 6, 7, 8, 9, 10 or 11.
+            if(x < 10000000u) {
+                // It's 4, 5, 6 or 7.
+                if(x < 100000u) {
+                    // It's 4 or 5.
+                    if(x < 10000u) {
+                        return 4u;
+                    } else {
+                        return 5u;
+                    }
+                } else {
+                    // It's 6 or 7.
+                    if(x < 1000000u) {
+                        return 6u;
+                    } else {
+                        return 7u;
+                    }
+                }
+            } else {
+                // It's 8, 9, 10 or 11.
+                if(x < 1000000000u) {
+                    // It's 8 or 9.
+                    if(x < 100000000u) {
+                        return 8u;
+                    } else {
+                        return 9u;
+                    }
+                } else {
+                    // It's 10 or 11.
+                    if(x < 10000000000u) {
+                        return 10u;
+                    } else {
+                        return 11u;
+                    }
+                }
+            }
+        } else {
+            // It's 12, 13, 14, 15, 16, 17, 18, 19, or 20.
+            if(x < 1000000000000000u) {
+                // It's 12, 13, 14 or 15.
+                if(x < 10000000000000u) {
+                    // It's 12 or 13.
+                    if(x < 1000000000000u) {
+                        return 12u;
+                    } else {
+                        return 13u;
+                    }
+                } else {
+                    // It's 14 or 15.
+                    if(x < 1000000000000000u) {
+                        return 14u;
+                    } else {
+                        return 15u;
+                    }
+                }
+            } else {
+                // It's 16, 17, 18, 19 or 20.
+                if(x < 100000000000000000u) {
+                    // It's 16 or 17.
+                    if(x < 10000000000000000u) {
+                        return 16u;
+                    } else {
+                        return 17u;
+                    }
+                } else {
+                    // It's 18, 19 or 20.
+                    if(x < 1000000000000000000u) {
+                        return 18u;
+                    } else {
+                        // It's 19 or 20.
+                        if(x < 10000000000000000000u) {
+                            return 19u;
+                        } else {
+                            return 20u;
+                        }
+                    }
                 }
             }
         }
