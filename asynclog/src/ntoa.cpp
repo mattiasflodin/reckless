@@ -601,14 +601,11 @@ void itoa_base16(output_buffer* pbuffer, long value, bool uppercase, char const*
     itoa_generic_base16(pbuffer, value, uppercase, prefix);
 }
 
-unsigned count_trailing_zeroes(decimal18 const& dv)
+unsigned count_trailing_zeroes(decimal18 const& dv, std::uint64_t truncated_digits)
 {
-    // We need to get rid of the least significant digit because a double can't
-    // always represent a zero digit at that position.
-    // (e.g. 123.456 becomes 123.456000000000003).
-    std::uint64_t mantissa = rounded_divide(dv.sign, dv.mantissa, 10);
+    std::uint64_t mantissa = rounded_rshift(dv.sign, dv.mantissa, truncated_digits);
     unsigned low = 0;
-    unsigned high = 18u;
+    unsigned high = 18u-truncated_digits;
     // Find the lowest x such that mantissa % 10^x != 0.
     // Then the number of trailing zeroes is x-1.
     while(low < high) {
@@ -619,9 +616,7 @@ unsigned count_trailing_zeroes(decimal18 const& dv)
             high = pos;
     }
 
-    // +1 because we always treat the least significant digit (that we stripped
-    // at function entry) as if it were zero.
-    return low-1 + 1;
+    return low-1;
 }
 
 unsigned count_trailing_zeroes_after_dot(decimal18 const& dv)
@@ -975,13 +970,8 @@ void ftoa_base10_g(output_buffer* pbuffer, double value, conversion_specificatio
             return ftoa_base10_f_normal(pbuffer, dv, p, cs);
         } else {
             unsigned trailing_zeroes = 0;
-            if(!cs.alternative_form) {
-                trailing_zeroes = count_trailing_zeroes(dv);
-                if(trailing_zeroes > truncated_digits)
-                    trailing_zeroes -= truncated_digits;
-                else
-                    trailing_zeroes = 0;
-            }
+            if(!cs.alternative_form)
+                trailing_zeroes = count_trailing_zeroes(dv, truncated_digits);
             p = p - 1 - trailing_zeroes;
             return ftoa_base10_e_normal(pbuffer, dv, p, cs);
         }
@@ -1409,9 +1399,9 @@ public:
 
     void scientific()
     {
-        TEST(convert(1.2345e-8, 6) == "1.23450e-08");
-        TEST(convert(1.2345e-10, 6) == "1.23450e-10");
-        TEST(convert(1.2345e+10, 6) == "1.23450e+10");
+        TEST(convert(1.2345e-8, 6) == "1.2345e-08");
+        TEST(convert(1.2345e-10, 6) == "1.2345e-10");
+        TEST(convert(1.2345e+10, 6) == "1.2345e+10");
         TEST(convert(1.2345e+10, 1) == "1e+10");
         TEST(convert(1.6345e+10, 1) == "2e+10");
         TEST(convert(1.6645e+10, 2) == "1.7e+10");
