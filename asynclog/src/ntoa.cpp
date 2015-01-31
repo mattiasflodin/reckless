@@ -147,6 +147,24 @@ unsigned log2(std::uint32_t v)
     return r+1;
 }
 
+unsigned log10(std::uint64_t x)
+{
+    // 19 digits
+    if(x <= 0xffffffffu)
+        return log10(static_cast<std::uint32_t>(x));
+    // ABCDEFGHJL
+    // ABC DEFGHJL
+    // A BC DEF GHJL
+    //   B C D EF GH JL
+    //         E F G H J L 
+    if(x < 1000000000000)
+
+    {
+    }
+    else
+    {
+    }
+}
 unsigned log10(std::uint32_t x)
 {
     // If we partition evenly (i.e. on 6) we get:
@@ -595,7 +613,7 @@ void ftoa_base10_f_normal(output_buffer* pbuffer, decimal18 dv, unsigned precisi
         // suffix_zeroes=0. When trying to reduce the mantissa to 1 digit we
         // end up not with 9, but with 10 due to rounding. In this case we need
         // to make room for an extra digit from the mantissa, which we'll take
-        // from the prefix zeroes or by moving the dot forward.
+        // from zeroes_after_dot or by increasing digits_before_dot.
         // 
         // Logically this can only happen if there are actual digits from the
         // mantissa on the right-hand side of the dot. If all the digits are on
@@ -1073,7 +1091,6 @@ unit_test::suite<itoa_base10_suite> itoa_base10_tests = {
     TESTCASE(itoa_base10_suite::sign),
     TESTCASE(itoa_base10_suite::precision_and_padding)
 };
-
 
 #define TEST_FTOA(number) test_conversion_quality(number, __FILE__, __LINE__)
 
