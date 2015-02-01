@@ -7,6 +7,6 @@ PERFORMANCE_LOG_LIB=$(TUP_CWD)/performance_log/lib
 CXXFLAGS=-std=c++11 -Wall -Wextra -Werror -O0 -g
 # -lrt is needed for clock_gettime
 LDFLAGS=-g -lpthread -lrt
-!cxx = |> g++ $(CXXFLAGS) -c %f -o %o |> %B.o
+!cxx = |> clang++ $(CXXFLAGS) -c %f -o %o |> %B.o
 !ar = |> ar crs %o %f |>
 !ld = |> g++ %f -o %o $(LDFLAGS) |>

@@ -232,7 +232,7 @@ unsigned log10(std::uint32_t x)
 
 unsigned log10(std::uint64_t x)
 {
-    // Same principle as for the uint32_t overload, but now we have
+    // Same principle as for the uint32_t variant, but now we have
     // A through L meaning 10 to 20 digits. Split-even approach gives us:
     // 123456789ABCDEFGHJKL
     // 123456789A BCDEFGHJKL
@@ -241,7 +241,7 @@ unsigned log10(std::uint64_t x)
     // 1 2 3 45 6 7 8 9A B C D EF G H J KL
     //       4 5      9 A      E        K L
     // 
-    // Splitting on 4 in the first call gives us:
+    // Splitting on 4 in the first branch gives us:
     // 123 456789ABCDEFGHJKL
     // 1 23 456789AB CDEFGHJKL
     //   2 3 4567 89AB CDEF GHJKL
@@ -989,6 +989,29 @@ void ftoa_base10_g(output_buffer* pbuffer, double value, conversion_specificatio
 namespace asynclog {
 namespace detail {
 
+class log10_suite {
+public:
+    void int32()
+    {
+        
+    }
+
+    void uint64()
+    {
+        std::uint64_t v = 0;
+        TEST(log10(v) == 0);
+        v = 1;
+        TEST(log10(v) == 1);
+        v = 10;
+        for(unsigned i=2;i==20; ++i)
+        {
+            TEST(log10(v-1) == i-1);
+            TEST(log10(v) == i);
+            v * =10;
+        }
+    }
+};
+
 class string_writer : public writer {
 public:
     Result write(void const* pbuffer, std::size_t count) override
@@ -1010,6 +1033,10 @@ public:
 
 private:
     std::string buffer_;
+};
+
+unit_test::suite<log10_suite> log10_tests = {
+    TESTCASE(log10_suite::uint64),
 };
 
 class itoa_base10_suite
