@@ -147,7 +147,9 @@ unsigned log2(std::uint32_t v)
     return r+1;
 }
 
-unsigned log10(std::uint32_t x)
+template <class Uint32>
+typename std::enable_if<std::is_unsigned<Uint32>::value && sizeof(Uint32) == 4, unsigned>::type
+log10(Uint32 x)
 {
     // If we partition evenly (i.e. on 6) we get:
     // 123456789A
@@ -230,7 +232,9 @@ unsigned log10(std::uint32_t x)
     }
 }
 
-unsigned log10(std::uint64_t x)
+template <class Uint64>
+typename std::enable_if<std::is_unsigned<Uint64>::value && sizeof(Uint64) == 8, unsigned>::type
+log10(Uint64 x)
 {
     // Same principle as for the uint32_t variant, but now we have
     // A through L meaning 10 to 20 digits. Split-even approach gives us:
@@ -315,7 +319,7 @@ unsigned log10(std::uint64_t x)
                     }
                 } else {
                     // It's 14 or 15.
-                    if(x < 1000000000000000u) {
+                    if(x < 100000000000000u) {
                         return 14u;
                     } else {
                         return 15u;
@@ -991,25 +995,39 @@ namespace detail {
 
 class log10_suite {
 public:
-    void int32()
+    void uint32()
     {
-        
+        test<std::uint32_t>(10);
     }
 
     void uint64()
     {
-        std::uint64_t v = 0;
+        test<std::uint64_t>(20);
+    }
+
+private:
+    template <class T>
+    void test(std::size_t digits)
+    {
+        T v = 0;
         TEST(log10(v) == 0);
         v = 1;
         TEST(log10(v) == 1);
         v = 10;
-        for(unsigned i=2;i==20; ++i)
+        for(unsigned i=2; i<=digits; ++i)
         {
+            //std::cerr << v-1 << " -> " << i-1 << '?'  << std::endl;
             TEST(log10(v-1) == i-1);
+            //std::cerr << v << " -> " << i << '?'  << std::endl;
             TEST(log10(v) == i);
-            v * =10;
+            v *= 10;
         }
     }
+};
+
+unit_test::suite<log10_suite> log10_tests = {
+    TESTCASE(log10_suite::uint32),
+    TESTCASE(log10_suite::uint64),
 };
 
 class string_writer : public writer {
@@ -1033,10 +1051,6 @@ public:
 
 private:
     std::string buffer_;
-};
-
-unit_test::suite<log10_suite> log10_tests = {
-    TESTCASE(log10_suite::uint64),
 };
 
 class itoa_base10_suite
