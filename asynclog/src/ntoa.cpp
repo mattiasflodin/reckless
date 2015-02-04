@@ -1235,11 +1235,11 @@ unit_test::suite<itoa_base10_suite> itoa_base10_tests = {
 
 #define TEST_FTOA(number) test_conversion_quality(number, __FILE__, __LINE__)
 
-class ftoa_base10
+class ftoa_base10_g
 {
 public:
     static std::size_t const PERFECT_QUALITY = std::numeric_limits<std::size_t>::max();
-    ftoa_base10() :
+    ftoa_base10_g() :
         output_buffer_(&writer_, 1024)
     {
     }
@@ -1444,21 +1444,21 @@ private:
     output_buffer output_buffer_;
 };
 
-unit_test::suite<ftoa_base10> ftoa_base10_tests = {
-    TESTCASE(ftoa_base10::greater_than_one),
-    TESTCASE(ftoa_base10::fractional),
-    TESTCASE(ftoa_base10::negative),
-    TESTCASE(ftoa_base10::subnormals),
-    TESTCASE(ftoa_base10::special),
-    TESTCASE(ftoa_base10::scientific),
-    TESTCASE(ftoa_base10::padding),
-    TESTCASE(ftoa_base10::random)
+unit_test::suite<ftoa_base10_g> ftoa_base10_tests = {
+    TESTCASE(ftoa_base10_g::greater_than_one),
+    TESTCASE(ftoa_base10_g::fractional),
+    TESTCASE(ftoa_base10_g::negative),
+    TESTCASE(ftoa_base10_g::subnormals),
+    TESTCASE(ftoa_base10_g::special),
+    TESTCASE(ftoa_base10_g::scientific),
+    TESTCASE(ftoa_base10_g::padding),
+    TESTCASE(ftoa_base10_g::random)
 };
 
-class ftoa_base10_precision
+class ftoa_base10_f
 {
 public:
-    ftoa_base10_precision() :
+    ftoa_base10_f() :
         output_buffer_(&writer_, 1024)
     {
     }
@@ -1524,8 +1524,8 @@ public:
     output_buffer output_buffer_;
 };
 
-unit_test::suite<ftoa_base10_precision> ftoa_base10_precision_tests = {
-    TESTCASE(ftoa_base10_precision::normal),
+unit_test::suite<ftoa_base10_f> ftoa_base10_precision_tests = {
+    TESTCASE(ftoa_base10_f::normal),
 };
 
 }   // namespace detail
