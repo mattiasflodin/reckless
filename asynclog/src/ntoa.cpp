@@ -362,7 +362,8 @@ log16(Unsigned v)
 template <typename Unsigned>
 void itoa_generic_base10(output_buffer* pbuffer, bool negative, Unsigned value, conversion_specification const& cs)
 {
-    prefetch_digits();
+    // TODO measure if these prefetches help
+    //prefetch_digits();
     char sign;
     if(negative) {
         sign = true;
@@ -742,7 +743,7 @@ void ftoa_base10_f_normal(output_buffer* pbuffer, decimal18 dv, unsigned precisi
     unsigned size = std::max(cs.minimum_field_width, content_size);
     unsigned padding = size - content_size;
     unsigned pad_zeroes = 0;
-    if(cs.pad_with_zeroes) {
+    if(cs.pad_with_zeroes && !cs.left_justify) {
         pad_zeroes = padding;
         padding = 0;
     }
@@ -817,7 +818,7 @@ void ftoa_base10_e_normal(output_buffer* pbuffer, decimal18 dv,
     unsigned size = std::max(cs.minimum_field_width, content_size);
     unsigned padding = size - content_size;
     unsigned pad_zeroes = 0;
-    if(cs.pad_with_zeroes) {
+    if(cs.pad_with_zeroes && !cs.left_justify) {
         pad_zeroes = padding;
         padding = 0;
     }
@@ -904,8 +905,9 @@ void itoa_base16(output_buffer* pbuffer, long value, bool uppercase, char const*
 
 void ftoa_base10_f(output_buffer* pbuffer, double value, conversion_specification const& cs)
 {
-    prefetch_digits();
-    prefetch_power_lut();
+    // TODO measure if these prefetches help
+    //prefetch_digits();
+    //prefetch_power_lut();
     auto category = std::fpclassify(value);
     if(category == FP_NAN) {
         return write_nan(pbuffer, value, cs);
@@ -930,8 +932,8 @@ void ftoa_base10_g(output_buffer* pbuffer, double value, conversion_specificatio
     // alternative mode is requested. Alternative mode also means that the period
     // stays, no matter if there are any fractional decimals remaining or
     // not.
-    prefetch_digits();
-    prefetch_power_lut();
+    //prefetch_digits();
+    //prefetch_power_lut();
     auto category = std::fpclassify(value);
     if(category == FP_NAN) {
         return write_nan(pbuffer, value, cs);
@@ -1233,6 +1235,97 @@ unit_test::suite<itoa_base10_suite> itoa_base10_tests = {
     TESTCASE(itoa_base10_suite::precision_and_padding)
 };
 
+class ftoa_base10_f
+{
+public:
+    ftoa_base10_f() :
+        output_buffer_(&writer_, 1024)
+    {
+    }
+    
+    void normal()
+    {
+        TEST(convert(1.5, 2) == "1.50");
+        TEST(convert(1.234567890, 4) == "1.2346");
+        TEST(convert(1.2345678901234567, 16) == "1.2345678901234567");
+        TEST(convert(1.2345678901234567, 17) == "1.23456789012345670");
+        TEST(convert(1.2345678901234567, 25) == "1.2345678901234567000000000");
+        TEST(convert(1.7976931348623157e308, 3) == "179769313486231563000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000.000");
+        TEST(convert(1234.5678, 0) == "1235");
+        TEST(convert(1234.5678, 1) == "1234.6");
+
+        TEST(convert(0.3, 1) == "0.3");
+        TEST(convert(0.3, 2) == "0.30");
+        TEST(convert(0.3, 20) == "0.29999999999999999000");
+
+        TEST(convert(1.2345e20, 5) == "123450000000000000000.00000");
+        TEST(convert(1.2345e20, 0) == "123450000000000000000");
+        TEST(convert(1.2345e2, 5) == "123.45000");
+        TEST(convert(1.2345e-20, 5) == "0.00000");
+        TEST(convert(0.5, 0) == "1");
+        TEST(convert(0.05, 1) == "0.1");
+        TEST(convert(9.9, 0) == "10");
+        TEST(convert(0, 0) == "0");
+        TEST(convert(1.23456789012345670, 20) == "1.23456789012345670000");
+        TEST(convert(0.123456789012345670, 20) == "0.12345678901234566300");
+        
+        TEST(convert(0.000123, 6) == "0.000123");
+    }
+
+    void padding()
+    {
+        conversion_specification cs;
+        cs.left_justify = false;
+        cs.alternative_form = false;
+        cs.pad_with_zeroes = true;
+        cs.plus_sign = 0;
+        cs.minimum_field_width = 7;
+        cs.precision = 3;
+        
+        TEST(convert(0.5, cs) == "000.500");
+        TEST(convert(-0.5, cs) == "-00.500");
+        TEST(convert(0.0, cs) == "000.000");
+        TEST(convert(-0.0, cs) == "-00.000");
+        
+        cs.left_justify = true;
+        
+        TEST(convert(0.5, cs) == "0.500  ");
+        TEST(convert(-0.5, cs) == "-0.500 ");
+        TEST(convert(0.0, cs) == "0.000  ");
+        TEST(convert(-0.0, cs) == "-0.000 ");
+    }
+
+private:
+    std::string convert(double number, conversion_specification const& cs)
+    {
+        writer_.reset();
+        asynclog::ftoa_base10_f(&output_buffer_, number, cs);
+        output_buffer_.flush();
+        //std::cout << '[' << writer_.str() << ']' << std::endl;
+        return writer_.str();
+    }
+
+    std::string convert(double number, unsigned precision)
+    {
+        conversion_specification cs;
+        cs.left_justify = false;
+        cs.alternative_form = false;
+        cs.pad_with_zeroes = false;
+        cs.plus_sign = 0;
+        cs.minimum_field_width = 0;
+        cs.precision = precision;
+        return convert(number, cs);
+    }
+
+    string_writer writer_;
+    output_buffer output_buffer_;
+};
+
+unit_test::suite<ftoa_base10_f> ftoa_base10_precision_tests = {
+    TESTCASE(ftoa_base10_f::normal),
+    TESTCASE(ftoa_base10_f::padding),
+};
+
 #define TEST_FTOA(number) test_conversion_quality(number, __FILE__, __LINE__)
 
 class ftoa_base10_g
@@ -1353,7 +1446,6 @@ public:
 
     void random()
     {
-        return;
         std::mt19937_64 rng;
         int const total = 10000000;
         int perfect = 0;
@@ -1453,87 +1545,6 @@ unit_test::suite<ftoa_base10_g> ftoa_base10_tests = {
     TESTCASE(ftoa_base10_g::scientific),
     TESTCASE(ftoa_base10_g::padding),
     TESTCASE(ftoa_base10_g::random)
-};
-
-class ftoa_base10_f
-{
-public:
-    ftoa_base10_f() :
-        output_buffer_(&writer_, 1024)
-    {
-    }
-    
-    void normal()
-    {
-        TEST(convert(1.5, 2) == "1.50");
-        TEST(convert(1.234567890, 4) == "1.2346");
-        TEST(convert(1.2345678901234567, 16) == "1.2345678901234567");
-        TEST(convert(1.2345678901234567, 17) == "1.23456789012345670");
-        TEST(convert(1.2345678901234567, 25) == "1.2345678901234567000000000");
-        TEST(convert(1.7976931348623157e308, 3) == "179769313486231563000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000.000");
-        TEST(convert(1234.5678, 0) == "1235");
-        TEST(convert(1234.5678, 1) == "1234.6");
-
-        TEST(convert(0.3, 1) == "0.3");
-        TEST(convert(0.3, 2) == "0.30");
-        TEST(convert(0.3, 20) == "0.29999999999999999000");
-
-        TEST(convert(1.2345e20, 5) == "123450000000000000000.00000");
-        TEST(convert(1.2345e20, 0) == "123450000000000000000");
-        TEST(convert(1.2345e2, 5) == "123.45000");
-        TEST(convert(1.2345e-20, 5) == "0.00000");
-        TEST(convert(0.5, 0) == "1");
-        TEST(convert(0.05, 1) == "0.1");
-        TEST(convert(9.9, 0) == "10");
-        TEST(convert(0, 0) == "0");
-        TEST(convert(1.23456789012345670, 20) == "1.23456789012345670000");
-        TEST(convert(0.123456789012345670, 20) == "0.12345678901234566300");
-        
-        TEST(convert(0.000123, 6) == "0.000123");
-    }
-
-    void padding()
-    {
-        conversion_specification cs;
-        cs.left_justify = false;
-        cs.alternative_form = false;
-        cs.pad_with_zeroes = true;
-        cs.plus_sign = 0;
-        cs.minimum_field_width = 6;
-        cs.precision = 3;
-        
-        TEST(convert(0.3, cs) == "00.300");
-    }
-
-private:
-    std::string convert(double number, conversion_specification const& cs)
-    {
-        asynclog::ftoa_base10_f(&output_buffer_, number, cs);
-        output_buffer_.flush();
-        std::cout << '[' << writer_.str() << ']' << std::endl;
-        return writer_.str();
-    }
-
-    std::string convert(double number, unsigned precision)
-    {
-        writer_.reset();
-        conversion_specification cs;
-        cs.left_justify = false;
-        cs.alternative_form = false;
-        cs.pad_with_zeroes = false;
-        cs.plus_sign = 0;
-        cs.minimum_field_width = 0;
-        cs.precision = precision;
-        return convert(number, cs);
-    }
-
-    string_writer writer_;
-    output_buffer output_buffer_;
-};
-
-unit_test::suite<ftoa_base10_f> ftoa_base10_precision_tests = {
-    TESTCASE(ftoa_base10_f::normal),
-    TESTCASE(ftoa_base10_f::padding),
 };
 
 }   // namespace detail
