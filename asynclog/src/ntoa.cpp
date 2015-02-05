@@ -1353,7 +1353,7 @@ public:
 
     void random()
     {
-        //return;
+        return;
         std::mt19937_64 rng;
         int const total = 10000000;
         int perfect = 0;
@@ -1494,14 +1494,24 @@ public:
 
     void padding()
     {
-        //conversion_specification cs;
-        //cs.left_justify = false;
-        //cs.alternative_form = false;
-        //cs.pad_with_zeroes = true;
-        //cs.plus_sign = 0;
-        //cs.minimum_field_width = 5;
-        //cs.precision = 3;
-        //TEST(convert(0.3, 
+        conversion_specification cs;
+        cs.left_justify = false;
+        cs.alternative_form = false;
+        cs.pad_with_zeroes = true;
+        cs.plus_sign = 0;
+        cs.minimum_field_width = 6;
+        cs.precision = 3;
+        
+        TEST(convert(0.3, cs) == "00.300");
+    }
+
+private:
+    std::string convert(double number, conversion_specification const& cs)
+    {
+        asynclog::ftoa_base10_f(&output_buffer_, number, cs);
+        output_buffer_.flush();
+        std::cout << '[' << writer_.str() << ']' << std::endl;
+        return writer_.str();
     }
 
     std::string convert(double number, unsigned precision)
@@ -1514,10 +1524,7 @@ public:
         cs.plus_sign = 0;
         cs.minimum_field_width = 0;
         cs.precision = precision;
-        asynclog::ftoa_base10_f(&output_buffer_, number, cs);
-        output_buffer_.flush();
-        //std::cout << '[' << writer_.str() << ']' << std::endl;
-        return writer_.str();
+        return convert(number, cs);
     }
 
     string_writer writer_;
@@ -1526,6 +1533,7 @@ public:
 
 unit_test::suite<ftoa_base10_f> ftoa_base10_precision_tests = {
     TESTCASE(ftoa_base10_f::normal),
+    TESTCASE(ftoa_base10_f::padding),
 };
 
 }   // namespace detail
