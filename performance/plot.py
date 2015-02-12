@@ -23,8 +23,8 @@ def timing_kind(name):
 def pretty_name(name):
     name_table = {
             'nop': 'Timing overhead (~113 ticks)',
-            'stdio': 'fprintf, no fflush (C)',
-            'fstream': 'std::fstream, no std::flush (C++)',
+            'stdio': 'fprintf (C)',
+            'fstream': 'std::fstream (C++)',
             'alog': 'asynclog'
     }
             
@@ -71,7 +71,7 @@ for name in sys.argv[1:]:
 
 legend = ax.legend()
 plt.xlabel('Iteration')
-plt.ylabel('CPU ticks')
+plt.ylabel('Latency (CPU ticks)')
 plt.show()
 #ax.set_size_inches(10, 10)
 #plt.savefig('plot.png', dpi=150)
