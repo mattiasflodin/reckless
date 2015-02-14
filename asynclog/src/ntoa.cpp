@@ -131,11 +131,10 @@ utoa_generic_base16_preallocated(char* str, unsigned pos, Unsigned value)
     return pos;   
 }
 
+// For special case v=0, this returns 0.
 unsigned log2(std::uint32_t v)
 {
-    // From Sean Eron Anderson's "Bit Twiddling Hacks" collection, except for
-    // the +1 at the end. Our bastardized logarithms all return the number of
-    // digits required in a string, not the "real" logarithm.
+    // From Sean Eron Anderson's "Bit Twiddling Hacks" collection.
     unsigned r;
     unsigned shift;
 
@@ -144,9 +143,10 @@ unsigned log2(std::uint32_t v)
     shift = (v > 0xF   ) << 2; v >>= shift; r |= shift;
     shift = (v > 0x3   ) << 1; v >>= shift; r |= shift;
                                             r |= (v >> 1);
-    return r+1;
+    return r;
 }
 
+// For special case x=0, this returns 1.
 template <class Uint32>
 typename std::enable_if<std::is_unsigned<Uint32>::value && sizeof(Uint32) == 4, unsigned>::type
 log10(Uint32 x)
@@ -176,56 +176,46 @@ log10(Uint32 x)
     // get a shorter depth for small numbers, which is probably more useful.
 
     if(x < 1000u) {
-        // It's 1, 2 or 3.
+        // It's 0, 1 or 2.
         if(x < 10u) {
-            // It's 0 or 1.
-            return x != 0;
+            return 0;
         } else {
-            // It's 2 or 3.
+            // It's 1 or 2.
             if(x < 100u) {
-                // It's 2.
-                return 2u;
+                return 1u;
             } else {
-                // It's 3.
-                return 3u;
+                return 2u;
             }
         }
     } else {
-        // It's 4, 5, 6, 7, 8, 9 or 10.
+        // It's 3, 4, 5, 6, 7, 8 or 9.
         if(x < 1000000u) {
-            // It's 4, 5, or 6.
+            // It's 3, 4, or 5.
             if(x < 10000u) {
-                // It's 4.
-                return 4;
+                return 3;
             } else {
-                // It's 5 or 6.
+                // It's 4 or 5.
                 if(x < 100000u) {
-                    // It's 5.
-                    return 5;
+                    return 4;
                 } else {
-                    // It's 6.
-                    return 6;
+                    return 5;
                 }
             }
         } else {
-            // It's 7, 8, 9 or 10.
+            // It's 6, 7, 8 or 9.
             if(x < 100000000u) {
-                // It's 7 or 8.
+                // It's 6 or 7.
                 if(x < 10000000u) {
-                    // It's 7.
-                    return 7;
+                    return 6;
                 } else {
-                    // It's 8.
-                    return 8;
+                    return 7;
                 }
             } else {
-                // It's 9 or 10.
+                // It's 8 or 9.
                 if(x < 1000000000u) {
-                    // It's 9.
-                    return 9;
+                    return 8;
                 } else {
-                    // It's 10.
-                    return 10;
+                    return 9;
                 }
             }
         }
@@ -252,6 +242,7 @@ log10(Uint64 x)
     //       45 67 89 AB CD EF GH JKL
     //       4 5 6 7 8 9 A B C D E F G H J KL
     //                                     K L
+    // Faster for small number and lower average height.
     if(x < 1000u) {
         // It's 1, 2 or 3.
         if(x < 10u) {
@@ -425,30 +416,37 @@ itoa_generic_base10(output_buffer* pbuffer, Integer value, conversion_specificat
     itoa_generic_base10(pbuffer, false, value, cs);
 }
 
-template <typename Unsigned>
-typename std::enable_if<std::is_unsigned<Unsigned>::value, void>::type
-itoa_generic_base16(output_buffer* pbuffer, Unsigned value, bool uppercase, char const* prefix)
-{
-    if(prefix) {
-        std::size_t len = std::strlen(prefix);
-        char* str = pbuffer->reserve(len);
-        std::memcpy(str, prefix, len);
-        pbuffer->commit(len);
-    }
-            
-    unsigned size = log16(value);
-    char* str = pbuffer->reserve(size);
-    if(uppercase)
-        utoa_generic_base16_preallocated<true>(str, size, value);
-    else
-        utoa_generic_base16_preallocated<false>(str, size, value);
-    pbuffer->commit(size);
-}
+//template <typename Unsigned>
+//typename std::enable_if<std::is_unsigned<Unsigned>::value, void>::type
+//itoa_generic_base16(output_buffer* pbuffer, Unsigned value, bool uppercase, char const* prefix)
+//{
+//    if(prefix) {
+//        std::size_t len = std::strlen(prefix);
+//        char* str = pbuffer->reserve(len);
+//        std::memcpy(str, prefix, len);
+//        pbuffer->commit(len);
+//    }
+//            
+//    unsigned size = log16(value);
+//    char* str = pbuffer->reserve(size);
+//    if(uppercase)
+//        utoa_generic_base16_preallocated<true>(str, size, value);
+//    else
+//        utoa_generic_base16_preallocated<false>(str, size, value);
+//    pbuffer->commit(size);
+//}
 
-template <typename Signed>
-typename std::enable_if<std::is_signed<Signed>::value, void>::type
-itoa_generic_base16(output_buffer* pbuffer, Signed value, bool uppercase, char const* prefix)
+template <typename Unsigned>
+void itoa_generic_base16(output_buffer* pbuffer, bool negative, Unsigned value, conversion_specification const& cs)
 {
+    char sign = negative? '-' : cs.plus_sign;
+}
+    
+template <typename Integer>
+void itoa_generic_base16(output_buffer* pbuffer, Integer value, conversion_specification const& cs)
+{
+    bool negative = value < 0;
+    
     if(value<0) {
         std::size_t prefix_length = std::strlen(prefix);
         auto uv = unsigned_cast(-value);
@@ -895,12 +893,12 @@ void itoa_base10(output_buffer* pbuffer, unsigned long long value, conversion_sp
 
 void itoa_base16(output_buffer* pbuffer, unsigned long value, bool uppercase, char const* prefix)
 {
-    itoa_generic_base16(pbuffer, value, uppercase, prefix);
+    itoa_generic_base16(pbuffer, value, cs);
 }
 
-void itoa_base16(output_buffer* pbuffer, long value, bool uppercase, char const* prefix)
+void itoa_base16(output_buffer* pbuffer, long value, conversion_specification const& cs)
 {
-    itoa_generic_base16(pbuffer, value, uppercase, prefix);
+    itoa_generic_base16(pbuffer, value, cs);
 }
 
 void ftoa_base10_f(output_buffer* pbuffer, double value, conversion_specification const& cs)
