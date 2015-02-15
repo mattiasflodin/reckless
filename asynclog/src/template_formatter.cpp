@@ -52,15 +52,6 @@ namespace {
                 break;
             ++pformat;
         }
-        pspec->left_justify = left_justify;
-        pspec->alternative_form = alternative_form;
-        pspec->pad_with_zeroes = pad_with_zeroes;
-        if(show_plus_sign)
-            pspec->plus_sign = '+';
-        else if(blank_sign)
-            pspec->plus_sign = ' ';
-        else
-            pspec->plus_sign = 0;
         
         pspec->minimum_field_width = isdigit(*pformat)? atou(pformat) : 0;
         if(*pformat == '.') {
@@ -69,6 +60,18 @@ namespace {
         } else {
             pspec->precision = UNSPECIFIED_PRECISION;
         }
+        if(show_plus_sign)
+            pspec->plus_sign = '+';
+        else if(blank_sign)
+            pspec->plus_sign = ' ';
+        else
+            pspec->plus_sign = 0;
+        
+        pspec->left_justify = left_justify;
+        pspec->alternative_form = alternative_form;
+        pspec->pad_with_zeroes = pad_with_zeroes;
+        pspec->uppercase = false;
+        
         return pformat;
     }
         
@@ -82,8 +85,13 @@ namespace {
             itoa_base10(pbuffer, v, spec);
             return pformat + 1;
         } else if(f == 'x') {
-            // FIXME
-            return nullptr;
+            spec.uppercase = false;
+            itoa_base16(pbuffer, v, spec);
+            return pformat + 1;
+        } else if(f == 'X') {
+            spec.uppercase = true;
+            itoa_base16(pbuffer, v, spec);
+            return pformat + 1;
         } else if(f == 'b') {
             // FIXME
             return nullptr;
@@ -222,11 +230,17 @@ char const* asynclog::format(output_buffer* pbuffer, char const* pformat, void c
     char c = *pformat;
     if(c != 'p' && c !='s')
         return nullptr;
-    char* s = pbuffer->reserve(2);
-    s[0] = '0';
-    s[1] = 'x';
-    pbuffer->commit(2);
-    itoa_base16(pbuffer, reinterpret_cast<std::uintptr_t>(p), false, nullptr);
+    
+    conversion_specification cs;
+    cs.minimum_field_width = 0;
+    cs.precision = 1;
+    cs.plus_sign = 0;
+    cs.left_justify = false;
+    cs.alternative_form = true;
+    cs.pad_with_zeroes = false;
+    cs.uppercase = false;
+    
+    itoa_base16(pbuffer, reinterpret_cast<std::uintptr_t>(p), cs);
     return pformat+1;
 }
 

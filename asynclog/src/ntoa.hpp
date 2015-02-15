@@ -25,10 +25,12 @@ void itoa_base10(output_buffer* pbuffer, unsigned long value, conversion_specifi
 void itoa_base10(output_buffer* pbuffer, long long value, conversion_specification const& cs);
 void itoa_base10(output_buffer* pbuffer, unsigned long long value, conversion_specification const& cs);
 
-//void itoa_base16(output_buffer* pbuffer, long value, bool uppercase, char const* prefix);
-//void itoa_base16(output_buffer* pbuffer, unsigned long value, bool uppercase, char const* prefix);
+void itoa_base16(output_buffer* pbuffer, int value, conversion_specification const& cs);
+void itoa_base16(output_buffer* pbuffer, unsigned int value, conversion_specification const& cs);
 void itoa_base16(output_buffer* pbuffer, long value, conversion_specification const& cs);
 void itoa_base16(output_buffer* pbuffer, unsigned long value, conversion_specification const& cs);
+void itoa_base16(output_buffer* pbuffer, long long value, conversion_specification const& cs);
+void itoa_base16(output_buffer* pbuffer, unsigned long long value, conversion_specification const& cs);
 
 void ftoa_base10_f(output_buffer* pbuffer, double value, conversion_specification const& cs);
 void ftoa_base10_g(output_buffer* pbuffer, double value, conversion_specification const& cs);
