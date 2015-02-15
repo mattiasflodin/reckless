@@ -416,26 +416,6 @@ itoa_generic_base10(output_buffer* pbuffer, Integer value, conversion_specificat
     itoa_generic_base10(pbuffer, false, value, cs);
 }
 
-//template <typename Unsigned>
-//typename std::enable_if<std::is_unsigned<Unsigned>::value, void>::type
-//itoa_generic_base16(output_buffer* pbuffer, Unsigned value, bool uppercase, char const* prefix)
-//{
-//    if(prefix) {
-//        std::size_t len = std::strlen(prefix);
-//        char* str = pbuffer->reserve(len);
-//        std::memcpy(str, prefix, len);
-//        pbuffer->commit(len);
-//    }
-//            
-//    unsigned size = log16(value);
-//    char* str = pbuffer->reserve(size);
-//    if(uppercase)
-//        utoa_generic_base16_preallocated<true>(str, size, value);
-//    else
-//        utoa_generic_base16_preallocated<false>(str, size, value);
-//    pbuffer->commit(size);
-//}
-
 template <typename Unsigned>
 void itoa_generic_base16(output_buffer* pbuffer, bool negative, Unsigned value, conversion_specification const& cs)
 {
@@ -484,25 +464,23 @@ void itoa_generic_base16(output_buffer* pbuffer, bool negative, Unsigned value, 
 }
     
 template <typename Integer>
-void itoa_generic_base16(output_buffer* pbuffer, Integer value, conversion_specification const& cs)
+typename std::enable_if<std::is_signed<Integer>::value, void>::type
+itoa_generic_base16(output_buffer* pbuffer, Integer value, conversion_specification const& cs)
 {
     bool negative = value < 0;
-    
-    if(value<0) {
-        std::size_t prefix_length = std::strlen(prefix);
-        auto uv = unsigned_cast(-value);
-        unsigned size = 1 + prefix_length + log16(uv);
-        char* str = pbuffer->reserve(size);
-        if(uppercase)
-            utoa_generic_base16_preallocated<true>(str, size, uv);
-        else
-            utoa_generic_base16_preallocated<false>(str, size, uv);
-        memcpy(str + 1, prefix, prefix_length);
-        str[0] = '-';
-        pbuffer->commit(size);
-    } else {
-        itoa_generic_base16(pbuffer, unsigned_cast(value), uppercase, prefix);
-    }
+    unsigned uv;
+    if(negative)
+        uv = unsigned_cast(-value);
+    else
+        uv = unsigned_cast(value);
+    itoa_generic_base16(pbuffer, negative, uv, cs);
+}
+
+template <typename Integer>
+typename std::enable_if<std::is_unsigned<Integer>::value, void>::type
+itoa_generic_base16(output_buffer* pbuffer, Integer value, conversion_specification const& cs)
+{
+    itoa_generic_base16(pbuffer, false, value, cs);
 }
 
 template <typename Float>
@@ -932,7 +910,7 @@ void itoa_base10(output_buffer* pbuffer, unsigned long long value, conversion_sp
     itoa_generic_base10(pbuffer, value, cs);
 }
 
-void itoa_base16(output_buffer* pbuffer, unsigned long value, bool uppercase, char const* prefix)
+void itoa_base16(output_buffer* pbuffer, unsigned long value, conversion_specification const& cs)
 {
     itoa_generic_base16(pbuffer, value, cs);
 }
