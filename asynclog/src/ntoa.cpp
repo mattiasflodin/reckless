@@ -146,31 +146,32 @@ unsigned log2(std::uint32_t v)
     return r;
 }
 
-// For special case x=0, this returns 1.
+// For special case x=0, this returns 0.
 template <class Uint32>
 typename std::enable_if<std::is_unsigned<Uint32>::value && sizeof(Uint32) == 4, unsigned>::type
 log10(Uint32 x)
 {
-    // If we partition evenly (i.e. on 6) we get:
-    // 123456789A
-    // 12345 6789A
-    // 12 345 67 89A
-    // 1 2 3 45 6 7 8 9A
-    //       4 5      9 A
+    // Compute logarithm by "binary search" based on magnitude/number of digits
+    // in number. If we partition evenly (i.e. on 5) we get:
+    // 0123456789
+    // 01234 56789
+    // 01 234 56 789
+    // 0 1 2 34 5 6 7 89
+    //       3 4      8 9
     //
-    // But if we partition on 5 instead we get
-    // 123456789A
-    // 1234 56789A
-    // 12 34 567 89A
-    // 1 2 3 4 5 67 8 9A
-    //           6 7  9 A
+    // But if we partition on 4 instead we get
+    // 0123456789
+    // 0123 456789
+    // 01 23 456 789
+    // 0 1 2 3 4 56 7 89
+    //           5 6  8 9
     //
     // And if we partition on 4, we get
-    // 123456789A
-    // 123 456789A
-    // 1 23 456 789A
-    //   2 3 4 56 78 9A
-    //         5 6 7 8 9 A
+    // 0123456789
+    // 012 3456789
+    // 0 12 345 6789
+    //   1 2 3 45 67 89
+    //         4 5 6 7 8 9
     //
     // In all cases we get a maximum height of 5, but when we partition on 4 we
     // get a shorter depth for small numbers, which is probably more useful.
@@ -222,119 +223,118 @@ log10(Uint32 x)
     }
 }
 
+// For special case x=0, this returns 0.
 template <class Uint64>
 typename std::enable_if<std::is_unsigned<Uint64>::value && sizeof(Uint64) == 8, unsigned>::type
 log10(Uint64 x)
 {
-    // Same principle as for the uint32_t variant, but now we have
-    // A through L meaning 10 to 20 digits. Split-even approach gives us:
-    // 123456789ABCDEFGHJKL
-    // 123456789A BCDEFGHJKL
-    // 12345 6789A BCDEF GHJKL
-    // 12 345 67 89A BC DEF GH JKL
-    // 1 2 3 45 6 7 8 9A B C D EF G H J KL
-    //       4 5      9 A      E        K L
+    // Same principle as for the uint32_t variant, but for the binary tree
+    // notation we now have A through J representing 10 to 19. Split-even
+    // approach gives us:
+    // 0123456789ABCDEFGHIJ
+    // 0123456789 ABCDEFGHIJ
+    // 01234 56789 ABCDE FGHIJ
+    // 01 234 56 789 AB CDE FG HIJ
+    // 0 1 2 34 5 6 7 89 A B C DE F G H IJ
+    //       3 4      8 9      D E      I J
     // 
     // Splitting on 4 in the first branch gives us:
-    // 123 456789ABCDEFGHJKL
-    // 1 23 456789AB CDEFGHJKL
-    //   2 3 4567 89AB CDEF GHJKL
-    //       45 67 89 AB CD EF GH JKL
-    //       4 5 6 7 8 9 A B C D E F G H J KL
-    //                                     K L
+    // 012 3456789ABCDEFGHIJ
+    // 0 12 3456789A BCDEFGHIJ
+    //   1 2 3456 789A BCDE FGHIJ
+    //       34 56 78 9A BC DE FG HIJ
+    //       3 4 5 6 7 8 9 A B C D E F G H IJ
+    //                                     I J
     // Faster for small number and lower average height.
     if(x < 1000u) {
-        // It's 1, 2 or 3.
+        // It's 0, 1 or 2.
         if(x < 10u) {
-            // It's 0 or 1.
-            return x != 0;
+            return 0;
         } else {
-            // It's 2 or 3.
+            // It's 1 or 2.
             if(x < 100u) {
-                // It's 2.
-                return 2u;
+                return 1u;
             } else {
-                // It's 3.
-                return 3u;
+                return 2u;
             }
         }
     } else {
-        // It's 4 through 20.
+        // It's 3 through 19.
         if(x < 100000000000u) {
-            // It's 4, 5, 6, 7, 8, 9, 10 or 11.
+            // It's 3, 4, 5, 6, 7, 8, 9 or 10.
             if(x < 10000000u) {
-                // It's 4, 5, 6 or 7.
+                // It's 3, 4, 5 or 6.
                 if(x < 100000u) {
-                    // It's 4 or 5.
+                    // It's 3 or 4.
                     if(x < 10000u) {
-                        return 4u;
+                        return 3u;
                     } else {
-                        return 5u;
+                        return 4u;
                     }
                 } else {
-                    // It's 6 or 7.
+                    // It's 5 or 6.
                     if(x < 1000000u) {
-                        return 6u;
+                        return 5u;
                     } else {
-                        return 7u;
+                        return 6u;
                     }
                 }
             } else {
-                // It's 8, 9, 10 or 11.
+                // It's 7, 8, 9 or 10.
                 if(x < 1000000000u) {
-                    // It's 8 or 9.
+                    // It's 7 or 8.
                     if(x < 100000000u) {
-                        return 8u;
+                        return 7u;
                     } else {
-                        return 9u;
+                        return 8u;
                     }
                 } else {
-                    // It's 10 or 11.
+                    // It's 9 or 10.
                     if(x < 10000000000u) {
-                        return 10u;
+                        return 9u;
                     } else {
-                        return 11u;
+                        return 10u;
                     }
                 }
             }
         } else {
-            // It's 12, 13, 14, 15, 16, 17, 18, 19, or 20.
+            // It's 11, 12, 13, 14, 15, 16, 17, 18, or 19.
             if(x < 1000000000000000u) {
-                // It's 12, 13, 14 or 15.
+                // It's 11, 12, 13 or 14.
                 if(x < 10000000000000u) {
-                    // It's 12 or 13.
+                    // It's 11 or 12.
                     if(x < 1000000000000u) {
-                        return 12u;
+                        return 11u;
                     } else {
-                        return 13u;
+                        return 12u;
                     }
                 } else {
-                    // It's 14 or 15.
+                    // It's 13 or 14.
                     if(x < 100000000000000u) {
-                        return 14u;
+                        return 13u;
                     } else {
-                        return 15u;
+                        return 14u;
                     }
                 }
             } else {
-                // It's 16, 17, 18, 19 or 20.
+                // It's 15, 16, 17, 18 or 19.
                 if(x < 100000000000000000u) {
-                    // It's 16 or 17.
+                    // It's 15 or 16.
                     if(x < 10000000000000000u) {
-                        return 16u;
+                        return 15u;
                     } else {
-                        return 17u;
+                        return 16u;
                     }
                 } else {
-                    // It's 18, 19 or 20.
+                    // It's 17, 18 or 19.
                     if(x < 1000000000000000000u) {
-                        return 18u;
+                        return 17u;
                     } else {
                         // It's 19 or 20.
                         if(x < 10000000000000000000u) {
-                            return 19u;
+                            return 18u;
                         } else {
-                            return 20u;
+                            return 19u;
                         }
                     }
                 }
@@ -347,7 +347,7 @@ template <typename Unsigned>
 typename std::enable_if<std::is_unsigned<Unsigned>::value, Unsigned>::type
 log16(Unsigned v)
 {
-    return (log2(v)+3)/4;
+    return log2(v)/4;
 }
 
 template <typename Unsigned>
@@ -371,7 +371,7 @@ void itoa_generic_base10(output_buffer* pbuffer, bool negative, Unsigned value, 
     //                  [---precision---]
     // [--------------size--------------]
     // depending on if it's left-justified or not.
-    unsigned digits = log10(value);
+    unsigned digits = log10(value) + 1;
     unsigned precision = (cs.precision == UNSPECIFIED_PRECISION? 1 : cs.precision);
     precision = std::max(digits, precision);
     unsigned size = std::max(sign + precision, cs.minimum_field_width);
@@ -440,6 +440,47 @@ template <typename Unsigned>
 void itoa_generic_base16(output_buffer* pbuffer, bool negative, Unsigned value, conversion_specification const& cs)
 {
     char sign = negative? '-' : cs.plus_sign;
+    unsigned digits = 0;
+    unsigned prefix = 0;
+    if(value != 0) {
+        digits = log16(value) + 1;
+        if(cs.alternative_form)
+            prefix = 2;
+    }
+    unsigned zeroes = cs.precision>digits? cs.precision - digits : 0;
+    unsigned content_size = !!sign + prefix + zeroes + digits;
+    unsigned size = std::max(content_size, cs.minimum_field_width);
+    unsigned padding = size - content_size;
+    if(cs.pad_with_zeroes && !cs.left_justify)
+    {
+        zeroes += padding;
+        padding = 0;
+    }
+
+    char* str = pbuffer->reserve(size);
+    unsigned pos = size;
+    if(cs.left_justify) {
+        pos -= padding;
+        std::memset(str + pos, ' ', padding);
+    }
+
+    if(cs.uppercase)
+        utoa_generic_base16_preallocated<true>(str, pos, value);
+    else
+        utoa_generic_base16_preallocated<false>(str, pos, value);
+
+    pos -= zeroes;
+    std::memset(str + pos, '0', zeroes);
+    if(prefix) {
+        str[--pos] = cs.uppercase? 'X' : 'x';
+        str[--pos] = '0';
+    }
+    if(sign)
+        str[--pos] = sign;
+    if(!cs.left_justify) {
+        pos -= padding;
+        std::memset(str + pos, ' ', padding);
+    }
 }
     
 template <typename Integer>
@@ -1012,9 +1053,9 @@ private:
         T v = 0;
         TEST(log10(v) == 0);
         v = 1;
-        TEST(log10(v) == 1);
+        TEST(log10(v) == 0);
         v = 10;
-        for(unsigned i=2; i<=digits; ++i)
+        for(unsigned i=1; i!=digits; ++i)
         {
             //std::cerr << v-1 << " -> " << i-1 << '?'  << std::endl;
             TEST(log10(v-1) == i-1);
