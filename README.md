@@ -1,7 +1,7 @@
-Introduction
-------------
 ![Performance chart](doc/images/performance_periodic_calls.png)
 
+Introduction
+------------
 Asynclog is an extremely low-latency, lightweight logging library. It
 was created because I needed to perform extensive diagnostic logging
 without worrying about performance. Many [other logging
