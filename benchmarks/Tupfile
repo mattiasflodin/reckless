@@ -1,0 +1,12 @@
+include_rules
+BASE_CXXFLAGS = $(CXXFLAGS) -isystem $(BOOST_INCLUDE) -I$(ASYNCLOG_INCLUDE) -I$(PERFORMANCE_LOG_INCLUDE) 
+CXXFLAGS = $(BASE_CXXFLAGS) -I../../spdlog/include
+LDFLAGS += -L$(ASYNCLOG_LIB) -L$(PERFORMANCE_LOG_LIB) -lasynclog -lperformance_log
+
+: foreach spdlog_*.cpp |> !cxx |> %B
+
+CXXFLAGS = $(BASE_CXXFLAGS)
+#: foreach blah_*.cpp |> !cxx |> %B
+
+#: foreach *.cpp |> !cxx |>
+#: foreach *.o | $(ASYNCLOG_LIB)/libasynclog.a $(PERFORMANCE_LOG_LIB)/libperformance_log.a |> !ld |> %B
