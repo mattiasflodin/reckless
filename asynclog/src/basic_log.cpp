@@ -83,7 +83,7 @@ void asynclog::basic_log::output_worker()
                 output_buffer_.flush();
             while(not shared_input_queue_.pop(ce)) {
                 shared_input_queue_full_event_.wait(wait_time_ms);
-                wait_time_ms = (wait_time_ms == 0)? 1 : (wait_time_ms + wait_time_ms/4);
+                wait_time_ms += std::max(1u, wait_time_ms/4);
                 wait_time_ms = std::min(wait_time_ms, 1000u);
             }
         }
