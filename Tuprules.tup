@@ -4,7 +4,7 @@ ASYNCLOG_INCLUDE=$(TUP_CWD)/asynclog/include
 ASYNCLOG_LIB=$(TUP_CWD)/asynclog/lib
 PERFORMANCE_LOG_INCLUDE=$(TUP_CWD)/performance_log/include
 PERFORMANCE_LOG_LIB=$(TUP_CWD)/performance_log/lib
-CXXFLAGS=-std=c++11 -Wall -Wextra -Werror -O0 -g
+CXXFLAGS=-std=c++11 -Wall -Wextra -Werror -O3 -g
 # -lrt is needed for clock_gettime
 LDFLAGS=-g -lpthread -lrt
 !cxx = |> g++ $(CXXFLAGS) -c %f -o %o |> %B.o
