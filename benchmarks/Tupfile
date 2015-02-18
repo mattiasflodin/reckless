@@ -13,7 +13,8 @@ LDFLAGS = $(COMMON_LDFLAGS)
 : foreach spdlog_*.cpp |> !cxx |>
 : foreach spdlog_*.o | $(COMMON_LIBS) |> !ld |> %B
 
-CXXFLAGS = $(COMMON_CXXFLAGS) -I../../pantheios/include -I../../stlsoft/include
-LDFLAGS = $(COMMON_LDFLAGS) -L../../pantheios/lib -lpantheios.be.file -lpantheios.fe.simple -lpantheios 
+CXXFLAGS = $(COMMON_CXXFLAGS) -Wno-unused-local-typedefs -I../../pantheios/include -I../../stlsoft/include
+PANTHEIOS_LIBS_OMG_WHO_USES_THIS = -lpantheios.1.core.mt -lpantheios.1.util.mt -lpantheios.1.fe.simple.mt -lpantheios.1.be.file.mt -lpantheios.1.bec.file.mt -lpantheios.1.util.mt 
+LDFLAGS = $(COMMON_LDFLAGS) -L../../pantheios/lib $(PANTHEIOS_LIBS_OMG_WHO_USES_THIS)
 : foreach pantheios_*.cpp |> !cxx |>
 : foreach pantheios_*.o | $(COMMON_LIBS) |> !ld |> %B

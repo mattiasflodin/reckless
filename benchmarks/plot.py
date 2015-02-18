@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import sys
 import os.path
 
-average_window = 6
+average_window = 128
 
 # from http://www.mulinblog.com/a-color-palette-optimized-for-data-visualization/
 gray = '#4D4D4D'
@@ -16,28 +16,30 @@ purple = '#B276B2'
 yellow = '#DECF3F'
 red = '#F15854'
 
-def timing_kind(name):
+def timing_library(name):
     name = os.path.splitext(name)[0]
-    return name[name.rfind('_')+1:]
+    return name[:name.find('_')]
 
 def pretty_name(name):
     name_table = {
             'nop': 'Timing overhead (~113 ticks)',
             'stdio': 'fprintf (C)',
             'fstream': 'std::fstream (C++)',
-            'alog': 'asynclog'
+            'asynclog': 'asynclog'
     }
             
-    return name_table.get(timing_kind(name), name)
+    return name_table.get(timing_library(name), timing_library(name))
 
 def timing_color(name):
     color_table = {
             'nop': red,
             'stdio': orange,
             'fstream': green,
-            'alog': blue,
+            'pantheios': gray,
+            'spdlog': pink,
+            'asynclog': blue,
             }
-    return color_table.get(timing_kind(name))
+    return color_table[timing_library(name)]
 
     
 def average(average_window, data):
@@ -64,6 +66,7 @@ fig, ax = plt.subplots()
 for name in sys.argv[1:]:
     with open(name, 'r') as f:
         data = f.readlines()
+    name = os.path.split(name)[-1]
     data = [int(x) for x in data]
     if average_window != 1:
         data = average2(average_window, data);
