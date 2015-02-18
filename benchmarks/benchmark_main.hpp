@@ -3,7 +3,7 @@
 #include <unistd.h>
 
 char c = 'A';
-float pi = 3.1414;
+float pi = 3.1415;
 int main()
 {
     unlink("log.txt");
@@ -26,9 +26,13 @@ int main()
     }
     performance_log::rdtscp_cpuid_clock::unbind_cpu();
 
+    std::uint64_t sum = 0;
     for(auto sample : performance_log) {
         std::cout << sample << std::endl;
+        sum += sample;
     }
+
+    std::cout << "Avg: " << static_cast<double>(sum)/performance_log.size() << std::endl;
     
     return 0;
     
