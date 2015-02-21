@@ -89,6 +89,7 @@ private:
     shared_input_queue_t shared_input_queue_;
     spsc_event shared_input_queue_full_event_;
     spsc_event shared_input_consumed_event_;
+    std::size_t thread_input_buffer_size_;
     output_buffer output_buffer_;
     std::thread output_thread_;
 };

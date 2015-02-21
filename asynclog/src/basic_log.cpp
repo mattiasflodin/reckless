@@ -7,7 +7,8 @@ asynclog::basic_log::basic_log(writer* pwriter,
         std::size_t shared_input_queue_size,
         std::size_t thread_input_buffer_size,
         std::size_t input_frame_alignment) :
-    shared_input_queue_(0)
+    shared_input_queue_(0),
+    thread_input_buffer_size_(0)
 {
     open(pwriter, output_buffer_max_capacity, shared_input_queue_size, thread_input_buffer_size, input_frame_alignment);
 }
@@ -19,7 +20,6 @@ asynclog::basic_log::~basic_log()
 }
 
 void asynclog::basic_log::open(writer* pwriter, 
-        std::size_t input_frame_alignment,
         std::size_t output_buffer_max_capacity,
         std::size_t shared_input_queue_size,
         std::size_t thread_input_buffer_size)
@@ -38,20 +38,8 @@ void asynclog::basic_log::open(writer* pwriter,
         if(thread_input_buffer_size == 0)
             thread_input_buffer_size = page_size;
     }
-
-    if(input_frame_alignment == 0)
-        input_frame_alignment = detail::get_cache_line_size();
-
-    assert(detail::is_power_of_two(input_frame_alignment));
-    // input_frame_alignment must at least match that of a function pointer
-    assert(input_frame_alignment >= sizeof(detail::formatter_dispatch_function_t*));
-    // We need the requirement below to ensure that, after alignment, there
-    // will either be 0 free bytes available in the input buffer, or
-    // enough to fit a function pointer. This simplifies the code.
-    assert(input_frame_alignment >= alignof(detail::formatter_dispatch_function_t*));
-
-    pthread_input_buffer_ = thread_input_buffer_t(thread_input_buffer_size, input_frame_alignment);
     reset_shared_input_queue(shared_input_queue_size);
+    thread_input_buffer_size_ = thread_input_buffer_size;
     output_buffer_ = output_buffer(pwriter, output_buffer_max_capacity);
     output_thread_ = std::thread(std::mem_fn(&basic_log::output_worker), this);
 }
@@ -141,15 +129,17 @@ void asynclog::basic_log::reset_shared_input_queue(std::size_t node_count)
 
 asynclog::detail::thread_input_buffer2* asynclog::basic_log::create_input_buffer()
 {
-    holder* p = create(indexes);
-    p->key = key_;
-    // TODO put pthread calls in a cpp file to avoid #includes in global namespace, also to reduce code bloat
-    int result = pthread_setspecific(key_, p);
-    if(likely(result == 0))
-        return p;
-    else if(result == ENOMEM)
+    auto p = thread_input_buffer2::create(thread_input_buffer_size_);
+    try {
+        int result = pthread_setspecific(key_, p);
+        if(likely(result == 0))
+            return p;
+        else if(result == ENOMEM)
             throw std::bad_alloc();
-    else
-        throw std::system_error(result, std::system_category());
+        else
+            throw std::system_error(result, std::system_category());
+    } catch(...) {
+        thread_input_buffer2::destroy(p);
+        throw;
+    }
 }
-

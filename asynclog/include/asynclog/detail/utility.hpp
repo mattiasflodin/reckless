@@ -50,7 +50,7 @@ std::size_t get_page_size() __attribute__ ((const));
 std::size_t get_cache_line_size() __attribute__((const));
 void prefetch(void const* ptr, std::size_t size);
 
-inline bool is_power_of_two(std::size_t v)
+inline constexpr bool is_power_of_two(std::size_t v)
 {
     return (v & (v - 1)) == 0;
 }
