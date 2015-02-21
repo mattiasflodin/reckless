@@ -70,11 +70,22 @@ private:
     void queue_commit_extent(detail::commit_extent const& ce);
     char* allocate_input_frame(std::size_t frame_size);
     void reset_shared_input_queue(std::size_t node_count);
+    thread_input_buffer2* get_input_buffer()
+    {
+        thread_input_buffer2* p = static_cast<thread_input_buffer2*>(pthread_getspecific(key_));
+        if(likely(p != nullptr)) {
+            return p;
+        } else {
+            return create_input_buffer();
+        }
+    }
+    thread_input_buffer2* create_input_buffer();
 
     typedef boost_1_56_0::lockfree::queue<detail::commit_extent, boost_1_56_0::lockfree::fixed_sized<true>> shared_input_queue_t;
 
-    typedef detail::thread_object<detail::thread_input_buffer, std::size_t, std::size_t> thread_input_buffer_t;
-    thread_input_buffer_t pthread_input_buffer_;
+    //typedef detail::thread_object<detail::thread_input_buffer, std::size_t, std::size_t> thread_input_buffer_t;
+    //thread_input_buffer_t pthread_input_buffer_;
+    
     shared_input_queue_t shared_input_queue_;
     spsc_event shared_input_queue_full_event_;
     spsc_event shared_input_consumed_event_;

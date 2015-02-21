@@ -138,3 +138,18 @@ void asynclog::basic_log::reset_shared_input_queue(std::size_t node_count)
     // TODO how do we handle an exception here?
     new (&shared_input_queue_) shared_input_queue_t(node_count);
 }
+
+asynclog::detail::thread_input_buffer2* asynclog::basic_log::create_input_buffer()
+{
+    holder* p = create(indexes);
+    p->key = key_;
+    // TODO put pthread calls in a cpp file to avoid #includes in global namespace, also to reduce code bloat
+    int result = pthread_setspecific(key_, p);
+    if(likely(result == 0))
+        return p;
+    else if(result == ENOMEM)
+            throw std::bad_alloc();
+    else
+        throw std::system_error(result, std::system_category());
+}
+
