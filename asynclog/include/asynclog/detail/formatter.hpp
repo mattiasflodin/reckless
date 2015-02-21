@@ -11,18 +11,6 @@
 namespace asynclog {
 namespace detail {
 
-typedef std::size_t formatter_dispatch_function_t(output_buffer*, char*);
-// TODO these checks need to be done at runtime now
-//static_assert(alignof(dispatch_function_t*) <= ASYNCLOG_FRAME_ALIGNMENT,
-//        "ASYNCLOG_FRAME_ALIGNMENT must at least match that of a function pointer");
-//// We need the requirement below to ensure that, after alignment, there
-//// will either be 0 free bytes available in the circular buffer, or
-//// enough to fit a dispatch pointer. This simplifies the code a bit.
-//static_assert(sizeof(dispatch_function_t*) <= FRAME_ALIGNMENT,
-//        "ASYNCLOG_FRAME_ALIGNMENT must at least match the size of a function pointer");
-formatter_dispatch_function_t* const WRAPAROUND_MARKER = reinterpret_cast<
-    formatter_dispatch_function_t*>(0);
-
 template <class Formatter, typename... Args, std::size_t... Indexes>
 void call_formatter(output_buffer* poutput, std::tuple<Args...>& args, index_sequence<Indexes...>)
 {

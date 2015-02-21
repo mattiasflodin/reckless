@@ -2,6 +2,8 @@
 #define ASYNCLOG_DETAIL_INPUT_HPP
 
 #include "asynclog/detail/spsc_event.hpp"
+#include "asynclog/output_buffer.hpp"
+#include "asynclog/detail/utility.hpp"    // is_power_of_two
 
 namespace asynclog {
 
@@ -9,11 +11,23 @@ class basic_log;
 
 namespace detail {
 
+typedef std::size_t formatter_dispatch_function_t(output_buffer*, char*);
+// TODO these checks need to be done at runtime now
+//static_assert(alignof(dispatch_function_t*) <= ASYNCLOG_FRAME_ALIGNMENT,
+//        "ASYNCLOG_FRAME_ALIGNMENT must at least match that of a function pointer");
+//// We need the requirement below to ensure that, after alignment, there
+//// will either be 0 free bytes available in the circular buffer, or
+//// enough to fit a dispatch pointer. This simplifies the code a bit.
+//static_assert(sizeof(dispatch_function_t*) <= FRAME_ALIGNMENT,
+//        "ASYNCLOG_FRAME_ALIGNMENT must at least match the size of a function pointer");
+formatter_dispatch_function_t* const WRAPAROUND_MARKER = reinterpret_cast<
+    formatter_dispatch_function_t*>(0);
+
 class thread_input_buffer {
 public:
-    static thread_input_buffer2* create(std::size_t size)
+    static thread_input_buffer* create(std::size_t size)
     {
-        std::size_t full_size = sizeof(thread_input_buffer2) + thread_input_buffer_size_ - sizeof(buffer_start_);
+        std::size_t full_size = sizeof(thread_input_buffer) + size - sizeof(formatter_dispatch_function_t*);
         char* buf = new char[full_size];
         try {
             return new (buf) thread_input_buffer(size);
@@ -23,9 +37,9 @@ public:
         }
     }
 
-    static void destroy(thread_input_buffer2* p)
+    static void destroy(thread_input_buffer* p)
     {
-        p->~thread_input_buffer2();
+        p->~thread_input_buffer();
         delete [] static_cast<char*>(static_cast<void*>(p));
     }
     // returns pointer to allocated input frame, moves input_end() forward.
@@ -49,29 +63,33 @@ private:
     
     char* advance_frame_pointer(char* p, std::size_t distance);
     void wait_input_consumed();
-    bool is_aligned(void* p)
+    bool is_aligned(void* p) const
     {
-        return (reinterpret_cast<std::uintptr_t>(p) & alignof(frame_alignment_mask())) == 0;
+        return (reinterpret_cast<std::uintptr_t>(p) & frame_alignment_mask()) == 0;
     }
-    bool is_aligned(std::size_t v)
+    bool is_aligned(std::size_t v) const
     {
         return (v & frame_alignment_mask()) == 0;
     }
 
-    std::uintptr_t frame_alignment_mask()
+    static constexpr std::uintptr_t frame_alignment_mask()
     {
-        static_assert(is_power_of_two(alignof(formatter_dispatch_function_t)));
-        return alignof(formatter_dispatch_function_t)-1;
+        static_assert(is_power_of_two(alignof(formatter_dispatch_function_t*)), "expected sizeof function pointer to be power of two");
+        return alignof(formatter_dispatch_function_t*)-1;
+    }
+
+    char* buffer_start()
+    {
+        return static_cast<char*>(static_cast<void*>(&buffer_start_));
     }
 
     basic_log* plog_;                 // Owner log instance
     spsc_event input_consumed_event_;
     std::size_t size_;                // number of chars in buffer
 
-    char* const pbegin_;              // fixed value
     std::atomic<char*> pinput_start_; // moved forward by output thread, read by logger::write (to determine free space left)
     char* pinput_end_;                // moved forward by logger::write, never read by anyone else
-    formatter_dispatch_function_t buffer_start_;
+    formatter_dispatch_function_t* buffer_start_;
 };
 
 struct commit_extent {

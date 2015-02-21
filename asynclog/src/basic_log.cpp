@@ -2,15 +2,28 @@
 
 #include <unordered_set>
 
+namespace {
+void destroy_thread(void*)
+{
+    // TODO
+    //thread_input_buffer* pbuffer = static_cast<thread_input_buffer*>(p);
+    //
+
+    // Signal that the puffer should be deleted by the 
+    //queue_commit_extent({pbuffer, nullptr});
+}
+}
+
 asynclog::basic_log::basic_log(writer* pwriter, 
         std::size_t output_buffer_max_capacity,
         std::size_t shared_input_queue_size,
-        std::size_t thread_input_buffer_size,
-        std::size_t input_frame_alignment) :
+        std::size_t thread_input_buffer_size) :
     shared_input_queue_(0),
     thread_input_buffer_size_(0)
 {
-    open(pwriter, output_buffer_max_capacity, shared_input_queue_size, thread_input_buffer_size, input_frame_alignment);
+    if(0 != pthread_key_create(&thread_input_buffer_key_, &destroy_thread))
+        throw std::bad_alloc();
+    open(pwriter, output_buffer_max_capacity, shared_input_queue_size, thread_input_buffer_size);
 }
 
 asynclog::basic_log::~basic_log()
@@ -109,13 +122,6 @@ void asynclog::basic_log::queue_commit_extent(detail::commit_extent const& ce)
     }
 }
 
-// TODO this should probably be removed.
-char* asynclog::basic_log::allocate_input_frame(std::size_t frame_size)
-{
-    auto pib = pthread_input_buffer_.get();
-    return pib->allocate_input_frame(frame_size);
-}
-
 void asynclog::basic_log::reset_shared_input_queue(std::size_t node_count)
 {
     // boost's lockfree queue has no move constructor and provides no reserve()
@@ -127,19 +133,19 @@ void asynclog::basic_log::reset_shared_input_queue(std::size_t node_count)
     new (&shared_input_queue_) shared_input_queue_t(node_count);
 }
 
-asynclog::detail::thread_input_buffer2* asynclog::basic_log::create_input_buffer()
+asynclog::detail::thread_input_buffer* asynclog::basic_log::init_input_buffer()
 {
-    auto p = thread_input_buffer2::create(thread_input_buffer_size_);
+    auto p = detail::thread_input_buffer::create(thread_input_buffer_size_);
     try {
-        int result = pthread_setspecific(key_, p);
-        if(likely(result == 0))
+        int result = pthread_setspecific(thread_input_buffer_key_, p);
+        if(detail::likely(result == 0))
             return p;
         else if(result == ENOMEM)
             throw std::bad_alloc();
         else
             throw std::system_error(result, std::system_category());
     } catch(...) {
-        thread_input_buffer2::destroy(p);
+        detail::thread_input_buffer::destroy(p);
         throw;
     }
 }

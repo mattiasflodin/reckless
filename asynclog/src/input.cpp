@@ -1,14 +1,11 @@
 #include "asynclog.hpp"
 #include "asynclog/detail/utility.hpp"
 
-asynclog::detail::thread_input_buffer::thread_input_buffer(std::size_t size, std::size_t frame_alignment) :
+asynclog::detail::thread_input_buffer::thread_input_buffer(std::size_t size) :
     size_(size),
-    frame_alignment_mask_(frame_alignment-1),
-    pbegin_(allocate_buffer(size, frame_alignment)),
-    pinput_start_(pbegin_),
-    pinput_end_(pbegin_)
+    pinput_start_(buffer_start()),
+    pinput_end_(buffer_start())
 {
-    assert(detail::is_power_of_two(frame_alignment));
 }
 
 asynclog::detail::thread_input_buffer::~thread_input_buffer()
@@ -30,13 +27,11 @@ asynclog::detail::thread_input_buffer::~thread_input_buffer()
     // so no need for strict memory ordering in this load.
     while(pinput_start_.load(std::memory_order_relaxed) != pinput_end_)
         wait_input_consumed();
-
-    free(pbegin_);
 }
 
 char* asynclog::detail::thread_input_buffer::discard_input_frame(std::size_t size)
 {
-    auto mask = frame_alignment_mask_;
+    auto mask = frame_alignment_mask();
     size = (size + mask) & ~mask;
     // We can use relaxed memory ordering everywhere here because there is
     // nothing being written of interest that the pointer update makes visible;
@@ -55,18 +50,8 @@ char* asynclog::detail::thread_input_buffer::wraparound()
     auto marker = *reinterpret_cast<formatter_dispatch_function_t**>(p);
     assert(WRAPAROUND_MARKER == marker);
 #endif
-    pinput_start_.store(pbegin_, std::memory_order_relaxed);
-    return pbegin_;
-}
-
-// Helper for allocating aligned ring buffer in ctor.
-char* asynclog::detail::thread_input_buffer::allocate_buffer(std::size_t size, std::size_t alignment)
-{
-    void* pbuffer = nullptr;
-    // TODO proper error here. bad_alloc?
-    if(0 != posix_memalign(&pbuffer, alignment, size))
-        throw std::runtime_error("cannot allocate input frame");
-    return static_cast<char*>(pbuffer);
+    pinput_start_.store(buffer_start(), std::memory_order_relaxed);
+    return buffer_start();
 }
 
 // Moves an input-buffer pointer forward by the given distance while
@@ -84,10 +69,10 @@ char* asynclog::detail::thread_input_buffer::advance_frame_pointer(char* p, std:
     assert(is_aligned(p));
     assert(is_aligned(distance));
     p += distance;
-    assert(size_ >= static_cast<std::size_t>(p - pbegin_));
-    auto remaining = size_ - (p - pbegin_);
+    assert(size_ >= static_cast<std::size_t>(p - buffer_start()));
+    auto remaining = size_ - (p - buffer_start());
     if(remaining == 0)
-        p = pbegin_;
+        p = buffer_start();
     return p;
 }
 
@@ -123,7 +108,7 @@ char* asynclog::detail::thread_input_buffer::allocate_input_frame(std::size_t si
     //   
     // (This is easier to understand by drawing it on a paper than by reading
     // the comment text).
-    auto mask = frame_alignment_mask_;
+    auto mask = frame_alignment_mask();
     size = (size + mask) & ~mask;
 
     // We can't write a frame that is larger than the entire capacity of the
@@ -134,7 +119,7 @@ char* asynclog::detail::thread_input_buffer::allocate_input_frame(std::size_t si
     while(true) {
         auto pinput_end = pinput_end_;
         // FIXME these asserts should / can be enabled again?
-        assert(static_cast<std::size_t>(pinput_end - pbegin_) < size_);
+        assert(static_cast<std::size_t>(pinput_end - buffer_start()) < size_);
         assert(is_aligned(pinput_end));
 
         // Even if we get an "old" value for pinput_start_ here, that's OK
@@ -167,13 +152,13 @@ char* asynclog::detail::thread_input_buffer::allocate_input_frame(std::size_t si
         } else {
             // Free space is non-contiguous.
             // TODO should we use an end pointer instead of a size_?
-            std::size_t free1 = size_ - (pinput_end - pbegin_);
+            std::size_t free1 = size_ - (pinput_end - buffer_start());
             if(likely(size < free1)) {
                 // There's enough room in the first segment.
                 pinput_end_ = advance_frame_pointer(pinput_end, size);
                 return pinput_end;
             } else {
-                std::size_t free2 = pinput_start - pbegin_;
+                std::size_t free2 = pinput_start - buffer_start();
                 if(likely(size < free2)) {
                     // We don't have enough room for a continuous input frame
                     // in the first segment (at the end of the circular
@@ -186,8 +171,8 @@ char* asynclog::detail::thread_input_buffer::allocate_input_frame(std::size_t si
                     // the marker.
                     *reinterpret_cast<formatter_dispatch_function_t**>(pinput_end_) =
                         WRAPAROUND_MARKER;
-                    pinput_end_ = advance_frame_pointer(pbegin_, size);
-                    return pbegin_;
+                    pinput_end_ = advance_frame_pointer(buffer_start(), size);
+                    return buffer_start();
                 } else {
                     // Not enough room. Wait for the output thread to consume
                     // some input.

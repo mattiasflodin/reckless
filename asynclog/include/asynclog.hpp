@@ -190,10 +190,8 @@ public:
     policy_log(writer* pwriter,
             std::size_t output_buffer_max_capacity = 0,
             std::size_t shared_input_queue_size = 0,
-            std::size_t thread_input_buffer_size = 0,
-            std::size_t input_frame_alignment = 0) :
+            std::size_t thread_input_buffer_size = 0) :
         basic_log(pwriter,
-                 input_frame_alignment,
                  output_buffer_max_capacity,
                  shared_input_queue_size,
                  thread_input_buffer_size)
@@ -221,10 +219,8 @@ public:
     severity_log(writer* pwriter,
             std::size_t output_buffer_max_capacity = 0,
             std::size_t shared_input_queue_size = 0,
-            std::size_t thread_input_buffer_size = 0,
-            std::size_t input_frame_alignment = 0) :
+            std::size_t thread_input_buffer_size = 0) :
         basic_log(pwriter,
-                 input_frame_alignment,
                  output_buffer_max_capacity,
                  shared_input_queue_size,
                  thread_input_buffer_size)
