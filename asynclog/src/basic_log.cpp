@@ -69,6 +69,9 @@ void asynclog::basic_log::close()
 
 void asynclog::basic_log::output_worker()
 {
+    // TODO if possible we should call signal_input_consumed() whenever the
+    // output buffer is flushed, so threads aren't kept waiting indefinitely if
+    // the queue never clears up.
     using namespace detail;
     std::unordered_set<thread_input_buffer*> touched_input_buffers;
     while(true) {
