@@ -6,6 +6,6 @@
     
 #define BENCHMARK_CLEANUP()
 
-#define LOG( c, i, f ) log.info( "Hello World! %s %d %f\n", c, i, f )
+#define LOG( c, i, f ) log.info( "Hello World! %s %d %f\n", c, i, f)
 
 

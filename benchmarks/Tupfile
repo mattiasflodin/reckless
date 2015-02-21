@@ -3,6 +3,16 @@ COMMON_CXXFLAGS = $(CXXFLAGS) -isystem $(BOOST_INCLUDE) -I$(PERFORMANCE_LOG_INCL
 COMMON_LDFLAGS = $(LDFLAGS) -L$(PERFORMANCE_LOG_LIB) -lperformance_log 
 COMMON_LIBS = $(PERFORMANCE_LOG_LIB)/libperformance_log.a 
 
+CXXFLAGS = $(COMMON_CXXFLAGS)
+LDFLAGS = $(COMMON_LDFLAGS)
+: foreach stdio_*.cpp |> !cxx |>
+: foreach stdio_*.o | $(COMMON_LIBS) |> !ld |> %B
+
+CXXFLAGS = $(COMMON_CXXFLAGS)
+LDFLAGS = $(COMMON_LDFLAGS)
+: foreach fstream_*.cpp |> !cxx |>
+: foreach fstream_*.o | $(COMMON_LIBS) |> !ld |> %B
+
 CXXFLAGS = $(COMMON_CXXFLAGS) -I$(ASYNCLOG_INCLUDE)
 LDFLAGS = $(COMMON_LDFLAGS) -L$(ASYNCLOG_LIB) -lasynclog
 : foreach asynclog_*.cpp |> !cxx |>

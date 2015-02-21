@@ -71,14 +71,14 @@ template <std::size_t LogSize, class ClockSource, class Sample>
 performance_log::logger<LogSize, ClockSource, Sample>::logger() :
     _next_sample_position(0)
 {
-    detail::lock_memory(_samples, sizeof(_samples));
+    //detail::lock_memory(_samples, sizeof(_samples));
     std::memset(_samples, 0, sizeof(_samples));
 }
 
 template <std::size_t LogSize, class ClockSource, class Sample>
 performance_log::logger<LogSize, ClockSource, Sample>::~logger()
 {
-    detail::unlock_memory(_samples, sizeof(_samples));
+    //detail::unlock_memory(_samples, sizeof(_samples));
 }
 
 inline auto performance_log::rdtscp_cpuid_clock::start() const -> timestamp
