@@ -13,6 +13,12 @@ asynclog::detail::thread_input_buffer::thread_input_buffer(std::size_t size, std
 
 asynclog::detail::thread_input_buffer::~thread_input_buffer()
 {
+    // FIXME I don't think we are properly waiting until the output
+    // worker has cleared this from touched_input_buffers. Which means
+    // it can call signal_input_consumed on a dangling pointer. We need
+    // to either get rid of touched_input_buffer or make sure we wait
+    // for the right thing here.
+ 
     // Wait for the output thread to consume all the contents of the buffer
     // before release it.
     // Both write() and wait_input_consumed should create full memory barriers,
