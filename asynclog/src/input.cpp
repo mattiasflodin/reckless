@@ -18,6 +18,11 @@ asynclog::detail::thread_input_buffer::~thread_input_buffer()
     // it can call signal_input_consumed on a dangling pointer. We need
     // to either get rid of touched_input_buffer or make sure we wait
     // for the right thing here.
+    //
+    // Actually, even if we don't have touched_input_buffers, there is a race
+    // between the call to discard_input_frame() and signal_input_consumed().
+    // If this dtor runs between them, then signal_input_consumed will be
+    // called on a dangling pointer.
  
     // Wait for the output thread to consume all the contents of the buffer
     // before release it.
