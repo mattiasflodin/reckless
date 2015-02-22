@@ -85,7 +85,6 @@ private:
         return static_cast<char*>(static_cast<void*>(&buffer_start_));
     }
 
-    basic_log* plog_;                 // Owner log instance
     spsc_event input_consumed_event_;
     std::size_t size_;                // number of chars in buffer
 

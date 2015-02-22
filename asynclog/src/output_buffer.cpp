@@ -77,6 +77,14 @@ void asynclog::output_buffer::flush()
     // NOTE if you get a crash here, it could be because your log object has a
     // longer lifetime than the writer (i.e. the writer has been destroyed
     // already).
+    // 
+    // TODO the above error happens if you have g_log as a global object and
+    // have a writer with local scope (e.g. in main()), *even if you do not
+    // write to the log after the writer goes out of scope*, because there can
+    // be stuff lingering in the async queue. This makes the error pretty
+    // obscure, and we should guard against it. Perhaps by taking the writer as
+    // a shared_ptr, or at least by leaving a huge warning in the
+    // documentation.
     pwriter_->write(pbuffer_, pcommit_end_ - pbuffer_);
     pcommit_end_ = pbuffer_;
 }

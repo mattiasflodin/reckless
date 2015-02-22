@@ -11,7 +11,7 @@
 
 class spsc_event {
 public:
-    spsc_event() : signal_(1)
+    spsc_event() : signal_(0)
     {
     }
 

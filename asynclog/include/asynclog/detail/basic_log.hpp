@@ -18,10 +18,7 @@ namespace asynclog {
 // TODO generic_log better name?
 class basic_log {
 public:
-    basic_log() :
-        shared_input_queue_(0)
-    {
-    }
+    basic_log();
     basic_log(writer* pwriter, 
             std::size_t output_buffer_max_capacity = 0,
             std::size_t shared_input_queue_size = 0,
@@ -41,6 +38,8 @@ public:
     {
         return output_thread_.joinable();
     }
+
+    void panic_flush();
 
 protected:
     template <class Formatter, typename... Args>
@@ -80,6 +79,7 @@ private:
         }
     }
     detail::thread_input_buffer* init_input_buffer();
+    void panic_flush_done();
 
     typedef boost_1_56_0::lockfree::queue<detail::commit_extent, boost_1_56_0::lockfree::fixed_sized<true>> shared_input_queue_t;
 
@@ -93,6 +93,8 @@ private:
     std::size_t thread_input_buffer_size_;
     output_buffer output_buffer_;
     std::thread output_thread_;
+    spsc_event panic_flush_done_event_;
+    bool panic_flush_;
 };
 
 }
