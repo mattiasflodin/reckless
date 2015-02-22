@@ -2,6 +2,7 @@
 #include "asynclog/detail/utility.hpp"
 
 asynclog::detail::thread_input_buffer::thread_input_buffer(std::size_t size) :
+    input_consumed_flag(false),
     size_(size),
     pinput_start_(buffer_start()),
     pinput_end_(buffer_start())

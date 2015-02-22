@@ -1,6 +1,7 @@
 #include "asynclog/detail/basic_log.hpp"
 
-#include <unordered_set>
+#include <vector>
+#include <ciso646>
 
 namespace {
 void destroy_thread(void*)
@@ -74,7 +75,8 @@ void asynclog::basic_log::output_worker()
     // output buffer is flushed, so threads aren't kept waiting indefinitely if
     // the queue never clears up.
     using namespace detail;
-    std::unordered_set<thread_input_buffer*> touched_input_buffers;
+    std::vector<thread_input_buffer*> touched_input_buffers;
+    touched_input_buffers.reserve(std::max(8u, 2*std::thread::hardware_concurrency()));
     while(true) {
         commit_extent ce;
         unsigned wait_time_ms = 0;
@@ -82,8 +84,10 @@ void asynclog::basic_log::output_worker()
             shared_input_consumed_event_.signal();
             for(thread_input_buffer* pinput_buffer : touched_input_buffers)
                 pinput_buffer->signal_input_consumed();
+            for(thread_input_buffer* pbuffer : touched_input_buffers)
+                pbuffer->input_consumed_flag = false;
             touched_input_buffers.clear();
-            if(!output_buffer_.empty())
+            if(not output_buffer_.empty())
                 output_buffer_.flush();
             while(not shared_input_queue_.pop(ce)) {
                 shared_input_queue_full_event_.wait(wait_time_ms);
@@ -97,16 +101,20 @@ void asynclog::basic_log::output_worker()
             return;
         }
 
-        char* pinput_start = ce.pinput_buffer->input_start();
-        while(pinput_start != ce.pcommit_end) {
-            auto pdispatch = *reinterpret_cast<formatter_dispatch_function_t**>(pinput_start);
-            if(WRAPAROUND_MARKER == pdispatch) {
-                pinput_start = ce.pinput_buffer->wraparound();
-                pdispatch = *reinterpret_cast<formatter_dispatch_function_t**>(pinput_start);
+            char* pinput_start = ce.pinput_buffer->input_start();
+            while(pinput_start != ce.pcommit_end) {
+                auto pdispatch = *reinterpret_cast<formatter_dispatch_function_t**>(pinput_start);
+                if(WRAPAROUND_MARKER == pdispatch) {
+                    pinput_start = ce.pinput_buffer->wraparound();
+                    pdispatch = *reinterpret_cast<formatter_dispatch_function_t**>(pinput_start);
+                }
+                auto frame_size = (*pdispatch)(&output_buffer_, pinput_start);
+                pinput_start = ce.pinput_buffer->discard_input_frame(frame_size);
+                if(not ce.pinput_buffer->input_consumed_flag) {
+                    touched_input_buffers.push_back(ce.pinput_buffer);
+                    ce.pinput_buffer->input_consumed_flag = true;
+                }
             }
-            auto frame_size = (*pdispatch)(&output_buffer_, pinput_start);
-            pinput_start = ce.pinput_buffer->discard_input_frame(frame_size);
-            touched_input_buffers.insert(ce.pinput_buffer);
         }
     }
 }

@@ -57,6 +57,8 @@ public:
     }
     void signal_input_consumed();
 
+    bool input_consumed_flag;
+
 private:
     thread_input_buffer(std::size_t size);
     ~thread_input_buffer();
