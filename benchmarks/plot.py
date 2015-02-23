@@ -70,7 +70,7 @@ for name in sys.argv[1:]:
     data = [int(x) for x in data]
     if average_window != 1:
         data = average2(average_window, data);
-    ax.plot(data, '-', label=pretty_name(name), color=timing_color(name))
+    ax.plot(data, '-', label=name) #, label=pretty_name(name) , color=timing_color(name))
 
 legend = ax.legend()
 plt.xlabel('Iteration')

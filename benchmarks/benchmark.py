@@ -61,7 +61,7 @@ if not args_ok:
             "or 'all' to benchmark all libs.\n".format('\n  '.join(AVAILABLE_LIBS)))
     sys.exit(1)
 
-variants = ['periodic_calls', 'simple_call_burst']
+variants = ['periodic_calls', 'one_thread', 'two_threads', 'four_threads']
 
 if not os.path.isdir('results'):
     os.mkdir('results')

@@ -1,6 +1,7 @@
 #include "performance_log.hpp"
 
 #include <system_error>
+#include <cassert>
 
 #include <sys/mman.h>
 #include <unistd.h>
@@ -19,6 +20,7 @@ void performance_log::detail::unlock_memory(void const* addr, std::size_t len)
 void performance_log::rdtscp_cpuid_clock::bind_cpu(int cpu)
 {
     int nprocessors = static_cast<int>(sysconf(_SC_NPROCESSORS_ONLN));
+    assert(cpu < nprocessors);
     auto const size = CPU_ALLOC_SIZE(nprocessors);
     cpu_set_t* pcpuset = CPU_ALLOC(nprocessors);
     if(not pcpuset)
