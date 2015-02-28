@@ -15,7 +15,11 @@ void mandelbrot_thread(unsigned* sample_buffer,
         double x1, double y1, double x2, double y2,
         )
 {
-    unsigned const total_samples;
+    double const width = x2 - x1;
+    double const height = y2 - y1;
+    double const scale_x = width/samples_width;
+    double const scale_y = height/samples_height;
+    unsigned const total_samples = samples_width*samples_height;;
     while(true)
     {
         std::size_t sample_index;
@@ -23,21 +27,19 @@ void mandelbrot_thread(unsigned* sample_buffer,
         {
             std::lock_guard<std::mutex> lk(g_pixel_index_mutex);
             pixel_index = g_pixel_index;
-            if(pixel_index == WIDTH_PIXELS*HEIGHT_PIXELS)
+            if(pixel_index == total_samples)
                 return;
-            end_pixel_index = std::min<std::size_t>(
-                WIDTH_PIXELS*HEIGHT_PIXELS,
-                pixel_index + THREAD_SLICE_SIZE);
+            end_pixel_index = std::min<std::size_t>(total_samples, pixel_index + THREAD_SLICE_SIZE);
             g_pixel_index = end_pixel_index;
         }
-        printf("\r%.0f%%", 100.0*pixel_index/(WIDTH_PIXELS*HEIGHT_PIXELS));
+        printf("\r%.0f%%", 100.0*pixel_index/total_samples);
         fflush(stdout);
 
         while(pixel_index != end_pixel_index) {
-            unsigned pixel_y = pixel_index / WIDTH_PIXELS;
-            unsigned pixel_x = pixel_index % WIDTH_PIXELS;
-            std::complex<double> c(BOX_LEFT + pixel_x*BOX_WIDTH/WIDTH_PIXELS,
-                    BOX_TOP + (HEIGHT_PIXELS-pixel_y)*BOX_HEIGHT/HEIGHT_PIXELS);
+            unsigned pixel_y = pixel_index / samples_width;
+            unsigned pixel_x = pixel_index % samples_width;
+            std::complex<double> c(x1 + pixel_x*scale_x,
+                    BOX_TOP + (samples_height-pixel_y)*BOX_HEIGHT/samples_height);
             std::complex<double> z;
 
             unsigned iterations = 0;
@@ -65,7 +67,7 @@ void mandelbrot()
     unsigned max_value = 0.0;
     std::size_t histogram[MAX_ITERATIONS];
     std::fill(histogram, histogram+MAX_ITERATIONS, 0);
-    for(std::size_t i=0; i!=WIDTH_PIXELS*HEIGHT_PIXELS; ++i) {
+    for(std::size_t i=0; i!=samples_width*samples_height; ++i) {
         max_value = std::max(max_value, g_image[i]);
         histogram[g_image[i]]++;
     }
@@ -79,7 +81,7 @@ void mandelbrot()
         hue += histogram[i-1];
         hues[i] = static_cast<std::uint8_t>(
                 static_cast<double>(PALETTE_SIZE-1)*hue/
-                (WIDTH_PIXELS*HEIGHT_PIXELS));
+                (samples_width*samples_height));
     }
 
     std::uint8_t palette[3*PALETTE_SIZE];
@@ -102,8 +104,8 @@ void mandelbrot()
         palette[3*i+2] = static_cast<std::uint8_t>(255.0*b);
     }
     
-    std::uint8_t image[3*WIDTH_PIXELS*HEIGHT_PIXELS];
-    for(std::size_t i=0; i!=WIDTH_PIXELS*HEIGHT_PIXELS; ++i)
+    std::uint8_t image[3*samples_width*samples_height];
+    for(std::size_t i=0; i!=samples_width*samples_height; ++i)
     {
         auto hue = hues[g_image[i]];
         image[3*i] = palette[3*hue];
