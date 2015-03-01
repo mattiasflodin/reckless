@@ -13,6 +13,10 @@ LDFLAGS = $(COMMON_LDFLAGS)
 : foreach stdio_*.cpp |> !cxx |>
 : foreach stdio_*.o | $(COMMON_LIBS) |> !ld |> %B
 
+CXXFLAGS = $(COMMON_CXXFLAGS) -DLOG_INCLUDE=\"stdio.hpp\"
+: foreach periodic_calls.cpp one_thread.cpp |> !cxx |>
+: foreach periodic_calls.o one_thread.o | $(COMMON_LIBS) |> !ld |> %B
+
 CXXFLAGS = $(COMMON_CXXFLAGS)
 LDFLAGS = $(COMMON_LDFLAGS)
 : foreach fstream_*.cpp |> !cxx |>
