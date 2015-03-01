@@ -1,5 +1,9 @@
 include_rules
 
+: foreach mandelbrot.cpp find_mandelbrot.cpp benchmark_mandelbrot.cpp |> !cxx |>
+: mandelbrot.o find_mandelbrot.o |> !ld |> find_mandelbrot
+: mandelbrot.o benchmark_mandelbrot.o |> !ld |> benchmark_mandelbrot
+
 COMMON_CXXFLAGS = $(CXXFLAGS) -isystem $(BOOST_INCLUDE) -I$(PERFORMANCE_LOG_INCLUDE) 
 COMMON_LDFLAGS = $(LDFLAGS) -L$(PERFORMANCE_LOG_LIB) -lperformance_log 
 COMMON_LIBS = $(PERFORMANCE_LOG_LIB)/libperformance_log.a 
@@ -8,9 +12,6 @@ CXXFLAGS = $(COMMON_CXXFLAGS)
 LDFLAGS = $(COMMON_LDFLAGS)
 : foreach stdio_*.cpp |> !cxx |>
 : foreach stdio_*.o | $(COMMON_LIBS) |> !ld |> %B
-
-: mandelbrot.cpp |> !cxx |>
-: mandelbrot.o | $(COMMON_LIBS) |> !ld |> %B
 
 CXXFLAGS = $(COMMON_CXXFLAGS)
 LDFLAGS = $(COMMON_LDFLAGS)
