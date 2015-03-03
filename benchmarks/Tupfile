@@ -13,8 +13,17 @@ LDFLAGS = $(COMMON_LDFLAGS)
 : foreach stdio_*.cpp |> !cxx |>
 : foreach stdio_*.o | $(COMMON_LIBS) |> !ld |> %B
 
-CXXFLAGS = $(COMMON_CXXFLAGS) -DLOG_INCLUDE=\"stdio.hpp\"
-: foreach periodic_calls.cpp one_thread.cpp |> !cxx |>
+STDIO_CXXFLAGS = $(COMMON_CXXFLAGS) -DLOG_INCLUDE=\"stdio.hpp\"
+CXXFLAGS = $(STDIO_CXXFLAGS) 
+: periodic_calls.cpp |> !cxx |>
+CXXFLAGS = $(STDIO_CXXFLAGS) -DTHREADS=1
+: call_burst.cpp |> !cxx |> call_burst_1.o
+CXXFLAGS = $(STDIO_CXXFLAGS) -DTHREADS=2
+: call_burst.cpp |> !cxx |> call_burst_2.o
+CXXFLAGS = $(STDIO_CXXFLAGS) -DTHREADS=3
+: call_burst.cpp |> !cxx |> call_burst_3.o
+CXXFLAGS = $(STDIO_CXXFLAGS) -DTHREADS=4
+: call_burst.cpp |> !cxx |> call_burst_4.o
 : foreach periodic_calls.o one_thread.o | $(COMMON_LIBS) |> !ld |> %B
 
 CXXFLAGS = $(COMMON_CXXFLAGS)
