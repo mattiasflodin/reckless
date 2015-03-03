@@ -6,7 +6,8 @@ include_rules
 
 COMMON_CXXFLAGS = $(CXXFLAGS) -isystem $(BOOST_INCLUDE) -I$(PERFORMANCE_LOG_INCLUDE) 
 COMMON_LDFLAGS = $(LDFLAGS) -L$(PERFORMANCE_LOG_LIB) -lperformance_log 
-COMMON_LIBS = $(PERFORMANCE_LOG_LIB)/libperformance_log.a 
+
+!pcxx = | $(PERFORMANCE_LOG_LIB)/libperformance_log.a |> $(CXX) $(CXXFLAGS) -c %f -o %o |> %B.o
 
 CXXFLAGS = $(COMMON_CXXFLAGS)
 LDFLAGS = $(COMMON_LDFLAGS)
@@ -15,6 +16,7 @@ LDFLAGS = $(COMMON_LDFLAGS)
 
 STDIO_CXXFLAGS = $(COMMON_CXXFLAGS) -DLOG_INCLUDE=\"stdio.hpp\"
 CXXFLAGS = $(STDIO_CXXFLAGS) 
+: foreach periodic_calls.o | $(COMMON_LIBS) |> !ld |> %B
 : periodic_calls.cpp |> !cxx |>
 CXXFLAGS = $(STDIO_CXXFLAGS) -DTHREADS=1
 : call_burst.cpp |> !cxx |> call_burst_1.o
@@ -24,7 +26,6 @@ CXXFLAGS = $(STDIO_CXXFLAGS) -DTHREADS=3
 : call_burst.cpp |> !cxx |> call_burst_3.o
 CXXFLAGS = $(STDIO_CXXFLAGS) -DTHREADS=4
 : call_burst.cpp |> !cxx |> call_burst_4.o
-: foreach periodic_calls.o one_thread.o | $(COMMON_LIBS) |> !ld |> %B
 
 CXXFLAGS = $(COMMON_CXXFLAGS)
 LDFLAGS = $(COMMON_LDFLAGS)
