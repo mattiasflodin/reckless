@@ -1,0 +1,12 @@
+
+LOG_INCLUDE=stdio.hpp
+THREADS=1
+: periodic_calls.cpp |> !pcxx |>  stdio_periodic_calls
+: call_burst.cpp |> !pcxx |> stdio_call_burst_1
+THREADS=2
+: call_burst.cpp |> !pcxx |> stdio_call_burst_2
+THREADS=3
+: call_burst.cpp |> !pcxx |> stdio_call_burst_3
+THREADS=4
+: call_burst.cpp |> !pcxx |> stdio_call_burst_4
+

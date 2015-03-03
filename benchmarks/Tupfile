@@ -1,23 +1,44 @@
 include_rules
 
+LOG_INCLUDE=
+EXTRA_CXXFLAGS =
+THREADS=
+
+!pcxx = | $(PERFORMANCE_LOG_LIB)/libperformance_log.a |> \
+    $(CXX) $(CXXFLAGS) -isystem $(BOOST_INCLUDE) \
+        -I$(PERFORMANCE_LOG_INCLUDE) $(EXTRA_CXXFLAGS) -DLOG_INCLUDE=\"$(LOG_INCLUDE)\" -DTHREADS=$(THREADS) -c %f -o %o.o &&\
+    $(LD) %o.o $(LDFLAGS) -L$(PERFORMANCE_LOG_LIB) -o %o -lperformance_log |> %B | %o.o
+    
+include generated.tup
 : foreach mandelbrot.cpp find_mandelbrot.cpp benchmark_mandelbrot.cpp |> !cxx |>
 : mandelbrot.o find_mandelbrot.o |> !ld |> find_mandelbrot
 : mandelbrot.o benchmark_mandelbrot.o |> !ld |> benchmark_mandelbrot
 
-COMMON_CXXFLAGS = $(CXXFLAGS) -isystem $(BOOST_INCLUDE) -I$(PERFORMANCE_LOG_INCLUDE) 
-COMMON_LDFLAGS = $(LDFLAGS) -L$(PERFORMANCE_LOG_LIB) -lperformance_log 
 
-!pcxx = | $(PERFORMANCE_LOG_LIB)/libperformance_log.a |> $(CXX) $(CXXFLAGS) -c && $(LD) %B.o |> %B
+#LOG_INCLUDE=asynclog.hpp
+#EXTRA_CXXFLAGS = -I$(ASYNCLOG_INCLUDE)
+#EXTRA_LDFLAGS = -L$(ASYNCLOG_LIB) -lasynclog
+#EXTRA_INPUTS = $(ASYNCLOG_LIB/libasynclog.a
+#THREADS=1
+#: periodic_calls.cpp |> !pcxx |>  asynclog_periodic_calls
+#: call_burst.cpp |> !pcxx |> asynclog_call_burst_1
+#THREADS=2
+#: call_burst.cpp |> !pcxx |> asynclog_call_burst_2
+#THREADS=3
+#: call_burst.cpp |> !pcxx |> asynclog_call_burst_3
+#THREADS=4
+#: call_burst.cpp |> !pcxx |> asynclog_call_burst_4
+#
 
-CXXFLAGS = $(COMMON_CXXFLAGS)
-LDFLAGS = $(COMMON_LDFLAGS)
-: foreach stdio_*.cpp |> !pcxx |>
+
+
+#CXXFLAGS = $(COMMON_CXXFLAGS)
+#LDFLAGS = $(COMMON_LDFLAGS)
+#: foreach stdio_*.cpp |> !pcxx |>
 #: foreach stdio_*.o |> !ld |> %B
 
 #STDIO_CXXFLAGS = $(COMMON_CXXFLAGS) -DLOG_INCLUDE=\"stdio.hpp\"
 #CXXFLAGS = $(STDIO_CXXFLAGS) 
-#: foreach periodic_calls.o | $(COMMON_LIBS) |> !ld |> %B
-#: periodic_calls.cpp |> !cxx |>
 #CXXFLAGS = $(STDIO_CXXFLAGS) -DTHREADS=1
 #: call_burst.cpp |> !cxx |> call_burst_1.o
 #CXXFLAGS = $(STDIO_CXXFLAGS) -DTHREADS=2
