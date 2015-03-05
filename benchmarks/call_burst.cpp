@@ -1,6 +1,7 @@
 #include <performance_log.hpp>
 #include <iostream>
 #include <unistd.h>
+
 #include LOG_INCLUDE
 
 char c = 'A';
@@ -12,7 +13,7 @@ int main()
     performance_log::logger<16384, performance_log::rdtscp_cpuid_clock, std::uint32_t> performance_log;
 
     {
-        BENCHMARK_INIT();
+        LOG_INIT();
 
         for(int i=0; i!=10000; ++i) {
             auto start = performance_log.start();
@@ -20,7 +21,7 @@ int main()
             performance_log.stop(start);
         }
 
-        BENCHMARK_CLEANUP();
+        LOG_CLEANUP();
     }
     performance_log::rdtscp_cpuid_clock::unbind_cpu();
 

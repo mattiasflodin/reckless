@@ -4,10 +4,18 @@ LIB=
 EXTRA_CXXFLAGS =
 THREADS=
 
-!pcxx = | $(PERFORMANCE_LOG_LIB)/libperformance_log.a |> \
-    ^ CXX %o^\
+!pcxx = |> ^ CXX %f [$(LIB)]^\
     $(CXX) $(CXXFLAGS) -isystem $(BOOST_INCLUDE) \
-        -I$(PERFORMANCE_LOG_INCLUDE) $(EXTRA_CXXFLAGS) -DLOG_INCLUDE=\"$(LIB).hpp\" -DTHREADS=$(THREADS) -c %f -o %o \
+        -I$(PERFORMANCE_LOG_INCLUDE) $(EXTRA_CXXFLAGS) -DLOG_INCLUDE=\"$(LIB).hpp\" -DTHREADS=$(THREADS) -c %f -o %o |>
+
+!pld = | $(PERFORMANCE_LOG_LIB)/libperformance_log.a $(EXTRA_INPUTS) |>\
+    ^ LD %o^\
+    $(LD) %f -o %o $(LDFLAGS) -L$(PERFORMANCE_LOG_LIB) -lperformance_log $(EXTRA_LDFLAGS) |>
+
+!pcxxld = | $(PERFORMANCE_LOG_LIB)/libperformance_log.a $(EXTRA_INPUTS) |> \
+    ^ CXX %f [$(LIB)]^\
+    $(CXX) $(CXXFLAGS) -isystem $(BOOST_INCLUDE) \
+        -I$(PERFORMANCE_LOG_INCLUDE) $(EXTRA_CXXFLAGS) -DLOG_INCLUDE=\"$(LIB).hpp\" -DTHREADS=$(THREADS) %f -o %o \
     $(LDFLAGS) -L$(PERFORMANCE_LOG_LIB) -lperformance_log $(EXTRA_LDFLAGS) |>
     
 LIB=nop
@@ -22,12 +30,14 @@ include suite.tup
 LIB=asynclog
 EXTRA_CXXFLAGS = -I$(ASYNCLOG_INCLUDE)
 EXTRA_LDFLAGS = -L$(ASYNCLOG_LIB) -lasynclog
+EXTRA_INPUTS = $(ASYNCLOG_LIB)/libasynclog.a
 include suite.tup
 
 ifdef SPDLOG
     LIB=spdlog
     EXTRA_CXXFLAGS = -I@(SPDLOG)/include
     EXTRA_LDFLAGS =
+    EXTRA_INPUTS =
     include suite.tup
 endif
 
@@ -45,9 +55,9 @@ ifdef PANTHEIOS
         -lpantheios.1.util.mt 
     EXTRA_CXXFLAGS = -Wno-unused-local-typedefs -I@(PANTHEIOS)/include -I@(STLSOFT)/include
     EXTRA_LDFLAGS = -L@(PANTHEIOS)/lib $(PANTHEIOS_LIBS_OMG_WHO_USES_THIS)
+    EXTRA_INPUTS =
     include suite.tup
 endif
-
 
 : find_mandelbrot.cpp |> !cxx |>
 : nop_mandelbrot.o find_mandelbrot.o |> !ld |> find_mandelbrot

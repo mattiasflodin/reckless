@@ -8,11 +8,15 @@
 #include <numeric>
 #include <cmath>
 
+#define LOG_ONLY_DECLARE
+#include LOG_INCLUDE
+
 namespace {
     
 unsigned const THREAD_SLICE_SIZE = 128;
 
 void mandelbrot_thread(
+    unsigned thread_index,
     unsigned* sample_buffer,
     unsigned samples_width,
     unsigned samples_height,
@@ -54,6 +58,9 @@ void mandelbrot_thread(
                 z = z*z + c;
                 ++iterations;
             }
+
+            LOG_MANDELBROT(thread_index, sample_x, sample_y, c.real(), c.imag(), iterations);
+
             sample_buffer[sample_index] = iterations;
             ++sample_index;
         }
@@ -76,8 +83,8 @@ void mandelbrot(
     unsigned next_slice_index = 0;
     std::mutex next_slice_index_mutex;
     std::vector<std::thread> threads(thread_count);
-    for(std::size_t thread=0; thread!=thread_count; ++thread) {
-        threads[thread] = std::thread(&mandelbrot_thread, sample_buffer,
+    for(unsigned thread=0; thread!=thread_count; ++thread) {
+        threads[thread] = std::thread(&mandelbrot_thread, thread, sample_buffer,
                 samples_width, samples_height, x1, y1, x2, y2, max_iterations,
                 &next_slice_index_mutex, &next_slice_index);
     }

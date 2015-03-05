@@ -3,6 +3,8 @@
 #include <thread>
 #include <fstream>
 
+#include LOG_INCLUDE
+
 unsigned const SAMPLES_WIDTH = 1024;
 unsigned const SAMPLES_HEIGHT = 1024;
 unsigned const MAX_ITERATIONS = 32768;
@@ -15,9 +17,13 @@ double const BOX_HEIGHT = BOX_WIDTH*SAMPLES_HEIGHT/SAMPLES_WIDTH;
 int main()
 {
     unsigned sample_buffer[SAMPLES_WIDTH*SAMPLES_HEIGHT];
-    mandelbrot(sample_buffer, SAMPLES_WIDTH, SAMPLES_HEIGHT,
-        BOX_LEFT, BOX_TOP, BOX_LEFT+BOX_WIDTH, BOX_TOP-BOX_HEIGHT,
-        MAX_ITERATIONS, std::thread::hardware_concurrency());
+    {
+        LOG_INIT();
+        mandelbrot(sample_buffer, SAMPLES_WIDTH, SAMPLES_HEIGHT,
+            BOX_LEFT, BOX_TOP, BOX_LEFT+BOX_WIDTH, BOX_TOP-BOX_HEIGHT,
+            MAX_ITERATIONS, std::thread::hardware_concurrency());
+        LOG_CLEANUP();
+    }
     
     char image[3*SAMPLES_WIDTH*SAMPLES_HEIGHT];
     color_mandelbrot(image, sample_buffer, SAMPLES_WIDTH, SAMPLES_HEIGHT,

@@ -13,7 +13,7 @@ int main()
     performance_log::logger<8192, performance_log::rdtscp_cpuid_clock, std::uint32_t> performance_log;
 
     {
-        BENCHMARK_INIT();
+        LOG_INIT();
 
         for(int i=0; i!=600; ++i) {
             usleep(333);
@@ -24,7 +24,7 @@ int main()
             }
         }
         
-        BENCHMARK_CLEANUP();
+        LOG_CLEANUP();
     }
     performance_log::rdtscp_cpuid_clock::unbind_cpu();
 

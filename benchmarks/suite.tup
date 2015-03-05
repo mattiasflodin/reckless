@@ -1,12 +1,12 @@
 THREADS=1
-: periodic_calls.cpp |> !pcxx |> $(LIB)_periodic_calls
-: call_burst.cpp |> !pcxx |> $(LIB)_call_burst_1
+: periodic_calls.cpp |> !pcxxld |> $(LIB)_periodic_calls
+: call_burst.cpp |> !pcxxld |> $(LIB)_call_burst_1
 THREADS=2
-: call_burst.cpp |> !pcxx |> $(LIB)_call_burst_2
+: call_burst.cpp |> !pcxxld |> $(LIB)_call_burst_2
 THREADS=3
-: call_burst.cpp |> !pcxx |> $(LIB)_call_burst_3
+: call_burst.cpp |> !pcxxld |> $(LIB)_call_burst_3
 THREADS=4
-: call_burst.cpp |> !pcxx |> $(LIB)_call_burst_4
+: call_burst.cpp |> !pcxxld |> $(LIB)_call_burst_4
 
-: foreach mandelbrot.cpp benchmark_mandelbrot.cpp |> !cxx |> $(LIB)_%B.o
-: $(LIB)_mandelbrot.o $(LIB)_benchmark_mandelbrot.o |> !ld |> $(LIB)_mandelbrot
+: foreach mandelbrot.cpp benchmark_mandelbrot.cpp |> !pcxx |> $(LIB)_%B.o
+: $(LIB)_mandelbrot.o $(LIB)_benchmark_mandelbrot.o |> !pld |> $(LIB)_mandelbrot

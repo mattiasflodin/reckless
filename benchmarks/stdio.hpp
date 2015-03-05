@@ -3,10 +3,10 @@
 
 #include <sys/time.h>
 
-#define BENCHMARK_INIT() \
+#define LOG_INIT() \
     FILE* file = std::fopen("log.txt", "w")
     
-#define BENCHMARK_CLEANUP() \
+#define LOG_CLEANUP() \
     std::fclose(file)
 
 inline void log(FILE* file, char c, int i, float f)
