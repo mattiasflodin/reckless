@@ -9,6 +9,6 @@ CXXFLAGS=-std=c++11 -Wall -Wextra -Werror -O3 -g
 LDFLAGS=-g -lpthread -lrt
 CXX = g++
 LD = g++
-!cxx = |> $(CXX) $(CXXFLAGS) -c %f -o %o |> %B.o
-!ar = |> ar crs %o %f |>
-!ld = |> $(LD) %f -o %o $(LDFLAGS) |>
+!cxx = |> ^ CXX %f^ $(CXX) $(CXXFLAGS) -c %f -o %o |> %B.o
+!ar = |> ^ AR %o^ ar crs %o %f |>
+!ld = |> ^ LD %o^ $(LD) %f -o %o $(LDFLAGS) |>

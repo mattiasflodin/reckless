@@ -5,6 +5,7 @@ EXTRA_CXXFLAGS =
 THREADS=
 
 !pcxx = | $(PERFORMANCE_LOG_LIB)/libperformance_log.a |> \
+    ^ CXX %o^\
     $(CXX) $(CXXFLAGS) -isystem $(BOOST_INCLUDE) \
         -I$(PERFORMANCE_LOG_INCLUDE) $(EXTRA_CXXFLAGS) -DLOG_INCLUDE=\"$(LIB).hpp\" -DTHREADS=$(THREADS) -c %f -o %o \
     $(LDFLAGS) -L$(PERFORMANCE_LOG_LIB) -lperformance_log $(EXTRA_LDFLAGS) |>
@@ -23,36 +24,30 @@ EXTRA_CXXFLAGS = -I$(ASYNCLOG_INCLUDE)
 EXTRA_LDFLAGS = -L$(ASYNCLOG_LIB) -lasynclog
 include suite.tup
 
+ifdef SPDLOG
+    LIB=spdlog
+    EXTRA_CXXFLAGS = -I@(SPDLOG)/include
+    EXTRA_LDFLAGS =
+    include suite.tup
+endif
 
-LIB=spdlog
-EXTRA_CXXFLAGS = -I../../spdlog/include
-EXTRA_LD =
-include suite.tup
-#: foreach spdlog_*.o | $(COMMON_LIBS) |> !ld |> %B
+ifdef PANTHEIOS
+    ifndef STLSOFT
+        error CONFIG_PANTHEIOS requires CONFIG_STLSOFT
+    endif
+    LIB=pantheios
+    PANTHEIOS_LIBS_OMG_WHO_USES_THIS = \
+        -lpantheios.1.core.mt \
+        -lpantheios.1.util.mt \
+        -lpantheios.1.fe.simple.mt \
+        -lpantheios.1.be.file.mt \
+        -lpantheios.1.bec.file.mt \
+        -lpantheios.1.util.mt 
+    EXTRA_CXXFLAGS = -Wno-unused-local-typedefs -I@(PANTHEIOS)/include -I@(STLSOFT)/include
+    EXTRA_LDFLAGS = -L@(PANTHEIOS)/lib $(PANTHEIOS_LIBS_OMG_WHO_USES_THIS)
+    include suite.tup
+endif
 
-#CXXFLAGS = $(COMMON_CXXFLAGS) -I../../spdlog/include
-#LDFLAGS = $(COMMON_LDFLAGS)
 
 : find_mandelbrot.cpp |> !cxx |>
 : nop_mandelbrot.o find_mandelbrot.o |> !ld |> find_mandelbrot
-
-#CXXFLAGS = $(COMMON_CXXFLAGS)
-#LDFLAGS = $(COMMON_LDFLAGS)
-#: foreach fstream_*.cpp |> !cxx |>
-#: foreach fstream_*.o | $(COMMON_LIBS) |> !ld |> %B
-#
-#CXXFLAGS = $(COMMON_CXXFLAGS) -I$(ASYNCLOG_INCLUDE)
-#LDFLAGS = $(COMMON_LDFLAGS) -L$(ASYNCLOG_LIB) -lasynclog
-#: foreach asynclog_*.cpp |> !cxx |>
-#: foreach asynclog_*.o | $(COMMON_LIBS) $(ASYNCLOG_LIB)/libasynclog.a |> !ld |> %B
-#
-#CXXFLAGS = $(COMMON_CXXFLAGS) -I../../spdlog/include
-#LDFLAGS = $(COMMON_LDFLAGS)
-#: foreach spdlog_*.cpp |> !cxx |>
-#: foreach spdlog_*.o | $(COMMON_LIBS) |> !ld |> %B
-#
-#CXXFLAGS = $(COMMON_CXXFLAGS) -Wno-unused-local-typedefs -I../../pantheios/include -I../../stlsoft/include
-#PANTHEIOS_LIBS_OMG_WHO_USES_THIS = -lpantheios.1.core.mt -lpantheios.1.util.mt -lpantheios.1.fe.simple.mt -lpantheios.1.be.file.mt -lpantheios.1.bec.file.mt -lpantheios.1.util.mt 
-#LDFLAGS = $(COMMON_LDFLAGS) -L../../pantheios/lib $(PANTHEIOS_LIBS_OMG_WHO_USES_THIS)
-#: foreach pantheios_*.cpp |> !cxx |>
-#: foreach pantheios_*.o | $(COMMON_LIBS) |> !ld |> %B
