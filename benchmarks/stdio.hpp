@@ -1,15 +1,23 @@
 #include <cstdio>
 #include <ctime>
+#include <utility>  // forward
 
 #include <sys/time.h>
 
+#ifdef LOG_ONLY_DECLARE
+extern FILE* g_log;
+#else
+       FILE* g_log;
+#endif
+
 #define LOG_INIT() \
-    FILE* file = std::fopen("log.txt", "w")
+    g_log = std::fopen("log.txt", "w")
     
 #define LOG_CLEANUP() \
-    std::fclose(file)
+    std::fclose(g_log)
 
-inline void log(FILE* file, char c, int i, float f)
+template <class... T>
+void log(char const* fmt, T&&... args)
 {
     timeval tv;
     gettimeofday(&tv, nullptr);
@@ -19,9 +27,14 @@ inline void log(FILE* file, char c, int i, float f)
     // Need 20 chars since we need a NUL char.
     char buf[20];
     std::strftime(buf, 20, "%Y-%m-%d %H:%M:%S.", &tm);
-    std::fprintf(file, "%s.%03u Hello World! %c %d %f\n",
-            buf, static_cast<unsigned>(tv.tv_usec)/1000u, c, i, f);
-    std::fflush(file);
+
+    std::fprintf(g_log, fmt, buf,
+        static_cast<unsigned>(tv.tv_usec)/1000u, std::forward<T>(args)...);
+    std::fflush(g_log);
 }
 
-#define LOG(c, i, f) log(file, c, i, f)
+#define LOG(c, i, f) log("%s.%03u Hello World! %c %d %f\n", c, i, f)
+
+#define LOG_MANDELBROT(Thread, X, Y, FloatX, FloatY, Iterations) \
+    log("%s.%03u [T%d] %d,%d/%f,%f: %d iterations\n", \
+        Thread, X, Y, FloatX, FloatY, Iterations)
