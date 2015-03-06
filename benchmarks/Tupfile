@@ -45,14 +45,18 @@ ifdef PANTHEIOS
     ifndef STLSOFT
         error CONFIG_PANTHEIOS requires CONFIG_STLSOFT
     endif
+    ifndef PANTHEIOS_COMPILER
+        error CONFIG_PANTHEIOS requires CONFIG_PANTHEIOS_COMPILER
+    endif
     LIB=pantheios
+    PCC=@(PANTHEIOS_COMPILER)
     PANTHEIOS_LIBS_OMG_WHO_USES_THIS = \
-        -lpantheios.1.core.mt \
-        -lpantheios.1.util.mt \
-        -lpantheios.1.fe.simple.mt \
-        -lpantheios.1.be.file.mt \
-        -lpantheios.1.bec.file.mt \
-        -lpantheios.1.util.mt 
+        -lpantheios.1.core.$(PCC).mt \
+        -lpantheios.1.util.$(PCC).mt \
+        -lpantheios.1.fe.simple.$(PCC).mt \
+        -lpantheios.1.be.file.$(PCC).mt \
+        -lpantheios.1.bec.file.$(PCC).mt \
+        -lpantheios.1.util.$(PCC).mt 
     EXTRA_CXXFLAGS = -Wno-unused-local-typedefs -I@(PANTHEIOS)/include -I@(STLSOFT)/include
     EXTRA_LDFLAGS = -L@(PANTHEIOS)/lib $(PANTHEIOS_LIBS_OMG_WHO_USES_THIS)
     EXTRA_INPUTS =
