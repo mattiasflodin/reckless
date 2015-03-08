@@ -21,7 +21,7 @@ int main()
         LOG_INIT();
         mandelbrot(sample_buffer, SAMPLES_WIDTH, SAMPLES_HEIGHT,
             BOX_LEFT, BOX_TOP, BOX_LEFT+BOX_WIDTH, BOX_TOP-BOX_HEIGHT,
-            MAX_ITERATIONS, std::thread::hardware_concurrency());
+            MAX_ITERATIONS, THREADS);
         LOG_CLEANUP();
     }
     
