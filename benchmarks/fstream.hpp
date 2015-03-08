@@ -20,6 +20,9 @@ extern std::ofstream g_log;
     g_log << "Hello World! " << c << ' ' << i << ' ' << f << std::endl; \
     g_log_mutex.unlock()
 
+#define LOG_FILE_WRITE(FileNumber, Percent) \
+    ofs << "file " << FileNumber << " (" << Percent << "%)" << '\n' << std::flush
+
 #define LOG_MANDELBROT(Thread, X, Y, FloatX, FloatY, Iterations) \
     g_log_mutex.lock(); \
     g_log << "[T" << Thread << "] " << X << ',' << Y << '/' << FloatX << ',' << FloatY << ": " << Iterations << " iterations" << std::endl; \

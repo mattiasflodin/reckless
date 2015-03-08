@@ -17,5 +17,9 @@ extern "C" char const PANTHEIOS_FE_PROCESS_IDENTITY[] = "periodic_calls";
 #define LOG_CLEANUP()
 
 #define LOG( c, i, f ) pantheios::log_INFORMATIONAL("Hello World! ", pantheios::character(c), " ", pantheios::integer(i), " ", pantheios::real(f))
+
+#define LOG_FILE_WRITE(FileNumber, Percent) \
+    pantheios::log_INFORMATIONAL("file", pantheios::integer(FileNumber), " (", pantheios::real(Percent), "%)")
+
 #define LOG_MANDELBROT(Thread, X, Y, FloatX, FloatY, Iterations) \
     pantheios::log_INFORMATIONAL("[T", pantheios::integer(Thread), "] " , pantheios::integer(X) , "," , pantheios::integer(Y) , "/" , pantheios::real(FloatX) , "," , pantheios::real(FloatY) , ": " , pantheios::integer(Iterations) , " iterations")

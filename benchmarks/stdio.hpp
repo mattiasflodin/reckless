@@ -35,6 +35,10 @@ void log(char const* fmt, T&&... args)
 
 #define LOG(c, i, f) log("%s.%03u Hello World! %c %d %f\n", c, i, f)
 
+#define LOG_FILE_WRITE(FileNumber, Percent) \
+    std::fprintf(g_log, "file %u (%f%%)\n", FileNumber, Percent); \
+    std::fflush(g_log)
+
 #define LOG_MANDELBROT(Thread, X, Y, FloatX, FloatY, Iterations) \
     log("%s.%03u [T%d] %d,%d/%f,%f: %d iterations\n", \
         Thread, X, Y, FloatX, FloatY, Iterations)

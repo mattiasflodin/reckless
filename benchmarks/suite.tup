@@ -1,11 +1,13 @@
 : periodic_calls.cpp |> !pcxxld |> $(LIB)_periodic_calls
 : mandelbrot.cpp |> !pcxx |> $(LIB)_%B.o
 
+: write_files.cpp |> !pcxxld |> $(LIB)_write_files
+
 THREADS=1
-include suite_per_thread.tup
+include multithreaded_suite.tup
 THREADS=2
-include suite_per_thread.tup
+include multithreaded_suite.tup
 THREADS=3
-include suite_per_thread.tup
+include multithreaded_suite.tup
 THREADS=4
-include suite_per_thread.tup
+include multithreaded_suite.tup

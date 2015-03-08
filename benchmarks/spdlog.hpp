@@ -17,7 +17,10 @@ extern std::shared_ptr<spdlog::logger> g_logger;
 #define LOG_CLEANUP() \
     g_logger.reset()
 
-#define LOG( c, i, f ) g_logger->info( "Hello World! {} {} {}", c, i, f )
+#define LOG( c, i, f ) g_logger->info("Hello World! {} {} {}", c, i, f)
+
+#define LOG_FILE_WRITE(FileNumber, Percent) \
+    g_logger->info("file {} ({}%)", FileNumber, Percent)
 
 #define LOG_MANDELBROT(Thread, X, Y, FloatX, FloatY, Iterations) \
     g_logger->info("[T{}] {},{}/{},{}: {} iterations", Thread, X, Y, FloatX, FloatY, Iterations)

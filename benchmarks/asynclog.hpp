@@ -14,5 +14,8 @@ extern asynclog::severity_log<asynclog::no_indent, ' ', asynclog::severity_field
 
 #define LOG( c, i, f ) g_log.info("Hello World! %s %d %f\n", c, i, f)
 
+#define LOG_FILE_WRITE(FileNumber, Percent) \
+    g_log.info("file %u (%f%%)\n", FileNumber, Percent)
+
 #define LOG_MANDELBROT(Thread, X, Y, FloatX, FloatY, Iterations) \
     g_log.info("[T%d] %d,%d/%f,%f: %d iterations\n", Thread, X, Y, FloatX, FloatY, Iterations)
