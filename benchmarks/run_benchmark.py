@@ -4,7 +4,7 @@ import sys, os, subprocess, errno
 from sys import stdout, stderr, argv
 from getopt import gnu_getopt
 
-ALL_LIBS = ['asynclog', 'stdio', 'fstream', 'pantheios', 'spdlog']
+ALL_LIBS = ['nop', 'asynclog', 'stdio', 'fstream', 'pantheios', 'spdlog']
 ALL_TESTS = ['periodic_calls', 'call_burst', 'write_files', 'mandelbrot']
 
 SINGLE_SAMPLE_TESTS = {'mandelbrot'}
@@ -70,6 +70,7 @@ def run_tests(libs, tests):
 
 def run_test(lib, test, threads = None):
     def run(dry_run):
+        # TODO wipe results dir before running test?
         binary_name = lib + '_' + test
         if threads is not None:
             binary_name += '_' + str(threads)
