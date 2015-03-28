@@ -19,17 +19,17 @@ double const BOX_HEIGHT = BOX_WIDTH*SAMPLES_HEIGHT/SAMPLES_WIDTH;
 int main()
 {
     unsigned sample_buffer[SAMPLES_WIDTH*SAMPLES_HEIGHT];
+    auto start = std::chrono::steady_clock::now();
     {
-        auto start = std::chrono::steady_clock::now();
         LOG_INIT();
         mandelbrot(sample_buffer, SAMPLES_WIDTH, SAMPLES_HEIGHT,
             BOX_LEFT, BOX_TOP, BOX_LEFT+BOX_WIDTH, BOX_TOP-BOX_HEIGHT,
             MAX_ITERATIONS, THREADS);
         LOG_CLEANUP();
-        auto end = std::chrono::steady_clock::now();
-        std::cout << std::chrono::duration_cast<std::chrono::milliseconds>(
-                end - start).count() << std::endl;
     }
+    auto end = std::chrono::steady_clock::now();
+    std::cout << std::chrono::duration_cast<std::chrono::milliseconds>(
+            end - start).count() << std::endl;
     
     char image[3*SAMPLES_WIDTH*SAMPLES_HEIGHT];
     color_mandelbrot(image, sample_buffer, SAMPLES_WIDTH, SAMPLES_HEIGHT,
