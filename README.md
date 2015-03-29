@@ -16,6 +16,7 @@ How it works
 By low latency I mean that the time from invoking the library and returning
 to the caller is as short as I could make it. The code generated at the
 call site consists of
+
 1. Pushing the arguments on a thread-local queue. This has the same cost
    as pushing the arguments on the stack for a normal function call.
 2. Call to Boost.Lockless (NB: this bundled with the library, not an
