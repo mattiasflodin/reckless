@@ -115,6 +115,8 @@ To build the library, clone the git repository and run make.
 To build a program against the library, given the variable ASYNCLOG
 pointing to the root source directory, use:
 
+```bash
+g++ myprogram.cpp -I$(ASYNCLOG)/asynclog/include -L$(ASYNCLOG)/asynclog/lib -lasynclog
 ```
-g++ myprogram.cpp -I$(ASYNCLOG)/include -L$(ASYNCLOG)/asynclog/lib -lasynclog
-```
+
+
