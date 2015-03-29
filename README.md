@@ -83,15 +83,14 @@ int main()
     g_log.debug("Pointer: %p\n", s.c_str());
     g_log.info("Info line: %s\n", s);
     for(int i=0; i!=4; ++i) {
-        asynclog::scoped_indent indent;
-        g_log.warn("Warning: %d\n", i);
+        asynclog::scoped_indent indent;  // The indent object causes the lines
+        g_log.warn("Warning: %d\n", i);  // within this scope to be indented
     }
     g_log.error("Error: %f\n", 3.14);
 
     return 0;
 }
 ```
-
 This would give the following output:
 ```
 D 2015-03-29 13:23:35.288  Pointer: 0x1e18218
