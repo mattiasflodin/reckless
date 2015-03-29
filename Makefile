@@ -7,7 +7,7 @@
 
 CXXFLAGS = -std=c++11 -Wall -Wextra -O3 -g -isystem boost -Iasynclog/include
 
-target = libasynclog.a
+target = asynclog/lib/libasynclog.a
 srcpath = asynclog/src
 objects := $(patsubst %.cpp,%.o,$(wildcard $(srcpath)/*.cpp))
 

@@ -102,35 +102,19 @@ W 2015-03-29 13:23:35.288      Warning: 3
 E 2015-03-29 13:23:35.288  Error: 3.140000
 ```
 
-Performance
------------
+Platforms
+---------
+The library currently works only on Linux. Windows and BSD are on the
+roadmap. I don't own any Apple computers, so OS X won't happen unless
+someone else sends me a patch or buys me a machine.
 
-Why is it so fast?
-------------------
+Building
+--------
+To build the library, clone the git repository and run make.
 
-Only the
-bare minimum of work is performed, which is to save the arguments on a
-lockless queue and return. The remainder of the work, i.e. string
-formatting and disk i/o is performed on a separate thread. Apart from
-not having to wait for the actual I/O operation (or more likely, copying
-the data to the OS cache) to complete, this has three advantages:
+To build a program against the library, given the variable ASYNCLOG
+pointing to the root source directory, use:
 
-1. It avoids costly calls to the kernel. Even an ordinary queue with
-   mutex locks are expensive because of the cost associated with
-   switching CPU context to privileged mode.
-2. It doesn't slow down the rest of your code. Calling the OS kernel is
-   likely to severely pollute your CPU cache, evicting the data you were
-   working on to RAM. In other words, *it makes your non-logging code
-   run faster* than if you were using a logging library that has to
-   enter the kernel to perform its work.
-3. 
-
-The idea is to
-just keep the logging arguments on a queue
-
-What's the catch?
------------------
-
-
-
-------------------
+```
+g++ myprogram.cpp -I$(ASYNCLOG)/include -L$(ASYNCLOG)/asynclog/lib -lasynclog
+```
