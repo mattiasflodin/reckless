@@ -19,27 +19,61 @@ call site consists of
 
 1. Pushing the arguments on a thread-local queue. This has the same cost
    as pushing the arguments on the stack for a normal function call.
-2. Call to Boost.Lockless (NB: this bundled with the library, not an
+2. Call to Boost.Lockless (NB: this is bundled with the library, not an
    external dependency) to register the write request on a shared
    lockless queue.
 
+The actual writing is performed asynchronously by a separate thread.
 This removes or hides several costs:
 
-* There is no transition to the kernel at the call site. This is an
-  easily overlooked but important cost, not only because the transition
-  costs time, but because it pollutes the CPU cache. In other words,
-  avoiding this *makes your non-logging code run faster* than if you
-  were using a library that has to enter the kernel to perform its
-  work.
+* No transition to the kernel at the call site. The kernel is an easily
+  overlooked but important cost, not only because the transition costs
+  time, but because it pollutes the CPU cache. In other words, avoiding
+  this *makes your non-logging code run faster* than if you were using a
+  library that has to enter the kernel to perform its work.
 * No locks need to be taken for synchronization between threads (unless
-  the queue fills up; see the performance sections for more information
+  the queue fills up; see the performance section for more information
   about the implications of this).
 * It doesn't have to wait for the I/O operation to complete.
 * If there are bursts of log calls, multiple items on the queue can be
-  combined into a single write.
+  batched into a single write.
 
 What's the catch?
 -----------------
+As all string formatting and I/O is done asynchronously and in a single
+thread, there are a few caveats you need to be aware of:
+* If you choose to pass log arguments by reference or pointer, then you
+  must ensure that the referenced object remains valid at least until
+  the log has been flushed or closed.
+* You must take special care to handle crashes if you want to make sure
+  that all log data prior to the crash is saved. This is not unique to
+  asynchronous logging--for example fprintf will buffer data until you
+  flush it--but asynchronous logging arguably makes the issue worse. The
+  library provides convenience functions to aid with this.
+* As all string formatting is done in a single thread, it could theoretically
+  limit the scalability of your application if the formatting is very
+  expensive.
+* Performance becomes somewhat less predictable. Rather than putting the
+  cost of the logging on the thread that calls the logging library, the
+  OS may suspend some other thread to make room for the logging thread
+  to run.
+
+Basic use
+---------
+```c++
+#include <asynclog.hpp>
+#include <memory>
+
+int main()
+{
+    asynclog::file_writer writer("alog.txt");
+    asynclog::policy_log<> log(&writer);
+    std::unique_ptr<int> pvalue(new int);
+    log.write("Allocated pvalue at %s\n", pvalue.get());
+    log.write("Value of uninitialized int is %05.3d\n", *pvalue);
+    log.write("Value of uninitialized int is %05.3x\n", *pvalue);
+}
+```
 
 
 Performance
