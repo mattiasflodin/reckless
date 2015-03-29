@@ -119,3 +119,8 @@ pointing to the asynclog root directory, use:
 g++ -std=c++11 myprogram.cpp -I$(ASYNCLOG)/asynclog/include -L$(ASYNCLOG)/asynclog/lib -lasynclog
 ```
 
+Alternatives
+------------
+spdlog
+g2log
+
