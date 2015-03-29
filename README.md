@@ -11,40 +11,6 @@ keep them all, without worrying about the performance impact. Filtering
 can and should wait until you want to read the log, or need to clean up disk
 space.
 
-Basic use
----------
-```c++
-#include <asynclog.hpp>
-
-// It is possible to build custom loggers for various ways of formatting the
-// log. The severity log is a stock logger that allows you to configure fields
-// that should be put on each line, including a severity marker for
-// debug/info/warning/error.
-using log_t = asynclog::severity_log<
-    asynclog::indent<4>,       // 4 spaces of indent
-    ' ',                       // Field separator
-    asynclog::severity_field,  // Show severity marker (D/I/W/E) first
-    asynclog::timestamp_field  // Then timestamp field
-    >;
-    
-asynclog::file_writer writer("log.txt");
-log_t g_log(&writer);
-
-int main()
-{
-    std::string s("Hello World!");
-    g_log.debug("Pointer: %p\n", s.c_str());
-    g_log.info("Info line: %s\n", s);
-    for(int i=0; i!=4; ++i) {
-        asynclog::scoped_indent indent;
-        g_log.warn("Warning: %d\n", i);
-    }
-    g_log.error("Error: %f\n", 3.14);
-
-    return 0;
-}
-```
-
 How it works
 ------------
 By low latency I mean that the time from invoking the library and returning
@@ -91,6 +57,51 @@ thread, there are a few caveats you need to be aware of:
   cost of the logging on the thread that calls the logging library, the
   OS may suspend some other thread to make room for the logging thread
   to run.
+
+Basic use
+---------
+```c++
+#include <asynclog.hpp>
+
+// It is possible to build custom loggers for various ways of formatting the
+// log. The severity log is a stock policy-based logger that allows you to
+// configure fields that should be put on each line, including a severity
+// marker for debug/info/warning/error.
+using log_t = asynclog::severity_log<
+    asynclog::indent<4>,       // 4 spaces of indent
+    ' ',                       // Field separator
+    asynclog::severity_field,  // Show severity marker (D/I/W/E) first
+    asynclog::timestamp_field  // Then timestamp field
+    >;
+    
+asynclog::file_writer writer("log.txt");
+log_t g_log(&writer);
+
+int main()
+{
+    std::string s("Hello World!");
+    g_log.debug("Pointer: %p\n", s.c_str());
+    g_log.info("Info line: %s\n", s);
+    for(int i=0; i!=4; ++i) {
+        asynclog::scoped_indent indent;
+        g_log.warn("Warning: %d\n", i);
+    }
+    g_log.error("Error: %f\n", 3.14);
+
+    return 0;
+}
+```
+
+This would give the following output:
+```
+D 2015-03-29 13:23:35.288  Pointer: 0x1e18218
+I 2015-03-29 13:23:35.288  Info line: Hello World!
+W 2015-03-29 13:23:35.288      Warning: 0
+W 2015-03-29 13:23:35.288      Warning: 1
+W 2015-03-29 13:23:35.288      Warning: 2
+W 2015-03-29 13:23:35.288      Warning: 3
+E 2015-03-29 13:23:35.288  Error: 3.140000
+```
 
 Performance
 -----------
