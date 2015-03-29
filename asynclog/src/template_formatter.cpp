@@ -205,12 +205,26 @@ char const* asynclog::format(output_buffer* pbuffer, char const* pformat, long d
 
 char const* asynclog::format(output_buffer* pbuffer, char const* pformat, char const* v)
 {
-    if(*pformat != 's')
+    char c = *pformat;
+    if(c =='s') {
+        auto len = std::strlen(v);
+        char* p = pbuffer->reserve(len);
+        std::memcpy(p, v, len);
+        pbuffer->commit(len);
+    } else if(c == 'p') {
+        conversion_specification cs;
+        cs.minimum_field_width = 0;
+        cs.precision = 1;
+        cs.plus_sign = 0;
+        cs.left_justify = false;
+        cs.alternative_form = true;
+        cs.pad_with_zeroes = false;
+        cs.uppercase = false;
+        itoa_base16(pbuffer, reinterpret_cast<std::uintptr_t>(v), cs);
+    } else {
         return nullptr;
-    auto len = std::strlen(v);
-    char* p = pbuffer->reserve(len);
-    std::memcpy(p, v, len);
-    pbuffer->commit(len);
+    }
+
     return pformat + 1;
 }
 

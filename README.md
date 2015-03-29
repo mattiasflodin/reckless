@@ -11,6 +11,35 @@ keep them all, without worrying about the performance impact. Filtering
 can and should wait until you want to read the log, or need to clean up disk
 space.
 
+Basic use
+---------
+```c++
+#include <asynclog.hpp>
+
+using log_t = asynclog::severity_log<
+    asynclog::indent<4, '\t'>,    // 4 spaces of indent
+    ' ',                    // Field separator
+    asynclog::severity_field,
+    asynclog::timestamp_field
+    >;
+    
+asynclog::file_writer writer("log.txt");
+log_t g_log;
+
+int main()
+{
+    g_log.open(&writer);
+
+    std::string s("Hello World!");
+    g_log.debug("Pointer: %p\n", s.c_str());
+    g_log.info("Info line: %s\n", s);
+    g_log.warn("Warning: %d\n", 24);
+    g_log.error("Error: %f\n", 3.14);
+
+    return 0;
+}
+```
+
 How it works
 ------------
 By low latency I mean that the time from invoking the library and returning
@@ -57,24 +86,6 @@ thread, there are a few caveats you need to be aware of:
   cost of the logging on the thread that calls the logging library, the
   OS may suspend some other thread to make room for the logging thread
   to run.
-
-Basic use
----------
-```c++
-#include <asynclog.hpp>
-#include <memory>
-
-int main()
-{
-    asynclog::file_writer writer("alog.txt");
-    asynclog::policy_log<> log(&writer);
-    std::unique_ptr<int> pvalue(new int);
-    log.write("Allocated pvalue at %s\n", pvalue.get());
-    log.write("Value of uninitialized int is %05.3d\n", *pvalue);
-    log.write("Value of uninitialized int is %05.3x\n", *pvalue);
-}
-```
-
 
 Performance
 -----------
