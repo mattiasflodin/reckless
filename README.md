@@ -104,19 +104,18 @@ E 2015-03-29 13:23:35.288  Error: 3.140000
 
 Platforms
 ---------
-The library currently works only on Linux. Windows and BSD are on the
-roadmap. I don't own any Apple computers, so OS X won't happen unless
-someone else sends me a patch or buys me a machine.
+The library currently works only on Linux. Windows and BSD are on the roadmap.
+I don't own any Apple computers, so OS X won't happen unless someone sends me
+a patch or buys me hardware.
 
 Building
 --------
 To build the library, clone the git repository and run make.
 
 To build a program against the library, given the variable ASYNCLOG
-pointing to the root source directory, use:
+pointing to the asynclog root directory, use:
 
 ```bash
-g++ myprogram.cpp -I$(ASYNCLOG)/asynclog/include -L$(ASYNCLOG)/asynclog/lib -lasynclog
+g++ -std=c++11 myprogram.cpp -I$(ASYNCLOG)/asynclog/include -L$(ASYNCLOG)/asynclog/lib -lasynclog
 ```
-
 
