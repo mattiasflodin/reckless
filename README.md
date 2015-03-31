@@ -38,6 +38,11 @@ This removes or hides several costs:
 * If there are bursts of log calls, multiple items on the queue can be
   batched into a single write.
 
+Performance
+-----------
+For a more detailed performance discussion and statistics, see the [separate
+article](doc/performance.md). 
+
 What's the catch?
 -----------------
 As all string formatting and I/O is done asynchronously and in a single
