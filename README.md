@@ -38,10 +38,8 @@ This removes or hides several costs:
 * If there are bursts of log calls, multiple items on the queue can be
   batched into a single write.
 
-Performance
------------
-For a more detailed performance discussion and statistics, see the [separate
-article](doc/performance.md). 
+For a more detailed performance discussion and statistics, see the
+[manual](doc/manual.md). 
 
 What's the catch?
 -----------------
