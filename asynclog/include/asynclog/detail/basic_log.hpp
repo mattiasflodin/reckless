@@ -1,6 +1,8 @@
 #ifndef ASYNCLOG_DETAIL_BASIC_LOG_HPP
 #define ASYNCLOG_DETAIL_BASIC_LOG_HPP
 
+// TODO move this out of detail namespace
+
 #include "asynclog/detail/input.hpp"
 #include "asynclog/detail/formatter.hpp"
 #include "asynclog/output_buffer.hpp"
@@ -40,7 +42,6 @@ public:
     }
 
     void panic_flush();
-
 protected:
     template <class Formatter, typename... Args>
     void write(Args&&... args)

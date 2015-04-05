@@ -27,6 +27,7 @@ int main()
     
     asynclog::file_writer writer("log.txt");
     g_log.open(&writer);
+
     std::thread thread([]()
     {
         for(int i=0;i!=1000000;++i) {
