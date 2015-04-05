@@ -1,19 +1,18 @@
 #include "asynclog/detail/basic_log.hpp"
 #include "asynclog/crash_handler.hpp"
 
+#include <cstring>  // memset
 #include <vector>
 #include <system_error>
 #include <cassert>
 #include <errno.h>
-#include <signal.h>
-
-#include <iostream> // TODO remove
+#include <signal.h> // sigaction
 
 namespace asynclog {
 namespace {
 // We set handlers for all signals that have a default behavior to
-// terminate the process or generate a core dump, and that have not had
-// their handler set to something else already.
+// terminate the process or generate a core dump (and that have not had
+// their handler set to something else already).
 std::initializer_list<int> const signals = {
     // POSIX.1-1990 signals
     SIGHUP, SIGINT, SIGQUIT, SIGILL, SIGABRT, SIGFPE, SIGKILL, SIGSEGV,
@@ -49,7 +48,7 @@ void install_crash_handler(std::initializer_list<basic_log*> log)
     act.sa_flags = SA_RESETHAND;
     // Some signals are synonyms for each other. Some are explictly specified
     // as such, but others may just be implemented that way on specific
-    // systems.  So we'll remove duplicate entries here before we loop through
+    // systems. So we'll remove duplicate entries here before we loop through
     // all the signal numbers.
     std::vector<int> unique_signals(signals);
     sort(begin(unique_signals), end(unique_signals));
