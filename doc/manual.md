@@ -33,21 +33,24 @@ protected:
 Member functions
 ----------------
 <table>
-<tr><td>(constructor)</td><td>Construct a log.</td></tr>
-<tr><td>(destructor)</td><td>Destruct the log. It will be closed if not already
+<tr><td><code>(constructor)</code></td><td>Construct a log.</td></tr>
+<tr><td><code>(destructor)</code></td><td>Destruct the log. It will be closed
+if open.
 </td></tr>
-<tr><td>open</td><td>Open the log. This allocates the necessary buffers,
+<tr><td><code>open</code></td><td>Open the log. This allocates the necessary buffers,
 associates the log with a writer, and starts up the writer thread.</td></tr>
-<tr><td>close</td><td>Close the log. This flushes all queued log data in a
-controlled manner, then shuts down the writer thread and disassociates
-.</td></tr>
-<tr><td>is_open</td><td>Return `true` if the log is opened.</td></tr>
-<tr><td>panic_flush</td><td>Perform the minimum required work to flush
-everything that has been written to the log up to now. This is meant to be
+<tr><td><code>close</code></td><td>Close the log. This flushes all queued log data in a
+controlled manner, then shuts down the background thread and disassociates the
+writer.</td></tr>
+<tr><td><code>panic_flush</code></td><td>Perform the minimum required work to
+write everything that has been sent to the log up to now. This is meant to be
 called when a fatal program error (i.e. crash) has occurred, and it is expected
-that the process will be terminated very soon. The log object is left in a
+that the process will be terminated after the call. The log object is left in a
 "panic" state that prevents any cleanup in the destructor. Any thread that
 tries to write to the log after this will sleep indefinitely.</td></tr>
+<tr><td><code><write></code></td><td>Store <code>args</code> on the
+asynchronous queue and invoke <code>Formatter::format(output_buffer*,
+Args...)</code> from the background thread.
 </table>
 
 Arguments
