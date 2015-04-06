@@ -21,6 +21,8 @@ namespace asynclog {
 class basic_log {
 public:
     basic_log();
+    // FIXME shared_input_queue_size seems like the least interesting of these
+    // and should be moved to the end.
     basic_log(writer* pwriter, 
             std::size_t output_buffer_max_capacity = 0,
             std::size_t shared_input_queue_size = 0,

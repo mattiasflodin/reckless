@@ -33,7 +33,8 @@ protected:
 Member functions
 ----------------
 <table>
-<tr><td><code>(constructor)</code></td><td>Construct a log.</td></tr>
+<tr><td><code>(constructor)</code></td><td>Construct a log and optionally open
+it if a writer is provided.</td></tr>
 <tr><td><code>(destructor)</code></td><td>Destruct the log. It will be closed
 if open.
 </td></tr>
@@ -51,13 +52,27 @@ tries to write to the log after this will sleep indefinitely.</td></tr>
 <tr><td><code>write</code></td><td>Store <code>args</code> on the
 asynchronous queue and invoke
 <code>Formatter::format(output_buffer*, Args...)</code>
-from the background thread.
+from the background thread. This is meant to be called from derived classes.
 </table>
 
 Arguments
 ---------
 <table>
-<tr><td><code>output_buffer_max_capacity</code></td><td></td></tr>
+<tr><td><code>pwriter</code></td><td>Pointer to a writer to use for writing
+formatted log data.
+<tr><td><code>output_buffer_max_capacity</code></td><td>Maximum number of bytes
+that may be allocated for the final, formatted output buffer. If 0 is
+specified, the CPU page size is used (on Intel this is commonly 4
+KiB).</td></tr>
+<tr><td><code>shared_input_queue_size</code>Maximum number of log entries in
+the queue shared between application threads and the background writer thread.
+If 0 is specified, the library picks a number that fits in a single CPU memory
+page. The shared queue only stores references to the thread-local log buffers
+and the current write position in them.</td></tr>
+<tr><td><code>thread_input_buffer_size</code></td><td>Maximum number of bytes
+that may be pushed on the thread-local log buffer. This stores the actual
+arguments passed to <code>write()</code> and a function pointer, for each log
+entry.
 </table>
 
 policy_log

@@ -15,6 +15,8 @@ void destroy_thread_input_buffer(void* p)
 }
 }
 
+// FIXME we need to destroy the pthreads key in dtor
+
 asynclog::basic_log::basic_log() :
     shared_input_queue_(0),
     thread_input_buffer_size_(0),
@@ -50,6 +52,8 @@ void asynclog::basic_log::open(writer* pwriter,
         std::size_t shared_input_queue_size,
         std::size_t thread_input_buffer_size)
 {
+    // FIXME we should base defaults on the common disk block size instead of
+    // page sizes (8KiB).
     if(output_buffer_max_capacity == 0 or shared_input_queue_size == 0
             or thread_input_buffer_size == 0)
     {
