@@ -29,7 +29,7 @@ public:
 
 Member functions
 ================
-||
+|||
 ---------------------------------------
 | (constructor) | Construct a logger. |
 | (destructor)  | Destructs the log. |
