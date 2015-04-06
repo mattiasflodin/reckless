@@ -30,12 +30,12 @@ public:
 Member functions
 ================
 |||
----------------------------------------
-| (constructor) | Construct a logger. |
-| (destructor)  | Destructs the log. |
-| open | Open the log. |
-| close | 
-| is_open | Return `true` if the log is opened. |
+----------------|-------------------------------------|
+| (constructor) | Construct a logger.                 |
+| (destructor)  | Destructs the log.                  |
+| open          | Open the log.                       |
+| close         |                                     |
+| is_open       | Return `true` if the log is opened. |
 
 
 policy_log
