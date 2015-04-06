@@ -42,6 +42,7 @@ public:
     }
 
     void panic_flush();
+
 protected:
     template <class Formatter, typename... Args>
     void write(Args&&... args)
