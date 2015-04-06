@@ -53,7 +53,7 @@ tries to write to the log after this will sleep indefinitely.</td></tr>
 Arguments
 ---------
 <table>
-<tr><td>`output_buffer_max_capacity`</td><td></td></tr>
+<tr><td><code>output_buffer_max_capacity</code></td><td></td></tr>
 </table>
 
 policy_log
