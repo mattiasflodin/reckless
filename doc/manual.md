@@ -29,13 +29,13 @@ public:
 
 Member functions
 ================
-|constructor    | construct a logger                  |
-|---------------|-------------------------------------|
-| (constructor) | Construct a logger.                 |
-| (destructor)  | Destructs the log.                  |
-| open          | Open the log.                       |
-| close         |                                     |
-| is_open       | Return `true` if the log is opened. |
+<table>
+<tr><td>(constructor)</td><td>Construct a logger.</td></tr>
+<tr><td> (destructor)</td><td> Destructs the log.                  </td></tr>
+<tr><td> open        </td><td> Open the log.                       </td></tr>
+<tr><td> close       </td><td>                                     </td></tr>
+<tr><td> is_open     </td><td> Return `true` if the log is opened. </td></tr>
+</table>
 
 
 policy_log
