@@ -48,9 +48,10 @@ called when a fatal program error (i.e. crash) has occurred, and it is expected
 that the process will be terminated after the call. The log object is left in a
 "panic" state that prevents any cleanup in the destructor. Any thread that
 tries to write to the log after this will sleep indefinitely.</td></tr>
-<tr><td><code><write></code></td><td>Store <code>args</code> on the
-asynchronous queue and invoke <code>Formatter::format(output_buffer*,
-Args...)</code> from the background thread.
+<tr><td><code>write</code></td><td>Store <code>args</code> on the
+asynchronous queue and invoke
+<code>Formatter::format(output_buffer*, Args...)</code>
+from the background thread.
 </table>
 
 Arguments
