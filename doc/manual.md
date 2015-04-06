@@ -1,8 +1,7 @@
 basic_log
----------
-The base class for all loggers is `basic_log`. It only forms the common
-functionality and cannot be directly instantiated (its destructor is
-protected).
+=========
+The base class for all logs is `basic_log`. It provides common functionality
+but does not provide any public functions for writing to the log.
 ```c++
 class basic_log {
 public:
@@ -24,22 +23,41 @@ public:
 
     bool is_open();
     void panic_flush();
+
+protected:
+    template <class Formatter, typename... Args>
+    void write(Args&&... args);
 };
 ```
 
 Member functions
-================
+----------------
 <table>
-<tr><td>(constructor)</td><td>Construct a logger.</td></tr>
-<tr><td> (destructor)</td><td> Destructs the log.                  </td></tr>
-<tr><td> open        </td><td> Open the log.                       </td></tr>
-<tr><td> close       </td><td>                                     </td></tr>
-<tr><td> is_open     </td><td> Return `true` if the log is opened. </td></tr>
+<tr><td>(constructor)</td><td>Construct a log.</td></tr>
+<tr><td>(destructor)</td><td>Destruct the log. It will be closed if not already
+</td></tr>
+<tr><td>open</td><td>Open the log. This allocates the necessary buffers,
+associates the log with a writer, and starts up the writer thread.</td></tr>
+<tr><td>close</td><td>Close the log. This flushes all queued log data in a
+controlled manner, then shuts down the writer thread and disassociates
+.</td></tr>
+<tr><td>is_open</td><td>Return `true` if the log is opened.</td></tr>
+<tr><td>panic_flush</td><td>Perform the minimum required work to flush
+everything that has been written to the log up to now. This is meant to be
+called when a fatal program error (i.e. crash) has occurred, and it is expected
+that the process will be terminated very soon. The log object is left in a
+"panic" state that prevents any cleanup in the destructor. Any thread that
+tries to write to the log after this will sleep indefinitely.</td></tr>
 </table>
 
+Arguments
+---------
+<table>
+<tr><td>`output_buffer_max_capacity`</td><td></td></tr>
+</table>
 
 policy_log
-----------
+==========
 
 severity_log
 ------------

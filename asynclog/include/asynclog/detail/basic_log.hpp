@@ -36,11 +36,6 @@ public:
             std::size_t thread_input_buffer_size = 0);
     virtual void close();
 
-    bool is_open()
-    {
-        return output_thread_.joinable();
-    }
-
     void panic_flush();
 
 protected:
@@ -81,7 +76,11 @@ private:
         }
     }
     detail::thread_input_buffer* init_input_buffer();
-    void panic_flush_done();
+    void on_panic_flush_done();
+    bool is_open()
+    {
+        return output_thread_.joinable();
+    }
 
     typedef boost_1_56_0::lockfree::queue<detail::commit_extent, boost_1_56_0::lockfree::fixed_sized<true>> shared_input_queue_t;
 

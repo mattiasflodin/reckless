@@ -39,6 +39,8 @@ asynclog::basic_log::basic_log(writer* pwriter,
 
 asynclog::basic_log::~basic_log()
 {
+    if(panic_flush_)
+        return;
     if(is_open())
         close();
 }
@@ -77,6 +79,8 @@ void asynclog::basic_log::close()
     queue_commit_extent({nullptr, nullptr});
     output_thread_.join();
     assert(shared_input_queue_.empty());
+    // FIXME reverse everything that open() does, including getting rid of the
+    // buffers etc.
 }
 
 void asynclog::basic_log::panic_flush()
@@ -99,7 +103,7 @@ void asynclog::basic_log::output_worker()
         unsigned wait_time_ms = 0;
         if(not shared_input_queue_.pop(ce)) {
             if(unlikely(panic_flush_)) {
-                panic_flush_done();
+                on_panic_flush_done();
             } else {
                 shared_input_consumed_event_.signal();
                 for(thread_input_buffer* pinput_buffer : touched_input_buffers)
@@ -119,7 +123,7 @@ void asynclog::basic_log::output_worker()
             
         if(not ce.pinput_buffer) {
             if(unlikely(panic_flush_))
-                panic_flush_done();
+                on_panic_flush_done();
             output_buffer_.flush();
             return;
         }
@@ -197,7 +201,7 @@ asynclog::detail::thread_input_buffer* asynclog::basic_log::init_input_buffer()
     }
 }
 
-void asynclog::basic_log::panic_flush_done()
+void asynclog::basic_log::on_panic_flush_done()
 {
     output_buffer_.flush();
     panic_flush_done_event_.signal();
