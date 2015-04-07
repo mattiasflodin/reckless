@@ -59,24 +59,41 @@ Arguments
 ---------
 <table>
 <tr><td><code>pwriter</code></td><td>Pointer to a writer to use for writing
-formatted log data.
+formatted log data to disk or other targets.
 <tr><td><code>output_buffer_max_capacity</code></td><td>Maximum number of bytes
 that may be allocated for the final, formatted output buffer. If 0 is
 specified, the CPU page size is used (on Intel this is commonly 4
 KiB).</td></tr>
-<tr><td><code>shared_input_queue_size</code>Maximum number of log entries in
-the queue shared between application threads and the background writer thread.
-If 0 is specified, the library picks a number that fits in a single CPU memory
-page. The shared queue only stores references to the thread-local log buffers
-and the current write position in them.</td></tr>
+<tr><td><code>shared_input_queue_size</code></td><td>Maximum number of log
+entries in the queue shared between application threads and the background
+writer thread.  If 0 is specified, the library picks a number that fits in a
+single CPU memory page. The shared queue stores references to the thread-local
+log buffers and the current write position in them.</td></tr>
 <tr><td><code>thread_input_buffer_size</code></td><td>Maximum number of bytes
 that may be pushed on the thread-local log buffer. This stores the actual
 arguments passed to <code>write()</code> and a function pointer, for each log
-entry.
+entry.</td></tr>
 </table>
 
 policy_log
 ==========
+`policy_log` provides `printf`-like formatting and configurable header fields
+for each line that can be configured at compile-time.
+
+```c++
+template <class IndentPolicy = no_indent, char FieldSeparator = ' ', class... HeaderFields>
+class policy_log : public basic_log {
+public:
+    policy_log();
+    policy_log(writer* pwriter,
+            std::size_t output_buffer_max_capacity = 0,
+            std::size_t shared_input_queue_size = 0,
+            std::size_t thread_input_buffer_size = 0);
+
+    template <typename... Args>
+    void write(char const* fmt, Args&&... args);
+};
+```
 
 severity_log
 ------------
