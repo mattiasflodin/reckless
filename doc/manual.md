@@ -1,3 +1,13 @@
+**Table of Contents**
+
+- [basic_log](#)
+	- [Member functions](#)
+	- [Arguments](#)
+- [policy_log](#)
+	- [severity_log](#)
+	- [Rolling your own logger](#)
+	- [Performance](#)
+
 basic_log
 =========
 The base class for all logs is `basic_log`. It provides common functionality
@@ -77,8 +87,8 @@ entry.</td></tr>
 
 policy_log
 ==========
-`policy_log` provides `printf`-like formatting and configurable header fields
-for each line that can be configured at compile-time.
+`policy_log` supports `printf`-like formatting, configurable header
+columns, and scope-based indenting.
 
 ```c++
 template <class IndentPolicy = no_indent, char FieldSeparator = ' ', class... HeaderFields>
@@ -95,8 +105,19 @@ public:
 };
 ```
 
+Arguments
+---------
+See [basic_log](#) for constructor arguments.
+<table>
+<tr><td><code>IndentPolicy</code></td>
+<td>May be <code></td></tr>
+<tr><td><code>FieldSeparator</code></td><td></td></tr>
+<tr><td><code>HeaderFields</code></td><td></td></tr>
+</table>
+
+
 severity_log
-------------
+============
 
 Custom writers
 
