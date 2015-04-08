@@ -113,10 +113,11 @@ See [basic_log](#) for constructor arguments.
 <td>May be one of:
 <ul>
 <li><code>no_indent</code> to disable scope-based indentation.</li>
-<li><code>indent<Multiplier, Character></code> where Character is the
-indentation character to use, and Multiplier is how many indentation
-characters to output for each indentation level. For example,
-<code>indent<4, ' '></code> or <code>indent<1, '\t'></code>.</li>
+<li><code>indent&lt;Multiplier, Character&gt;</code> where
+<code>Character</code> is the indentation character to use, and
+<code>Multiplier</code> is how many indentation characters to output for each
+indentation level. For example, <code>indent&lt;4, ' '&gt;</code> or
+<code>indent&lt;1, '\t'&gt;</code>.</li>
 </ul>
 <tr><td><code>FieldSeparator</code></td><td></td></tr>
 <tr><td><code>HeaderFields</code></td><td></td></tr>
