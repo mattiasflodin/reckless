@@ -130,9 +130,10 @@ implementation of <code>timestamp_field</code> for more information.</td></tr>
 parsed differently depending on the type of each converted argument, but are
 roughly equivalent to <code>printf</code> for native types.</td></tr>
 <tr><td><code>args</code></td><td>Data to print. For each argument,
-<code>format(output_buffer*, char const* fmt, T&&)</code> is invoked.
-Argument-dependent lookup applies, so <code>format</code> may be declared in
-the same namespace as <code>T</code>.</td></tr>
+<code>format(output_buffer*, char const* fmt, T&&)</code> is invoked to write
+T as formatted data to the output buffer.  Argument-dependent lookup applies,
+so <code>format</code> may be declared in the same namespace as
+<code>T</code>.</td></tr>
 </table>
 
 
