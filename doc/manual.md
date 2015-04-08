@@ -88,7 +88,7 @@ entry.</td></tr>
 policy_log
 ==========
 `policy_log` supports `printf`-like formatting, configurable header
-columns, and scope-based indenting.
+fields, and scope-based indenting.
 
 ```c++
 template <class IndentPolicy = no_indent, char FieldSeparator = ' ', class... HeaderFields>
@@ -119,9 +119,22 @@ See [basic_log](#) for constructor arguments.
 indentation level. For example, <code>indent&lt;4, ' '&gt;</code> or
 <code>indent&lt;1, '\t'&gt;</code>.</li>
 </ul>
-<tr><td><code>FieldSeparator</code></td><td></td></tr>
-<tr><td><code>HeaderFields</code></td><td></td></tr>
+<tr><td><code>FieldSeparator</code></td><td>Character to use for separating
+log fields.</td></tr>
+<tr><td><code>HeaderFields</code></td><td>One or more fields to use for
+prefixing each log line. The only field currently available is
+<code>timestamp_field</code> which will output the time in ISO 8601 compliant
+time format. Other fields can be be implemented by the client; see the
+implementation of <code>timestamp_field</code> for more information.</td></tr>
+<tr><td><code>fmt</code></td><td>Format string. The conversion specifiers are
+parsed differently depending on the type of each converted argument, but are
+roughly equivalent to <code>printf</code> for native types.</td></tr>
+<tr><td><code>args</code></td><td>Data to print. For each argument,
+<code>format(output_buffer*, char const* fmt, T&&)</code> is invoked.
+Argument-dependent lookup applies, so <code>format</code> may be declared in
+the same namespace as <code>T</code>.</td></tr>
 </table>
+
 
 
 severity_log
