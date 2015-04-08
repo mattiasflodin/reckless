@@ -110,7 +110,10 @@ Arguments
 See [basic_log](#) for constructor arguments.
 <table>
 <tr><td><code>IndentPolicy</code></td>
-<td>May be <code></td></tr>
+<td>May be one of:
+<table>
+<tr><td><code>no_indent</code></td><td>blah  blah</td></tr>
+</table>
 <tr><td><code>FieldSeparator</code></td><td></td></tr>
 <tr><td><code>HeaderFields</code></td><td></td></tr>
 </table>
