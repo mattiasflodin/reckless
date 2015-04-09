@@ -147,19 +147,62 @@ lookup applies, so the client may declare <code>format</code> in the same
 namespace as <code>T</code>.</td></tr>
 </table>
 
-When `IndentPolicy` is set to `indent`, instances of `scoped_indent` will
-increase the indentation level by one during their life time. Note that
-the indentation level is necessarily a thread-local state, so if you have
-multiple writer threads then your log may end up with interleaved indentation
-levels. One way of dealing with this is to have a field containing the thread
-ID, and filtering the log by thread. Another possible future method would be
-to output each thread to a separate file, but this would require some changes
-in the `output_buffer` API.
+When `IndentPolicy` is set to `indent`, each instance of `scoped_indent` will
+increase the indentation level by one during its life time. Note that the
+indentation level is necessarily a thread-local property, so if you have
+multiple writer threads then your log may end up with interleaved lines with
+dififerent indentation levels. One way of dealing with this is to have a field
+containing the thread ID, and filtering the log by thread.
 
 severity_log
 ============
-The severity log is 
+The severity log is identical to `policy_log` except that it provides four
+write functions instead of one.
+
+```c++
+template <class IndentPolicy, char FieldSeparator, class... HeaderFields>
+class severity_log : public basic_log {
+public:
+    severity_log()
+    {
+    }
+
+    severity_log(writer* pwriter,
+            std::size_t output_buffer_max_capacity = 0,
+            std::size_t shared_input_queue_size = 0,
+            std::size_t thread_input_buffer_size = 0);
+
+    template <typename... Args>
+    void debug(char const* fmt, Args&&... args);
+    
+    template <typename... Args>
+    void info(char const* fmt, Args&&... args);
+    
+    template <typename... Args>
+    void warn(char const* fmt, Args&&... args);
+    
+    template <typename... Args>
+    void error(char const* fmt, Args&&... args);
+};
+```
+
+Each of these signifies a different severity level, with a proposed
+interpretation as follows:
+
+| Severity | Meaning |
+|----------|---------|
+| debug    | Log lines used while debugging a specific issue.
+| info     | Information about successful operations, operations that are about to start, or about the current state of the program. |
+| warn     | Indicates an issue that may potentially lead in an error. |
+| error    | Indicates an issue that prevents the program from working as intended. |
+----------------------
+
+The severity level can be placed on the log line by including `severity_field`
+as one of the header fields. This will output "D", "I", "W" or "E" to indicate
+which of the four functions was called.
+
 Custom writers
+==============
 
 Custom string formatting for your own data types
 ================================================
