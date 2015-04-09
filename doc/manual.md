@@ -137,7 +137,7 @@ parsed differently depending on the type of each converted argument, but are
 roughly equivalent to <code>printf</code> for native types. There is no need
 to end the string with a newline as <code>write</code> always writes each
 string on a separate line. This behavior is mostly to avoid spending CPU
-cycles on analyzing and splitting the output to insert the header fields at
+cycles on splitting the output to insert the header fields at
 the beginning of each new line, but also to make logging simpler for the
 caller.</td></tr>
 <tr><td><code>args</code></td><td>Data to print. For each argument,
@@ -147,15 +147,27 @@ lookup applies, so the client may declare <code>format</code> in the same
 namespace as <code>T</code>.</td></tr>
 </table>
 
+When `IndentPolicy` is set to `indent`, instances of `scoped_indent` will
+increase the indentation level by one during their life time. Note that
+the indentation level is necessarily a thread-local state, so if you have
+multiple writer threads then your log may end up with interleaved indentation
+levels. One way of dealing with this is to have a field containing the thread
+ID, and filtering the log by thread. Another possible future method would be
+to output each thread to a separate file, but this would require some changes
+in the `output_buffer` API.
+
 severity_log
 ============
 The severity log is 
 Custom writers
 
+Custom string formatting for your own data types
+================================================
+
 Rolling your own logger
------------------------
+=======================
 
 Performance
------------
+===========
 
 
