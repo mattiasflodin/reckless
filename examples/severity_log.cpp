@@ -17,13 +17,13 @@ log_t g_log(&writer);
 int main()
 {
     std::string s("Hello World!");
-    g_log.debug("Pointer: %p\n", s.c_str());
-    g_log.info("Info line: %s\n", s);
+    g_log.debug("Pointer: %p", s.c_str());
+    g_log.info("Info line: %s", s);
     for(int i=0; i!=4; ++i) {
         asynclog::scoped_indent indent;  // The indent object causes the lines
-        g_log.warn("Warning: %d\n", i);  // within this scope to be indented
+        g_log.warn("Warning: %d", i);  // within this scope to be indented
     }
-    g_log.error("Error: %f\n", 3.14);
+    g_log.error("Error: %f", 3.14);
 
     return 0;
 }

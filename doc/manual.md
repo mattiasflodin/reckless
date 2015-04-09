@@ -105,6 +105,12 @@ public:
 };
 ```
 
+Member functions
+---------
+<table>
+<tr><td><code>write</code></td><td>Write a formatted line to the log.</td></tr>
+</table>
+
 Arguments
 ---------
 See [basic_log](#) for constructor arguments.
@@ -128,19 +134,22 @@ time format. Other fields can be be implemented by the client; see the
 implementation of <code>timestamp_field</code> for more information.</td></tr>
 <tr><td><code>fmt</code></td><td>Format string. The conversion specifiers are
 parsed differently depending on the type of each converted argument, but are
-roughly equivalent to <code>printf</code> for native types.</td></tr>
+roughly equivalent to <code>printf</code> for native types. There is no need
+to end the string with a newline as <code>write</code> always writes each
+string on a separate line. This behavior is mostly to avoid spending CPU
+cycles on analyzing and splitting the output to insert the header fields at
+the beginning of each new line, but also to make logging simpler for the
+caller.</td></tr>
 <tr><td><code>args</code></td><td>Data to print. For each argument,
 <code>format(output_buffer*, char const* fmt, T&&)</code> is invoked to write
-T as formatted data to the output buffer.  Argument-dependent lookup applies,
-so <code>format</code> may be declared in the same namespace as
-<code>T</code>.</td></tr>
+<code>T</code> as formatted data to the output buffer. Argument-dependent
+lookup applies, so the client may declare <code>format</code> in the same
+namespace as <code>T</code>.</td></tr>
 </table>
-
-
 
 severity_log
 ============
-
+The severity log is 
 Custom writers
 
 Rolling your own logger

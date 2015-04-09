@@ -60,6 +60,14 @@ protected:
         // and in the output thread.
         new (pframe + args_offset) args_t(std::forward<Args>(args)...);
 
+        // TODO ideally queue_commit_extent would be called in a separate
+        // commit() or flush() function, but then we have to call
+        // get_input_buffer() twice which bloats the code at the call site. But
+        // if we make get_input_buffer() protected (i.e. move
+        // thread_input_buffer from the detail namespace) then we can delegate
+        // the call to get_input_buffer to the derived class, which could then
+        // call write multiple times followed by commit() if it wants to
+        // without having to fetch the TLS variable every time.
         queue_commit_extent({pbuffer, pbuffer->input_end()});
     }
 

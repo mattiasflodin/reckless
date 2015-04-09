@@ -134,6 +134,9 @@ public:
         format_fields(pbuffer, fields...);
         indent.apply(pbuffer);
         template_formatter::format(pbuffer, pformat, std::forward<Args>(args)...);
+        auto p = pbuffer->reserve(1);
+        *p = '\n';
+        pbuffer->commit(1);
     }
 
 private:
