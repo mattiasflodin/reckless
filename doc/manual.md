@@ -209,6 +209,8 @@ Custom string formatting for your own data types
 
 Rolling your own logger
 =======================
+example: ucs-2 logger
+example: root / hierarchical logger
 
 Performance
 ===========
