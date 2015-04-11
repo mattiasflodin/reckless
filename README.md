@@ -2,11 +2,11 @@
 
 Introduction
 ------------
-Asynclog is an extremely low-latency, lightweight logging library. It
+Reckless is an extremely low-latency, lightweight logging library. It
 was created because I needed to perform extensive diagnostic logging
 without worrying about performance. [Other logging
 libraries](http://www.pantheios.org/performance.html) boast the ability
-to throw log messages away very quickly; asynclog boasts the ability to
+to throw log messages away very quickly; reckless boasts the ability to
 keep them all, without worrying about the performance impact. Filtering
 can and should wait until you want to read the log, or need to clean up disk
 space.
@@ -64,7 +64,7 @@ thread, there are a few caveats you need to be aware of:
 Basic use
 ---------
 ```c++
-#include <asynclog.hpp>
+#include <reckless.hpp>
 
 // It is possible to build custom loggers for various ways of formatting the
 // log. The severity log is a stock policy-based logger that allows you to
