@@ -1,10 +1,12 @@
-#include <asynclog.hpp>
+#include <reckless/policy_log.hpp>
+#include <reckless/file_writer.hpp>
 #include <memory>
 #include <cstdio>
+#include <thread>
 
 #include <signal.h>
 
-asynclog::policy_log<> g_log;
+reckless::policy_log<> g_log;
 
 volatile int t1_count=0;
 volatile int t2_count=0;
@@ -25,7 +27,7 @@ int main()
     act.sa_flags = SA_RESETHAND;
     sigaction(SIGSEGV, &act, nullptr);
     
-    asynclog::file_writer writer("log.txt");
+    reckless::file_writer writer("log.txt");
     g_log.open(&writer);
 
     std::thread thread([]()

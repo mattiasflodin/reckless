@@ -1,2 +1,0 @@
-* Extremely low-latency calls to the logging function. Essentially all that happens is that the log function's arguments are stored in a circular buffer, for later retrieval by the logger thread.
-* Simultaneous output from separate threads is only interleaved at synchronization points, i.e. when flush() is called. This avoids garbled and difficult-to-read output in the log file.

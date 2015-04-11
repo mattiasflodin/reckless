@@ -25,7 +25,7 @@ def pretty_name(name):
             'nop': 'Timing overhead (~113 ticks)',
             'stdio': 'fprintf (C)',
             'fstream': 'std::fstream (C++)',
-            'asynclog': 'asynclog'
+            'reckless': 'reckless'
     }
             
     return name_table.get(timing_library(name), timing_library(name))
@@ -37,7 +37,7 @@ def timing_color(name):
             'fstream': green,
             'pantheios': gray,
             'spdlog': pink,
-            'asynclog': blue,
+            'reckless': blue,
             }
     return color_table[timing_library(name)]
 

@@ -1,7 +1,7 @@
 ![Performance chart](doc/images/performance_periodic_calls.png)
 
 Introduction
-------------
+============
 Reckless is an extremely low-latency, lightweight logging library. It
 was created because I needed to perform extensive diagnostic logging
 without worrying about performance. [Other logging
@@ -12,8 +12,8 @@ can and should wait until you want to read the log, or need to clean up disk
 space.
 
 How it works
-------------
-By low latency I mean that the time from invoking the library and returning
+============
+By low latency I mean that the time from calling the library and returning
 to the caller is as short as I could make it. The code generated at the
 call site consists of
 
@@ -34,20 +34,24 @@ This removes or hides several costs:
 * No locks need to be taken for synchronization between threads (unless
   the queue fills up; see the performance section for more information
   about the implications of this).
-* It doesn't have to wait for the I/O operation to complete.
+* It doesn't have to wait for the actual I/O operation to complete.
 * If there are bursts of log calls, multiple items on the queue can be
-  batched into a single write.
+  batched into a single write, improving throughput without sacrificing write
+  latency.
 
 For a more detailed performance discussion and statistics, see the
 [manual](doc/manual.md). 
 
 What's the catch?
------------------
+=================
 As all string formatting and I/O is done asynchronously and in a single
 thread, there are a few caveats you need to be aware of:
 * If you choose to pass log arguments by reference or pointer, then you
-  must ensure that the referenced object remains valid at least until
-  the log has been flushed or closed.
+  must ensure that the referenced data remains valid at least until the
+  log has been flushed or closed (unless you're only interested in
+  logging the value of the pointer itself). The best option for
+  dynamically allocated data is typically `std::string` or
+  `std::shared_ptr`.
 * You must take special care to handle crashes if you want to make sure
   that all log data prior to the crash is saved. This is not unique to
   asynchronous logging--for example fprintf will buffer data until you
@@ -62,7 +66,7 @@ thread, there are a few caveats you need to be aware of:
   to run.
 
 Basic use
----------
+=========
 ```c++
 #include <reckless.hpp>
 
@@ -70,14 +74,14 @@ Basic use
 // log. The severity log is a stock policy-based logger that allows you to
 // configure fields that should be put on each line, including a severity
 // marker for debug/info/warning/error.
-using log_t = asynclog::severity_log<
-    asynclog::indent<4>,       // 4 spaces of indent
+using log_t = reckless::severity_log<
+    reckless::indent<4>,       // 4 spaces of indent
     ' ',                       // Field separator
-    asynclog::severity_field,  // Show severity marker (D/I/W/E) first
-    asynclog::timestamp_field  // Then timestamp field
+    reckless::severity_field,  // Show severity marker (D/I/W/E) first
+    reckless::timestamp_field  // Then timestamp field
     >;
     
-asynclog::file_writer writer("log.txt");
+reckless::file_writer writer("log.txt");
 log_t g_log(&writer);
 
 int main()
@@ -86,7 +90,7 @@ int main()
     g_log.debug("Pointer: %p", s.c_str());
     g_log.info("Info line: %s", s);
     for(int i=0; i!=4; ++i) {
-        asynclog::scoped_indent indent;  // The indent object causes the lines
+        reckless::scoped_indent indent;  // The indent object causes the lines
         g_log.warn("Warning: %d", i);  // within this scope to be indented
     }
     g_log.error("Error: %f", 3.14);
@@ -106,24 +110,28 @@ E 2015-03-29 13:23:35.288  Error: 3.140000
 ```
 
 Platforms
----------
+=========
 The library currently works only on Linux. Windows and BSD are on the roadmap.
 I don't own any Apple computers, so OS X won't happen unless someone sends me
 a patch or buys me hardware.
 
 Building
---------
+========
 To build the library, clone the git repository and run make.
 
-To build a program against the library, given the variable ASYNCLOG
-pointing to the asynclog root directory, use:
+To build a program against the library, given the variable RECKLESS
+pointing to the reckless root directory, use:
 
 ```bash
-g++ -std=c++11 myprogram.cpp -I$(ASYNCLOG)/asynclog/include -L$(ASYNCLOG)/asynclog/lib -lasynclog
+g++ -std=c++11 myprogram.cpp -I$(RECKLESS)/reckless/include -L$(RECKLESS)/reckless/lib -lreckless
 ```
 
+More information
+================
+For more details, see the [manual](doc/manual.md).
+
 Alternatives
-------------
+============
 spdlog
 g2log
 

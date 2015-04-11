@@ -1,5 +1,5 @@
 include_rules
-CXXFLAGS += -isystem $(BOOST_INCLUDE) -I$(ASYNCLOG_INCLUDE)
-LDFLAGS += -L$(ASYNCLOG_LIB) -lasynclog
+CXXFLAGS += -isystem $(BOOST_INCLUDE) -I$(RECKLESS_INCLUDE)
+LDFLAGS += -L$(RECKLESS_LIB) -lreckless
 : foreach *.cpp |> !cxx |>
-: foreach *.o | $(ASYNCLOG_LIB)/libasynclog.a |> !ld |> %B
+: foreach *.o | $(RECKLESS_LIB)/libreckless.a |> !ld |> %B

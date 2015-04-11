@@ -5,10 +5,10 @@
 # here to build performance tests and other cruft. You need to use tup for all
 # of that.
 
-CXXFLAGS = -std=c++11 -Wall -Wextra -O3 -g -isystem boost -Iasynclog/include
+CXXFLAGS = -std=c++11 -Wall -Wextra -O3 -g -isystem boost -Ireckless/include
 
-target = asynclog/lib/libasynclog.a
-srcpath = asynclog/src
+target = reckless/lib/libasynclog.a
+srcpath = reckless/src
 objects := $(patsubst %.cpp,%.o,$(wildcard $(srcpath)/*.cpp))
 
 .PHONY: clean

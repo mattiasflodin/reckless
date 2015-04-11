@@ -212,6 +212,9 @@ Rolling your own logger
 example: ucs-2 logger
 example: root / hierarchical logger
 
+Handling crashes
+================
+
 Performance
 ===========
 

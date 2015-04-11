@@ -27,10 +27,10 @@ include suite.tup
 LIB=fstream
 include suite.tup
 
-LIB=asynclog
-EXTRA_CXXFLAGS = -I$(ASYNCLOG_INCLUDE)
-EXTRA_LDFLAGS = -L$(ASYNCLOG_LIB) -lasynclog
-EXTRA_INPUTS = $(ASYNCLOG_LIB)/libasynclog.a
+LIB=reckless
+EXTRA_CXXFLAGS = -I$(RECKLESS_INCLUDE)
+EXTRA_LDFLAGS = -L$(RECKLESS_LIB) -lreckless
+EXTRA_INPUTS = $(RECKLESS_LIB)/libreckless.a
 include suite.tup
 
 ifdef SPDLOG
@@ -57,7 +57,17 @@ ifdef PANTHEIOS
         -lpantheios.1.be.file.$(PCC).mt \
         -lpantheios.1.bec.file.$(PCC).mt \
         -lpantheios.1.util.$(PCC).mt 
-    EXTRA_CXXFLAGS = -Wno-unused-local-typedefs -I@(PANTHEIOS)/include -I@(STLSOFT)/include
+    # We can't take responsibility for warnings in the pantheios header files.
+    EXTRA_CXXFLAGS = -Wno-error
+    ifeq ($(CXX),g++)
+        # This warning comes up a *lot* on pantheios for my version of g++,
+        # hiding everything else. It's not supported by clang though, so we need
+        # to be judicious about its use to avoid failed builds.  I suppose it
+        # would be best if we could test for its availability, or better yet if
+        # pantheios would fix its code.
+        EXTRA_CXXFLAGS += -Wno-unused-local-typedefs
+    endif
+    EXTRA_CXXFLAGS += -I@(PANTHEIOS)/include -I@(STLSOFT)/include
     EXTRA_LDFLAGS = -L@(PANTHEIOS)/lib $(PANTHEIOS_LIBS_OMG_WHO_USES_THIS)
     EXTRA_INPUTS =
     include suite.tup
