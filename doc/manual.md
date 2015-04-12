@@ -186,23 +186,58 @@ public:
 };
 ```
 
-Each of these signifies a different severity level, with a proposed
-interpretation as follows:
+Each of these signifies a different severity level. In my experience,
+severity levels in log files easily become a point of contention, so if
+you wish to use them you may want to roll your own class based on this,
+and make sure that you have well-defined meanings of each log level.
+Below are definitions that I propose for this class.
 
-| Severity | Meaning |
-|:---------|:--------|
-| `debug`  | Log lines used while debugging a specific issue.
+| Severity | Proposed meaning |
+|:---------|:-----------------|
+| `debug`  | Log lines used while debugging a specific issue. |
 | `info`   | Information about successful operations, operations that are about to start, or about the current state of the program. |
-| `warn`   | Indicates an issue that may potentially lead in an error. |
+| `warn`   | Indicates an issue that may potentially lead to an error later on. |
 | `error`  | Indicates an issue that prevents the program from working as intended. |
-----------------------
+------------------------------
 
 The severity level can be placed on the log line by including `severity_field`
-as one of the header fields. This will output "D", "I", "W" or "E" to indicate
+as one of the header fields. This will output `D`, `I`, `W` or `E` to indicate
 which of the four functions was called.
 
 Custom writers
 ==============
+To customize how reckless logs data, you implement the `writer`
+interface.
+```c++
+class writer {
+public:
+    enum Result
+    {
+        SUCCESS,
+        ERROR_TRY_LATER,
+        ERROR_GIVE_UP
+    };
+    virtual ~writer() = 0;
+    virtual Result write(void const* pbuffer, std::size_t count) = 0;
+};
+```
+
+The `write` function should attempt to write `count` bytes from the
+buffer pointed to by `pbuffer`. If it returns `SUCCESS` then the log
+will consider the data to be persisted and will discard it from memory.
+
+The other two return values are not yet honored by the log at the time
+of this writing, but their meaning will be as follows. If
+`ERROR_GIVE_UP` is returned then the background thread will stop
+writing. The log will continue to operate but all data will be silently
+ignored. If `ERROR_TRY_LATER` is returned then the background thread
+will keep trying as new data is received. This is intended to be used
+for temporary situations, for example shortage of disk space or memory.
+If any buffers fill up then log functions will not block but discard
+data to prevent the program from freezing. The implementation may wish
+to output some kind of diagnostic message about this when the writer is
+again able to write data.
+
 
 Custom string formatting for your own data types
 ================================================
