@@ -254,8 +254,28 @@ public:
 };
 ```
 
-Custom string formatting for your own data types
+Custom string formatting
 ================================================
+Both `policy_log` and `severity_log` make use of the
+`template_formatter` class, which provides `printf`-like formatting of
+strings. However, it also allows the caller to define formatting for
+user-defined types. For every argument of type `T&&` passed to the log function,
+
+```c++
+format(output_buffer*, char const* fmt, T&&)
+```
+
+is called to write a formatted version of it to the output buffer. Since
+argument-dependent lookup applies for the call, the caller may declare
+`format` in the same namespace as `T`. The library provides a `format`
+implementation for all the native types, so you may piggy-back on that
+for your own implementation.
+
+output_buffer
+-------------
+The `output_buffer` class accumulates formatted data  for your own data types
+
+
 
 Custom fields
 =============

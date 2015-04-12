@@ -5,6 +5,7 @@
 
 #include <cstddef>  // size_t
 #include <new>      // bad_alloc
+#include <cstring>  // strlen, memcpy
 
 namespace reckless {
 class writer;
@@ -41,6 +42,39 @@ public:
     {
         pcommit_end_ += size;
     }
+    
+    void write(void const* p, std::size_t count)
+    {
+        auto const buffer_size = pbuffer_end_ - pbuffer_;
+        
+        char const* cp = static_cast<char const*>(p);
+        char const* end = cp + count;
+        auto remaining = static_cast<std::size_t>(end - cp);
+        auto available = static_cast<std::size_t>(pbuffer_end_ - pbuffer_);
+        while(detail::unlikely(remaining > available)) {
+            std::memcpy(pbuffer_end_, cp, available);
+            cp += available;
+            remaining -= available;
+            available = buffer_size;
+            pcommit_end_ = pbuffer_end_;
+            flush();
+        }
+        
+        std::memcpy(pcommit_end_, cp, remaining);
+        pcommit_end_ += remaining;
+    }
+    void write(char const* s)
+    {
+        write(s, std::strlen(s));
+    }
+
+    void write(char c)
+    {
+        char* p = reserve(1);
+        *p = c;
+        commit(1);
+    }
+    
     bool empty() const
     {
         return pcommit_end_ == pbuffer_;

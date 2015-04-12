@@ -1,5 +1,5 @@
 #include <reckless/template_formatter.hpp>
-#include "ntoa.hpp"
+#include <reckless/ntoa.hpp>
 
 #include <cstdio>
 #include <cstring>
@@ -28,6 +28,9 @@ namespace {
         return c >= '0' && c <= '9';
     }
     
+    // TODO for people writing custom format functions, it would be nice to
+    // have access to this. Also being able to just skip past the conversion
+    // specification so they can check the format character.
     char const* parse_conversion_specification(conversion_specification* pspec, char const* pformat)
     {
         bool left_justify = false;
