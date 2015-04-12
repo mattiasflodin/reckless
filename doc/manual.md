@@ -190,11 +190,11 @@ Each of these signifies a different severity level, with a proposed
 interpretation as follows:
 
 | Severity | Meaning |
-|----------|---------|
-| debug    | Log lines used while debugging a specific issue.
-| info     | Information about successful operations, operations that are about to start, or about the current state of the program. |
-| warn     | Indicates an issue that may potentially lead in an error. |
-| error    | Indicates an issue that prevents the program from working as intended. |
+|:---------|:--------|
+| `debug`  | Log lines used while debugging a specific issue.
+| `info`   | Information about successful operations, operations that are about to start, or about the current state of the program. |
+| `warn`   | Indicates an issue that may potentially lead in an error. |
+| `error`  | Indicates an issue that prevents the program from working as intended. |
 ----------------------
 
 The severity level can be placed on the log line by including `severity_field`
