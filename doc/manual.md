@@ -238,9 +238,27 @@ data to prevent the program from freezing. The implementation may wish
 to output some kind of diagnostic message about this when the writer is
 again able to write data.
 
+file_writer
+===========
+`file_writer` is a simple implementation of the `writer` interface that
+continuously writes to a single file. The file path is passed as an
+argument to the constructor. If it already exists then the writer will
+append to the existing file.
+
+```c++
+class file_writer : public writer {
+public:
+    file_writer(char const* path);
+    ~file_writer();
+    Result write(void const* pbuffer, std::size_t count);
+};
+```
 
 Custom string formatting for your own data types
 ================================================
+
+Custom fields
+=============
 
 Rolling your own logger
 =======================

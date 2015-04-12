@@ -79,7 +79,11 @@ void reckless::output_buffer::flush()
     // NOTE if you get a crash here, it could be because your log object has a
     // longer lifetime than the writer (i.e. the writer has been destroyed
     // already).
-    // 
+    
+    // TODO we must honor the return value of write here. Also, since
+    // it's user-provided code we should handle exceptions. The same
+    // goes for any calls to formatter functions.
+ 
     // TODO the above error happens if you have g_log as a global object and
     // have a writer with local scope (e.g. in main()), *even if you do not
     // write to the log after the writer goes out of scope*, because there can
