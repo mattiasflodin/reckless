@@ -97,6 +97,8 @@ policy_log
 fields, and scope-based indenting.
 
 ```c++
+// #include <reckless/policy_log.hpp>
+
 template <class IndentPolicy = no_indent, char FieldSeparator = ' ', class... HeaderFields>
 class policy_log : public basic_log {
 public:
@@ -166,6 +168,8 @@ The severity log is identical to `policy_log` except that it provides four
 write functions instead of one.
 
 ```c++
+// #include <reckless/severity_log.hpp>
+
 template <class IndentPolicy, char FieldSeparator, class... HeaderFields>
 class severity_log : public basic_log {
 public:
@@ -215,6 +219,8 @@ Custom writers
 To customize how reckless logs data, you implement the `writer`
 interface.
 ```c++
+// #include <reckless/writer.hpp>
+
 class writer {
 public:
     enum Result
@@ -252,6 +258,8 @@ argument to the constructor. If it already exists then the writer will
 append to the existing file.
 
 ```c++
+// #include <reckless/file_writer.hpp>
+
 class file_writer : public writer {
 public:
     file_writer(char const* path);
@@ -280,22 +288,29 @@ your own implementation.
 output_buffer
 -------------
 The `output_buffer` class accumulates formatted data and flushes it to disk
-when appropriate.
+when appropriate. The task of the `format` function is to write data to the
+`output_buffer`.
 
 ```c++
 // #include <reckless/output_buffer.hpp>
 
 class output_buffer {
 public:
-    void reset(writer* pwriter, std::size_t max_capacity);
     char* reserve(std::size_t size);
-
     void commit(std::size_t size);
     void write(void const* p, std::size_t count);
     void write(char const* s);
     void write(char c);
 };
 ```
+
+| Member function | Description |
+|:----------------|:------------|
+| reserve         | Reserve `size` bytes of the buffer for writing. This
+should reflect a pessimistic guess for how much data you will need to write.
+The output buffer makes sure that much memory is available, flushing existing
+data if necessary. A pointer to the reserved memory is returned.
+| commit          | Commit reserved data
 
 
 Custom fields
