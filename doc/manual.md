@@ -8,11 +8,17 @@
 	- [Rolling your own logger](#)
 	- [Performance](#)
 
+Overview of the library
+=======================
+<Graph>
+
 basic_log
 =========
 The base class for all logs is `basic_log`. It provides common functionality
 but does not provide any public functions for writing to the log.
 ```c++
+#include <reckless/basic_log.hpp>
+
 class basic_log {
 public:
     basic_log();
@@ -256,25 +262,40 @@ public:
 
 Custom string formatting
 ================================================
-Both `policy_log` and `severity_log` make use of the
-`template_formatter` class, which provides `printf`-like formatting of
-strings. However, it also allows the caller to define formatting for
-user-defined types. For every argument of type `T&&` passed to the log function,
+Both `policy_log` and `severity_log` make use of the `template_formatter`
+class, which provides `printf`-like formatting of strings. However, it also
+allows the caller to define formatting for user-defined types. For every
+argument of type `T&&` passed to the log function,
 
 ```c++
 format(output_buffer*, char const* fmt, T&&)
 ```
 
-is called to write a formatted version of it to the output buffer. Since
-argument-dependent lookup applies for the call, the caller may declare
+is called to write a formatted version of it to the output buffer.
+argument-dependent lookup applies for the call, so the caller may declare
 `format` in the same namespace as `T`. The library provides a `format`
-implementation for all the native types, so you may piggy-back on that
-for your own implementation.
+implementation for all the native types, so you may piggy-back on that for
+your own implementation.
 
 output_buffer
 -------------
-The `output_buffer` class accumulates formatted data  for your own data types
+The `output_buffer` class accumulates formatted data and flushes it to disk
+when appropriate.
 
+```c++
+// #include <reckless/output_buffer.hpp>
+
+class output_buffer {
+public:
+    void reset(writer* pwriter, std::size_t max_capacity);
+    char* reserve(std::size_t size);
+
+    void commit(std::size_t size);
+    void write(void const* p, std::size_t count);
+    void write(char const* s);
+    void write(char c);
+};
+```
 
 
 Custom fields

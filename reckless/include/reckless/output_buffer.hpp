@@ -13,6 +13,8 @@ class writer;
 class output_buffer {
 public:
     output_buffer();
+    // TODO hide functions that are not relevant to the client, e.g. move
+    // assignment, empty(), flush etc?
     output_buffer(output_buffer&& other);
     output_buffer(writer* pwriter, std::size_t max_capacity);
     ~output_buffer();
@@ -82,8 +84,8 @@ public:
     void flush();
 
 private:
-    output_buffer(output_buffer const&);    // not defined
-    output_buffer& operator=(output_buffer const&); // not defined
+    output_buffer(output_buffer const&) = delete;
+    output_buffer& operator=(output_buffer const&) = delete;
 
     writer* pwriter_;
     char* pbuffer_;
