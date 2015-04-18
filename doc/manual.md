@@ -17,7 +17,7 @@ basic_log
 The base class for all logs is `basic_log`. It provides common functionality
 but does not provide any public functions for writing to the log.
 ```c++
-#include <reckless/basic_log.hpp>
+// #include <reckless/basic_log.hpp>
 
 class basic_log {
 public:
@@ -326,6 +326,9 @@ memory once and commit multiple times, as long as the sum of what you commit
 is never larger than what you reserved. Calling `reserve` multiple times will
 obtain the same pointer each time until `commit` has been called.
 
+`write` is a shorthand for a combined `reserve` and `commit` call, but does
+take any opportunities it can to optimize the operation.
+
 Parameters
 ----------
 <table>
@@ -336,19 +339,6 @@ Parameters
 terminator is not written.</td></tr>
 <tr><td><code>c</code></td><td>Single byte</td></tr>
 </table>
-
-
-
-
-
-| Member function | Description |
-|:----------------|:------------|
-| reserve         | Reserve unused space from the Reserve `size` bytes of the buffer for writing. This
-should reflect a pessimistic guess for how much data you will need to write.
-The output buffer makes sure that much memory is available, flushing existing
-data if necessary. A pointer to the reserved memory is returned.
-| commit          | Commit reserved data
-
 
 Custom fields
 =============
