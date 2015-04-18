@@ -286,7 +286,7 @@ implementation for all the native types, so you may piggy-back on that for
 your own implementation.
 
 output_buffer
--------------
+=============
 The `output_buffer` class accumulates formatted data and flushes it to disk
 when appropriate. The task of the `format` function is to write data to the
 `output_buffer`.
@@ -298,15 +298,52 @@ class output_buffer {
 public:
     char* reserve(std::size_t size);
     void commit(std::size_t size);
-    void write(void const* p, std::size_t count);
+    void write(void const* buf, std::size_t count);
     void write(char const* s);
     void write(char c);
 };
 ```
 
+Member functions
+----------------
+<table>
+
+<tr><td><code>reserve</code></td><td>Ensure there is enough space in the
+buffer and obtain a pointer to the current position.</td></tr>
+
+<tr><td><code>commit</code></td><td>Commit previously reserved bytes to the
+buffer.</td></tr>
+
+<tr><td><code>write</code></td><td>Write provided data directly to the buffer.</td></tr>
+
+</table>
+
+The intended usage pattern is to make a pessimistic guess for how much space
+will be required in the buffer for the data that is to be written, and reserve
+that much space. After data has been written to the buffer, the number of
+bytes that were actually required are committed. It is possible to reserve
+memory once and commit multiple times, as long as the sum of what you commit
+is never larger than what you reserved. Calling `reserve` multiple times will
+obtain the same pointer each time until `commit` has been called.
+
+Parameters
+----------
+<table>
+<tr><td><code>size</code></td><td>Number of bytes to reserve or commit.</td></tr>
+<tr><td><code>buf</code></td><td>Pointer to buffer</td></tr>
+<tr><td><code>count</code></td><td>Number of bytes to write</td></tr>
+<tr><td><code>s</code></td><td>Zero-terminated string to write. The zero
+terminator is not written.</td></tr>
+<tr><td><code>c</code></td><td>Single byte</td></tr>
+</table>
+
+
+
+
+
 | Member function | Description |
 |:----------------|:------------|
-| reserve         | Reserve `size` bytes of the buffer for writing. This
+| reserve         | Reserve unused space from the Reserve `size` bytes of the buffer for writing. This
 should reflect a pessimistic guess for how much data you will need to write.
 The output buffer makes sure that much memory is available, flushing existing
 data if necessary. A pointer to the reserved memory is returned.

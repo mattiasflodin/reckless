@@ -45,11 +45,13 @@ public:
         pcommit_end_ += size;
     }
     
-    void write(void const* p, std::size_t count)
+    void write(void const* buf, std::size_t count)
     {
+        // TODO this could be smarter by writing from the client-provided
+        // buffer instead of copying the data.
         auto const buffer_size = pbuffer_end_ - pbuffer_;
         
-        char const* cp = static_cast<char const*>(p);
+        char const* cp = static_cast<char const*>(buf);
         char const* end = cp + count;
         auto remaining = static_cast<std::size_t>(end - cp);
         auto available = static_cast<std::size_t>(pbuffer_end_ - pbuffer_);
