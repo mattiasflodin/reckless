@@ -94,7 +94,7 @@ entry.</td></tr>
 should match the arguments that you intend to pass to <code>write</code>.
 The task of the <code>Formatter</code> is to write formatted data to the
 provided <code>output_buffer</code> based on the values of
-<code>Args</code></td></tr>
+<code>Args</code>.</td></tr>
 </table>
 
 policy_log
@@ -350,7 +350,26 @@ terminator is not written).</td></tr>
 
 Custom fields in policy_log
 ===========================
+If you don't want to build your own logger, the `policy_log`'s `HeaderFields`
+parameter `policy_log` provides a simple way to put custom information on each
+log line. A field should provide this conceptual interface:
 
+```c++
+class field {
+public:
+    field();
+    field(field&&);
+    bool format(output_buffer* pbuffer);
+};
+```
+
+When `policy_log::write` is called, each requested field is instantiated using
+its default constructor, then moved (or just copied, if no move semantics are
+available) to the log queue. In the background thread, `format` is called to
+write field data to the output buffer.
+
+For example, the stock `timestamp_field` obtains the current time in the
+constructor, and formats it as an ISO 8601 timestamp in `format`.
 
 Rolling your own logger
 =======================
