@@ -92,7 +92,9 @@ entry.</td></tr>
 <tr><td><code>Formatter</code></td><td>A type that provides the function
 <code>Formatter::format(output_buffer*, Args...)</code>. <code>Args</code>
 should match the arguments that you intend to pass to <code>write</code>.
-</td></tr>.
+The task of the <code>Formatter</code> is to write formatted data to the
+provided <code>output_buffer</code> based on the values of
+<code>Args</code></td></tr>
 </table>
 
 policy_log
@@ -292,8 +294,8 @@ your own implementation.
 output_buffer
 =============
 The `output_buffer` class accumulates formatted data and flushes it to disk
-when appropriate. The task of the `format` function is to write data to the
-`output_buffer`.
+when appropriate. The task of the client-provided `format` function is to
+write data to the `output_buffer`.
 
 ```c++
 // #include <reckless/output_buffer.hpp>
@@ -325,7 +327,7 @@ buffer.</td></tr>
 The intended usage pattern is to make a pessimistic guess for how much space
 will be required in the buffer for the data that is to be written, and reserve
 that much space. After data has been written to the buffer, the number of
-bytes that were actually required are committed. It is possible to reserve
+bytes that were actually used are committed. It is possible to reserve
 memory once and commit multiple times, as long as the sum of what you commit
 is never larger than what you reserved. Calling `reserve` multiple times will
 obtain the same pointer each time until `commit` has been called.
@@ -346,8 +348,9 @@ terminator is not written).</td></tr>
 <tr><td><code>c</code></td><td>Single byte</td></tr>
 </table>
 
-Custom fields
-=============
+Custom fields in policy_log
+===========================
+
 
 Rolling your own logger
 =======================
