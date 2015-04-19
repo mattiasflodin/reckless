@@ -352,7 +352,7 @@ Custom fields in policy_log
 ===========================
 If you don't want to build your own logger, the `policy_log`'s `HeaderFields`
 parameter `policy_log` provides a simple way to put custom information on each
-log line. A field should provide this conceptual interface:
+log line. A field should provide this interface:
 
 ```c++
 class field {
@@ -373,6 +373,10 @@ constructor, and formats it as an ISO 8601 timestamp in `format`.
 
 Rolling your own logger
 =======================
+While `policy_log` and `severity_log` provide good default starting points for
+logging, many people may want to define their own logger interface that builds
+on the reckless asynchronous framework.
+
 example: ucs-2 logger
 example: root / hierarchical logger
 
