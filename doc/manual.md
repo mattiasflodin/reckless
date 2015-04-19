@@ -90,7 +90,8 @@ that may be pushed on the thread-local log buffer. This stores the actual
 arguments passed to <code>write()</code> and a function pointer, for each log
 entry.</td></tr>
 <tr><td><code>Formatter</code></td><td>A type that provides the function
-<code>Formatter::format(output_buffer*, Args...)</code>. 
+<code>Formatter::format(output_buffer*, Args...)</code>. <code>Args</code>
+should match the arguments that you intend to pass to <code>write</code>.
 </td></tr>.
 </table>
 
