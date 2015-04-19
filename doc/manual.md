@@ -75,7 +75,7 @@ Arguments
 ---------
 <table>
 <tr><td><code>pwriter</code></td><td>Pointer to a writer to use for writing
-formatted log data to disk or other targets.
+formatted log data to disk or other targets.</td></tr>
 <tr><td><code>output_buffer_max_capacity</code></td><td>Maximum number of bytes
 that may be allocated for the final, formatted output buffer. If 0 is
 specified, the CPU page size is used (on Intel this is commonly 4
@@ -89,6 +89,9 @@ log buffers and the current write position in them.</td></tr>
 that may be pushed on the thread-local log buffer. This stores the actual
 arguments passed to <code>write()</code> and a function pointer, for each log
 entry.</td></tr>
+<tr><td><code>Formatter</code></td><td>A type that provides the function
+<code>Formatter::format(output_buffer*, Args...)</code>. 
+</td></tr>.
 </table>
 
 policy_log
@@ -327,7 +330,9 @@ is never larger than what you reserved. Calling `reserve` multiple times will
 obtain the same pointer each time until `commit` has been called.
 
 `write` is a shorthand for a combined `reserve` and `commit` call, but does
-take any opportunities it can to optimize the operation.
+take any opportunities it can to optimize the operation. If you write a large
+enough piece of data, it may be passed directly to the writer from your buffer
+instead of being copied to the intermediate buffer.
 
 Parameters
 ----------
@@ -335,8 +340,8 @@ Parameters
 <tr><td><code>size</code></td><td>Number of bytes to reserve or commit.</td></tr>
 <tr><td><code>buf</code></td><td>Pointer to buffer</td></tr>
 <tr><td><code>count</code></td><td>Number of bytes to write</td></tr>
-<tr><td><code>s</code></td><td>Zero-terminated string to write. The zero
-terminator is not written.</td></tr>
+<tr><td><code>s</code></td><td>Zero-terminated string to write (the zero
+terminator is not written).</td></tr>
 <tr><td><code>c</code></td><td>Single byte</td></tr>
 </table>
 
