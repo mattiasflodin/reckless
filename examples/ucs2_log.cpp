@@ -22,11 +22,11 @@ private:
     };
 };
 
-reckless::file_writer writer("log.txt");
-ucs2_log g_log(&writer);
 
 int main()
 {
+reckless::file_writer writer("log.txt");
+ucs2_log g_log(&writer);
     std::wstring s(L"Hello World!\n");
     for(std::size_t i=0; i!=10000; ++i)
         g_log.puts(s);

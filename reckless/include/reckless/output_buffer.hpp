@@ -45,28 +45,15 @@ public:
         pcommit_end_ += size;
     }
     
-    void write(void const* buf, std::size_t count)
-    {
-        // TODO this could be smarter by writing from the client-provided
-        // buffer instead of copying the data.
-        auto const buffer_size = pbuffer_end_ - pbuffer_;
-        
-        char const* pinput = static_cast<char const*>(buf);
-        char const* pinput_end = pinput + count;
-        auto remaining_input = static_cast<std::size_t>(pinput_end - pinput);
-        auto available_buffer = static_cast<std::size_t>(pbuffer_end_ - pcommit_end_);
-        while(detail::unlikely(remaining_input > available_buffer)) {
-            std::memcpy(pcommit_end_, pinput, available_buffer);
-            pinput += available_buffer;
-            remaining_input -= available_buffer;
-            available_buffer = buffer_size;
-            pcommit_end_ = pbuffer_;
-            flush();
-        }
-        
-        std::memcpy(pcommit_end_, pinput, remaining_input);
-        pcommit_end_ += remaining_input;
-    }
+    //void write(void const* buf, std::size_t count)
+    //{
+    //    char* p = reserve(count);
+    //    memcpy(p, buf, count);
+    //    commit(count);
+    //}
+    
+    void write(void const* buf, std::size_t count);
+    
     void write(char const* s)
     {
         write(s, std::strlen(s));
