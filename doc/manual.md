@@ -389,10 +389,6 @@ and optionally build your own formatter class (if you don't want to use
 simple ucs-2 strings to a log file.
 
 ```c++
-#include <reckless/basic_log.hpp>
-#include <reckless/file_writer.hpp>
-#include <string>
-
 class ucs2_log : public reckless::basic_log {
 public:
     ucs2_log(reckless::writer* pwriter) : basic_log(pwriter) {}
@@ -404,7 +400,6 @@ public:
     {
         basic_log::write<ucs2_formatter>(std::move(s));
     }
-
 private:
     struct ucs2_formatter {
         static void format(reckless::output_buffer* pbuffer, std::wstring const& s)

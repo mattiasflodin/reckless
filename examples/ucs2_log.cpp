@@ -23,15 +23,13 @@ private:
 };
 
 
-int main()
-{
 reckless::file_writer writer("log.txt");
 ucs2_log g_log(&writer);
-    std::wstring s(L"Hello World!\n");
+
+int main()
+{
     for(std::size_t i=0; i!=10000; ++i)
-        g_log.puts(s);
-        //g_log.puts(L"Hello World!\n");
-    g_log.close();
+        g_log.puts(L"Hello World!\n");
     return 0;
 }
 

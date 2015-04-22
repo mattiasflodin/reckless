@@ -45,13 +45,6 @@ public:
         pcommit_end_ += size;
     }
     
-    //void write(void const* buf, std::size_t count)
-    //{
-    //    char* p = reserve(count);
-    //    memcpy(p, buf, count);
-    //    commit(count);
-    //}
-    
     void write(void const* buf, std::size_t count);
     
     void write(char const* s)
