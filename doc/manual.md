@@ -384,8 +384,9 @@ instead, or you might not like the built-in template formatter. For all of
 these scenarios, it is easy to implement your own logger.
 
 To implement your own logger, you create a class that derives from basic_log,
-and optionally build your own formatter class. For example, the following could
-be used for writing simple ucs-2 strings to a log file.
+and optionally build your own formatter class (if you don't want to use
+`template_formatter`). For example, the following could be used for writing
+simple ucs-2 strings to a log file.
 
 ```c++
 #include <reckless/basic_log.hpp>
@@ -403,6 +404,7 @@ public:
     {
         basic_log::write<ucs2_formatter>(std::move(s));
     }
+
 private:
     struct ucs2_formatter {
         static void format(reckless::output_buffer* pbuffer, std::wstring const& s)
@@ -412,6 +414,8 @@ private:
     };
 };
 ```
+
+For more examples, see the source code for the existing loggers.
 
 Handling crashes
 ================

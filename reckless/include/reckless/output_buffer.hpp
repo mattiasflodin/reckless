@@ -51,21 +51,21 @@ public:
         // buffer instead of copying the data.
         auto const buffer_size = pbuffer_end_ - pbuffer_;
         
-        char const* cp = static_cast<char const*>(buf);
-        char const* end = cp + count;
-        auto remaining = static_cast<std::size_t>(end - cp);
-        auto available = static_cast<std::size_t>(pbuffer_end_ - pbuffer_);
-        while(detail::unlikely(remaining > available)) {
-            std::memcpy(pbuffer_end_, cp, available);
-            cp += available;
-            remaining -= available;
-            available = buffer_size;
-            pcommit_end_ = pbuffer_end_;
+        char const* pinput = static_cast<char const*>(buf);
+        char const* pinput_end = pinput + count;
+        auto remaining_input = static_cast<std::size_t>(pinput_end - pinput);
+        auto available_buffer = static_cast<std::size_t>(pbuffer_end_ - pcommit_end_);
+        while(detail::unlikely(remaining_input > available_buffer)) {
+            std::memcpy(pcommit_end_, pinput, available_buffer);
+            pinput += available_buffer;
+            remaining_input -= available_buffer;
+            available_buffer = buffer_size;
+            pcommit_end_ = pbuffer_;
             flush();
         }
         
-        std::memcpy(pcommit_end_, cp, remaining);
-        pcommit_end_ += remaining;
+        std::memcpy(pcommit_end_, pinput, remaining_input);
+        pcommit_end_ += remaining_input;
     }
     void write(char const* s)
     {
