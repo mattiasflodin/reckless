@@ -383,12 +383,16 @@ everybody, on Windows you may wish to write data in UCS-2 (Unicode) format
 instead, or you might not like the built-in template formatter. For all of
 these scenarios, it is easy to implement your own logger.
 
-To implement your own logger, you create a class that derives from basic_log,
+To implement your own logger, you create a class that derives from `basic_log`,
 and optionally build your own formatter class (if you don't want to use
 `template_formatter`). For example, the following could be used for writing
 simple UCS-2 strings to a log file.
 
 ```c++
+#include <reckless/basic_log.hpp>
+#include <reckless/file_writer.hpp>
+#include <string>
+
 class ucs2_log : public reckless::basic_log {
 public:
     ucs2_log(reckless::writer* pwriter) : basic_log(pwriter) {}
