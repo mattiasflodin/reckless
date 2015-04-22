@@ -454,6 +454,8 @@ handler is somewhat involved and platform-specific, so for convenience some
 functionality to do this is provided by the library.
 
 ```c++
+// #include <reckless/crash_handler.hpp>
+
 void install_crash_handler(std::initializer_list<basic_log*> log);
 void uninstall_crash_handler();
 
