@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 from sys import stdout
-import os
+import os, errno
 from os.path import join
 import shutil
 import subprocess
@@ -34,8 +34,11 @@ for root, dirs, files in os.walk('.'):
         stdout.write(name + '\n')
         try:
             os.unlink(join(root, name))
-        except FileNotFoundError:
-            pass
+        except OSError as e:
+            if e.errno == errno.ENOENT:
+                pass
+            else:
+                raise
         
     if len(preserved_lines) == 0:
         os.unlink(join(root, '.gitignore'))

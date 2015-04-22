@@ -66,7 +66,7 @@ that the process will be terminated after the call. The log object is left in a
 "panic" state that prevents any cleanup in the destructor. Any thread that
 tries to write to the log after this will sleep indefinitely.</td></tr>
 <tr><td><code>write</code></td><td>Store <code>args</code> on the
-asynchronous queue and invoke
+asynchronous queue and invoke the static function
 <code>Formatter::format(output_buffer*, Args...)</code>
 from the background thread. This is meant to be called from derived classes.
 </table>
@@ -90,11 +90,11 @@ that may be pushed on the thread-local log buffer. This stores the actual
 arguments passed to <code>write()</code> and a function pointer, for each log
 entry.</td></tr>
 <tr><td><code>Formatter</code></td><td>A type that provides the function
-<code>Formatter::format(output_buffer*, Args...)</code>. <code>Args</code>
-should match the arguments that you intend to pass to <code>write</code>.
-The task of the <code>Formatter</code> is to write formatted data to the
-provided <code>output_buffer</code> based on the values of
-<code>Args</code>.</td></tr>
+<code>static void format(output_buffer*, Args...)</code>. <code>Args</code>
+should be compatible with the arguments that you intend to pass to
+<code>write</code>. The task of the <code>Formatter</code> is to write
+formatted data to the provided <code>output_buffer</code> based on the values
+of <code>Args</code>.</td></tr>
 </table>
 
 policy_log
@@ -369,16 +369,49 @@ available) to the log queue. In the background thread, `format` is called to
 write field data to the output buffer.
 
 For example, the stock `timestamp_field` obtains the current time in the
-constructor, and formats it as an ISO 8601 timestamp in `format`.
+constructor, and formats it as an ISO 8601 timestamp in `format`. It is
+recommended to look at the source code for this if you wish to implement your
+own field.
 
 Rolling your own logger
 =======================
 While `policy_log` and `severity_log` provide good default starting points for
-logging, many people may want to define their own logger interface that builds
-on the reckless asynchronous framework.
+logging, many people may wish to build their own logger interface and only
+reuse the underlying asynchronous framework. For example, the
+debug/info/warning/error levels in `severity_log` may not be a good fit for
+everybody, on Windows you may wish to write data in UCS-2 (Unicode) format
+instead, or you might not like the built-in template formatter. For all of
+these scenarios, it is easy to implement your own logger.
 
-example: ucs-2 logger
-example: root / hierarchical logger
+To implement your own logger, you create a class that derives from basic_log,
+and optionally build your own formatter class. For example, the following could
+be used for writing simple ucs-2 strings to a log file.
+
+```c++
+#include <reckless/basic_log.hpp>
+#include <reckless/file_writer.hpp>
+#include <string>
+
+class ucs2_log : public reckless::basic_log {
+public:
+    ucs2_log(reckless::writer* pwriter) : basic_log(pwriter) {}
+    void puts(std::wstring const& s)
+    {
+        basic_log::write<ucs2_formatter>(s);
+    }
+    void puts(std::wstring&& s)
+    {
+        basic_log::write<ucs2_formatter>(std::move(s));
+    }
+private:
+    struct ucs2_formatter {
+        static void format(reckless::output_buffer* pbuffer, std::wstring const& s)
+        {
+            pbuffer->write(s.data(), sizeof(wchar_t)*s.size());
+        }
+    };
+};
+```
 
 Handling crashes
 ================
