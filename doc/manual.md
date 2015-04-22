@@ -425,29 +425,29 @@ For more examples, see the source code for the existing loggers.
 A note on move semantics
 ------------------------
 Whenever it can, reckless tries to move objects rather than copy them. In the
-example above, a temporary std::wstring object is created to hold the string.
-Because it is an rvalue, this string is moved into the asynchronous queue
-rather than copied. When the formatter is called from the background thread,
-all argument values are passed as rvalues because they will no longer be
-needed and will be destroyed as soon as the formatter is done. In other words,
-the formatter may choose to accept its arguments by value, as normal
-references, or as rvalue references. In the example, if `s` was accepted by
-value then a new `wstring` object would be created on the stack and
-`wstring`'s move constructor would be called. If `s` was accepted as an lvalue
-or rvalue reference then no new object would be created. A const lvalue
-reference is usually the right choice as this avoids creating any new objects,
-unless you need to modify the object.
+example above, when `puts` is called a temporary `std::wstring` object is
+created to hold the string.  Because it is an rvalue, this string is moved
+into the asynchronous queue rather than copied. When the formatter is called
+from the background thread, all argument values are passed as rvalues because
+they will no longer be needed and will be destroyed as soon as the formatter
+is done. In other words, the formatter may choose to accept its arguments by
+value, as normal references, or as rvalue references. In the example, if `s`
+was accepted by value then a new `wstring` object would be created on the
+stack and `wstring`'s move constructor would be called. If `s` was accepted as
+an lvalue or rvalue reference then no new object would be created. A const
+lvalue reference is usually the right choice as this avoids creating any new
+objects, unless you need to modify the object.
 
 Handling crashes
 ================
-As with any log that buffers data before writing, there is a risk that it will
-get lost if the program crashes. This is particularly unfortunate if the point
-of the log was to backtrack the events that lead to a crash. Reckless tries to
-minimize the risk by writing as soon as it becomes aware that data is
-available. However, a more reliable way to save the data is to call `panic_flush`
-function in `basic_log` from a crash handler. Installing a crash handler is
-somewhat involved and platform-specific, so for convenience some functionality
-to do this is provided by the library.
+As with any log that buffers data before writing, there is a risk that data
+will get lost if the program crashes. This is particularly unfortunate if the
+point of the log was to backtrack the events that lead to a crash. Reckless
+tries to minimize the risk by writing as soon as it becomes aware that data is
+available. However, a more reliable way to save the data is to call the
+`panic_flush` function in `basic_log` from a crash handler. Installing a crash
+handler is somewhat involved and platform-specific, so for convenience some
+functionality to do this is provided by the library.
 
 ```c++
 void install_crash_handler(std::initializer_list<basic_log*> log);
