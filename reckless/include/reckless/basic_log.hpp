@@ -48,7 +48,6 @@ protected:
     void write(Args&&... args)
     {
         using namespace detail;
-        assert(is_open());
         typedef std::tuple<typename std::decay<Args>::type...> args_t;
         std::size_t const args_align = alignof(args_t);
         std::size_t const args_offset = (sizeof(formatter_dispatch_function_t*) + args_align-1)/args_align*args_align;

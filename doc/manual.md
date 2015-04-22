@@ -386,7 +386,7 @@ these scenarios, it is easy to implement your own logger.
 To implement your own logger, you create a class that derives from basic_log,
 and optionally build your own formatter class (if you don't want to use
 `template_formatter`). For example, the following could be used for writing
-simple ucs-2 strings to a log file.
+simple UCS-2 strings to a log file.
 
 ```c++
 class ucs2_log : public reckless::basic_log {
@@ -408,12 +408,82 @@ private:
         }
     };
 };
+
+reckless::file_writer writer("log.txt");
+ucs2_log g_log(&writer);
+
+int main()
+{
+    g_log.puts(L"Hello World!\n");
+    return 0;
+}
+
 ```
 
 For more examples, see the source code for the existing loggers.
 
+A note on move semantics
+------------------------
+Whenever it can, reckless tries to move objects rather than copy them. In the
+example above, a temporary std::wstring object is created to hold the string.
+Because it is an rvalue, this string is moved into the asynchronous queue
+rather than copied. When the formatter is called from the background thread,
+all argument values are passed as rvalues because they will no longer be
+needed and will be destroyed as soon as the formatter is done. In other words,
+the formatter may choose to accept its arguments by value, as normal
+references, or as rvalue references. In the example, if `s` was accepted by
+value then a new `wstring` object would be created on the stack and
+`wstring`'s move constructor would be called. If `s` was accepted as an lvalue
+or rvalue reference then no new object would be created. A const lvalue
+reference is usually the right choice as this avoids creating any new objects,
+unless you need to modify the object.
+
 Handling crashes
 ================
+As with any log that buffers data before writing, there is a risk that it will
+get lost if the program crashes. This is particularly unfortunate if the point
+of the log was to backtrack the events that lead to a crash. Reckless tries to
+minimize the risk by writing as soon as it becomes aware that data is
+available. However, a more reliable way to save the data is to call `panic_flush`
+function in `basic_log` from a crash handler. Installing a crash handler is
+somewhat involved and platform-specific, so for convenience some functionality
+to do this is provided by the library.
+
+```c++
+void install_crash_handler(std::initializer_list<basic_log*> log);
+void uninstall_crash_handler();
+
+class scoped_crash_handler {
+public:
+    scoped_crash_handler(std::initializer_list<basic_log*> log)
+    {
+        install_crash_handler(log);
+    }
+    ~scoped_crash_handler()
+    {
+        uninstall_crash_handler();
+    }
+};
+```
+
+As you might guess, setting up the crash handler is a matter of calling
+```c++
+install_crash_handler(&my_log);
+```
+and before the log goes out of scope, call
+```c++
+uninstall_crash_handler();
+```
+You may pass multiple log objects to `install_crash_handler`, and if a crash
+occurs, `panic_flush` will be called on each of those objects.
+
+Note that if you already have a crash handler of your own, you should simply
+add a call to `panic_flush` there instead of using these convenience
+functions.
+
+
+Floating-point accuracy
+=======================
 
 Performance
 ===========
