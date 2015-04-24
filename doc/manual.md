@@ -487,9 +487,23 @@ Note that if you already have a crash handler of your own, you should simply
 add a call to `panic_flush` there instead of using these convenience
 functions.
 
+Limited floating-point accuracy
+===============================
+You should be aware that `template_formatter`, which is used by `policy_log`
+and `severity_log` for formatting text, uses a home-grown algorithm for
+converting floating-point values to strings. String conversion of IEEE754
+floating-point is generally expected to be performed so that it generates as
+few digits as possible, but still yields the exact same floating-point number
+when it is converted back from a string. Statistical tests on 10 million
+randomly generated values show that this is true for 99.4% of the numbers. 
 
-Floating-point accuracy
-=======================
+I made the choice to implement a custom algorithm because in benchmarks,
+floating-point conversions turned out to be a performance bottleneck. The new
+algorithm has improved overall performance, but I have not yet made any 
+
+in a manner that does not always have optimal precision. IEEE754 
+conversion of floating-point values to strings requires A general
+requirement of string conversion using `%g`
 
 Performance
 ===========

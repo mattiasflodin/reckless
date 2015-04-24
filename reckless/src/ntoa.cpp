@@ -539,8 +539,6 @@ struct decimal18
     int exponent;
 };
 
-// TODO some day we should probably use this everywhere instead of descale().
-// It is simpler and more rigorously documented.
 decimal18 binary64_to_decimal18(double v)
 {
     if(v == 0)
@@ -1775,12 +1773,8 @@ public:
             }
             ++i;
         }
-        auto start = std::find_if(quality_counts, quality_counts+17, [](std::size_t x) {return x != 0;});
-        while(start != quality_counts+17)
-        {
-            std::cout << "  " << (start - quality_counts) << " digits: " << *start << " non-perfect conversions" << std::endl;
-            ++start;
-        }
+        for(std::size_t i=0; i!=17; ++i)
+            std::cout << "  " << i << " digits: " << quality_counts[i] << " non-perfect conversions" << std::endl;
         std::cout << "  perfect conversions: " << perfect;
         std::cout << " (" << 100*static_cast<double>(perfect)/total << "%)";
         std::cout << std::endl;
@@ -1795,11 +1789,10 @@ private:
         istr >> number2;
         if(number != number2)
         {
-            std::ostringstream ostr;
-            ostr << std::setprecision(17) << std::fixed << number;
-            std::string const& iostream_str = ostr.str();
-            auto it = mismatch(iostream_str.begin(), iostream_str.end(), str.begin()).first;
-            std::size_t correct_digits = it - iostream_str.begin();
+            char buf[32];
+            std::sprintf(buf, "%.17g", number);
+            // NEXT split string on e and validate both mantissa and expoent separately
+            std::size_t correct_digits = 0;
             return correct_digits;
         }
         return PERFECT_QUALITY;

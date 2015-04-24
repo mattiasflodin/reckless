@@ -4,12 +4,12 @@ RECKLESS_INCLUDE=$(TUP_CWD)/reckless/include
 RECKLESS_LIB=$(TUP_CWD)/reckless/lib
 PERFORMANCE_LOG_INCLUDE=$(TUP_CWD)/performance_log/include
 PERFORMANCE_LOG_LIB=$(TUP_CWD)/performance_log/lib
-CXXFLAGS=-std=c++11 -Wall -Wextra -Werror -g
+CXXFLAGS=-std=c++11 -Wall -Wextra -Werror -ggdb3
 ifndef DEBUG
   CXXFLAGS+=-O3
 endif
 # -lrt is needed for clock_gettime
-LDFLAGS=-g -lpthread -lrt
+LDFLAGS=-ggdb3 -lpthread -lrt
 ifdef CXX
     CXX = @(CXX)
 else
