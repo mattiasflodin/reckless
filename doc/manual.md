@@ -516,10 +516,12 @@ Correct significant digits | Number of samples (percentage)
 
 I made the choice to implement a custom algorithm because number to string
 conversion, and in particular floating-point conversions, turned out to be a
-performance bottleneck in my benchmark tests. The new algorithm shows improved
-overall logging performance, but I have not yet made any detailed performance
-analysis of the conversion function itself. It is possible that this algorithm
-will change in the future, for example by using the
+performance bottleneck in my benchmark tests. I feel that for the majority of
+cases, absolutely perfect accuracy in logging is not as important as
+performance. The new algorithm shows improved overall logging performance, but
+I have not yet made any detailed performance analysis of the conversion
+function itself. It is possible that this algorithm will change in the future,
+for example by using the
 [Grisu3](http://florian.loitsch.com/publications/dtoa-pldi2010.pdf) algorithm,
 and that a more thorough evaluation of performance will be made. However,
 printing floating-point numbers is *hard*. I estimate that over 90% of the
