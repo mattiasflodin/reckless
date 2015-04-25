@@ -525,10 +525,6 @@ for example by using the
 [Grisu3](http://florian.loitsch.com/publications/dtoa-pldi2010.pdf) algorithm,
 and that a more thorough evaluation of performance will be made. However,
 printing floating-point numbers is *hard*. I estimate that over 90% of the
-development time of reckless was spent on the number formatting alone. So
-improvements in this area is likely going to take a long time.
-
-Performance
-===========
-
-
+development time of the initial reckless release was spent on the number
+formatting alone. So improvements in this area are likely going to take a long
+time.
