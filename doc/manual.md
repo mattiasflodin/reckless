@@ -502,16 +502,16 @@ more digits than necessary.
 For the numbers that are not correctly converted, the following table shows the
 number significant digits that were correct.
 
-Correct significant digits | Number of samples (percentage)
+Correct significant digits | Number of samples | Percentage
 ---------------------------|-------------------------------
-                        10 | 1 (1e-06%)
-                        11 | 6 (6e-06%)
-                        12 | 100 (0.0001%)
-                        13 | 1100 (0.0011%)
-                        14 | 11889 (0.011889%)
-                        15 | 117953 (0.117953%)
-                        16 | 446222 (0.446222%)
-                        17 | 11371 (0.011371%)
+                        10 | 1                 | 0.000001%
+                        11 | 6                 | 0.000006%
+                        12 | 100               | 0.0001%
+                        13 | 1100              | 0.0011%
+                        14 | 11889             | 0.011889%
+                        15 | 117953            | 0.117953%
+                        16 | 446222            | 0.446222%
+                        17 | 11371             | 0.011371%
 
 
 I made the choice to implement a custom algorithm because number to string
