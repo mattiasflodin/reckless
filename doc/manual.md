@@ -503,7 +503,7 @@ For the numbers that are not correctly converted, the following table shows the
 number significant digits that were correct.
 
 Correct significant digits | Number of samples | Percentage
----------------------------|-------------------------------
+---------------------------|-------------------|-----------
                         10 | 1                 | 0.000001%
                         11 | 6                 | 0.000006%
                         12 | 100               | 0.0001%
