@@ -494,16 +494,37 @@ and `severity_log` for formatting text, uses a home-grown algorithm for
 converting floating-point values to strings. String conversion of IEEE754
 floating-point is generally expected to be performed so that it generates as
 few digits as possible, but still yields the exact same floating-point number
-when it is converted back from a string. Statistical tests on 10 million
-randomly generated values show that this is true for 99.4% of the numbers. 
+when it is converted back from a string. Statistical tests on 100 million
+randomly generated values show that this is true for 98.5% of the numbers.
+99.4% of the numbers are correctly converted, but the additional 1% include
+more digits than necessary. 
 
-I made the choice to implement a custom algorithm because in benchmarks,
-floating-point conversions turned out to be a performance bottleneck. The new
-algorithm has improved overall performance, but I have not yet made any 
+For the numbers that are not correctly converted, the following table shows the
+number significant digits that were correct.
 
-in a manner that does not always have optimal precision. IEEE754 
-conversion of floating-point values to strings requires A general
-requirement of string conversion using `%g`
+Correct significant digits | Number of samples (percentage)
+---------------------------|-------------------------------
+                        10 | 1 (1e-06%)
+                        11 | 6 (6e-06%)
+                        12 | 100 (0.0001%)
+                        13 | 1100 (0.0011%)
+                        14 | 11889 (0.011889%)
+                        15 | 117953 (0.117953%)
+                        16 | 446222 (0.446222%)
+                        17 | 11371 (0.011371%)
+
+
+I made the choice to implement a custom algorithm because number to string
+conversion, and in particular floating-point conversions, turned out to be a
+performance bottleneck in my benchmark tests. The new algorithm shows improved
+overall logging performance, but I have not yet made any detailed performance
+analysis of the conversion function itself. It is possible that this algorithm
+will change in the future, for example by using the
+[Grisu3](http://florian.loitsch.com/publications/dtoa-pldi2010.pdf) algorithm,
+and that a more thorough evaluation of performance will be made. However,
+printing floating-point numbers is *hard*. I estimate that over 90% of the
+development time of reckless was spent on the number formatting alone. So
+improvements in this area is likely going to take a long time.
 
 Performance
 ===========
