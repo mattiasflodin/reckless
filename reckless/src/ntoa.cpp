@@ -1634,7 +1634,7 @@ unit_test::suite<ftoa_base10_f> ftoa_base10_precision_tests = {
 class ftoa_base10_g
 {
 public:
-    static std::size_t const PERFECT_QUALITY = std::numeric_limits<std::size_t>::max();
+    static std::size_t const PERFECT_QUALITY = 17; //std::numeric_limits<std::size_t>::max();
     ftoa_base10_g() :
         output_buffer_(&writer_, 1024)
     {
@@ -1768,7 +1768,9 @@ public:
             if(quality == PERFECT_QUALITY) {
                 perfect++;
             } else {
-                TEST(quality < 17);
+                if(quality > 17)
+                     quality = get_conversion_quality(v);
+                assert(quality < 17);
                 quality_counts[quality]++;
             }
             ++i;
@@ -1781,21 +1783,48 @@ public:
     }
 
 private:
+    std::pair<std::string, std::string> normalize_for_comparison(std::string const& number)
+    {
+        auto exponent_pos = number.find('e');
+        std::string mantissa(number, 0, exponent_pos);
+        auto decimal_point = mantissa.find('.');
+        if(decimal_point != std::string::npos)
+            mantissa.erase(decimal_point, 1);
+        auto nonzero_pos = mantissa.find_first_not_of('0');
+        if(nonzero_pos != std::string::npos)
+            mantissa.erase(0, nonzero_pos);
+        
+        std::string exponent;
+        if(exponent_pos != std::string::npos)
+            exponent.assign(number, exponent_pos+1, std::string::npos);
+
+        return {mantissa, exponent};
+    }
+
     std::size_t get_conversion_quality(double number)
     {
         std::string const& str = convert(number);
-        std::istringstream istr(str);
-        double number2;
-        istr >> number2;
-        if(number != number2)
-        {
+        //std::istringstream istr(str);
+        //double number2;
+        //istr >> number2;
+        //if(number != number2)
+        //{
+            std::string mantissa1, exponent1;
+            tie(mantissa1, exponent1) = normalize_for_comparison(str);
+
             char buf[32];
             std::sprintf(buf, "%.17g", number);
-            // NEXT split string on e and validate both mantissa and expoent separately
-            std::size_t correct_digits = 0;
-            return correct_digits;
-        }
-        return PERFECT_QUALITY;
+            std::string mantissa2, exponent2;
+            tie(mantissa2, exponent2) = normalize_for_comparison(buf);
+
+            assert(exponent1 == exponent2);
+            //assert(mantissa1.size() == mantissa2.size());
+            auto size = std::min(mantissa1.size(), mantissa2.size());
+            return mismatch(
+                begin(mantissa1), begin(mantissa1)+size,
+                begin(mantissa2)).first - begin(mantissa1);
+        //}
+        //return PERFECT_QUALITY;
     }
 
     std::string convert(double number, conversion_specification const& cs)
