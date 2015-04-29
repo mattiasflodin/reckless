@@ -1,8 +1,8 @@
 These performance measurements were last made on 2015-21-29. The results may
 have changed since then.
 
-Methodology
-===========
+How to read these benchmarks
+============================
 When you make claims about performance, people expect that they are backed up
 with measurements. But it is important to realize that your use case and
 constraints can have a big impact on how performance is measured and,
@@ -16,7 +16,7 @@ tradeoff, and no two alternatives can be compared without considering what
 those tradeoffs are.
 
 For reckless the following assumptions were made, and the benchmarks were
-developed according to these assumptions:
+developed according to those assumptions:
 * It is important to minimize the risk of losing log messages in the event of
   a crash.
 * It is OK to trade some precision in floating-point output for added
@@ -24,8 +24,8 @@ developed according to these assumptions:
 * We are concerned with the impact of actual logging, not of logging calls
   that are filtered out at runtime (say, debug messages that are disabled via
   some compile-time or run-time switch). We expect to produce many log
-  messages in production environments, not just in debug mode. Enabling log
-  messages post-mortem is too late.
+  messages in production environments, not just in debug mode. It is too late
+  to enable log messages post-mortem.
 * We care enough about performance that we will accept the risk for
   dangling pointer references. Note that you should be OK as long as you never
   pass a raw pointer to dynamically allocated or stack-allocated memory.
@@ -57,24 +57,25 @@ asynchronous queue and not the time for flushing all those messages to disk.
 
 But since the constraints are different in this benchmark,
 the spdlog asynchronous buffer size was set to roughly 8 KiB (128 entries),
-and the sink was put in force-flush mode to ensure that messages are written
-early and are not kept around in the stdio buffer. This corresponds to the
-behavior of reckless, which flushes whenever it can and defaults to an 8 KiB
-buffer size.
+and the file sink was put in force-flush mode to ensure that messages are
+written early instead of being kept around indefinitely in the stdio buffer.
+This corresponds to the behavior of reckless, which flushes whenever it can and
+defaults to an 8 KiB buffer size.
 
 The [Pantheios performance article](http://www.pantheios.org/performance.html)
 shows performance both when logging is turned on and off. It claims that
 “Pantheios is 10-100+ times more efficient than any of the leading diagnostic
 logging libraries currently in popular use.” I’m not sure that this can be
-concluded from the charts at all, but in the event that it can, it applies when
-only *logging is turned off*. For this benchmark, I have only benchmarked
+concluded from the charts at all, but in the event that it can, it applies
+*only when logging is turned off*. For this benchmark I have only benchmarked
 Pantheios for the case when logging is turned on. Again, the Pantheios
 developers have clearly set different goals with their benchmarks than I do
 here.
 
 On a similar notion, for stdio and fstream the file buffer is flushed after
-each write. Note that by flushing I mean sending the data to the OS kernel, not
-actually writing to disk. Sending it to the kernel is enough to ensure that the
-data will survive a software crash, but not an OS crash or power loss.
+each write. Note in all libraries tested, flushing means sending the data to
+the OS kernel, not actually writing to disk. Sending it to the kernel is enough
+to ensure that the data will survive a software crash, but not an OS crash or
+power loss.
 
 
