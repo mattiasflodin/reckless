@@ -12,6 +12,11 @@ THREADED_TESTS = {'call_burst', 'mandelbrot'}
 TESTS_WITH_DRY_RUN = {'call_burst'}
 MAX_THREADS = 4
 
+# /run_benchmark.py -t mandelbrot  1448.92s user 64.87s system 208% cpu 12:04.87 total
+# with SINGLE_SAMPLE_TEST_ITERATIONS=2 means we should have
+# about 80 for 8 hours runtime
+SINGLE_SAMPLE_TEST_ITERATIONS = 80
+
 def main():
     opts, args = gnu_getopt(argv[1:], 'l:t:h', ['libs', 'tests', 'help'])
     libs = None
@@ -68,20 +73,17 @@ def run_tests(libs, tests):
         stdout.write('\n')
         stdout.flush()
 
+def reset():
+    if os.path.exists('log.txt'):
+        os.unlink('log.txt')
+    subprocess.call('sync')
+    
 def run_test(lib, test, threads = None):
-    def run(dry_run):
-        # TODO wipe results dir before running test?
-        binary_name = lib + '_' + test
-        if threads is not None:
-            binary_name += '_' + str(threads)
-
-        out = os.devnull
-        if dry_run:
-            out = open(os.devnull, 'w')
-        else:
-            txt_name = binary_name + '.txt'
-            out = open('results/' + txt_name, 'w')
-
+    binary_name = lib + '_' + test
+    if threads is not None:
+        binary_name += '_' + str(threads)
+        
+    def run(out_file):
         try:
             p = subprocess.Popen([binary_name], executable='./' + binary_name, stdout=out)
             p.wait()
@@ -91,11 +93,18 @@ def run_test(lib, test, threads = None):
             else:
                 raise
 
-        out.close()
-
     if test in TESTS_WITH_DRY_RUN:
-        run(True)
-    run(False)
+        with open(os.devnull, 'w') as out:
+            run(out)
+            
+    txt_name = binary_name + '.txt'
+    with open('results/' + txt_name, 'w') as out:
+        total_iterations = 1
+        if test in SINGLE_SAMPLE_TESTS:
+            total_iterations = SINGLE_SAMPLE_TEST_ITERATIONS
+        for i in range(0, total_iterations):
+            reset()
+            run(out)
     return True
 
 if __name__ == "__main__":

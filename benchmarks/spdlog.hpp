@@ -10,6 +10,9 @@ extern std::shared_ptr<spdlog::logger> g_logger;
 // risk of messages getting lost. That means we want to flush on every
 // write, not keep stuff in the stdio buffer. Hence we set
 // force_flush=true here.
+
+// Each log line is ~66 bytes. For a 8192-byte buffer that gives us 124
+// entries. spdlog requires that the size is a power of 2.
 #define LOG_INIT() \
     spdlog::set_async_mode(128); \
     g_logger = spdlog::create<spdlog::sinks::simple_file_sink_st>("log", "log.txt", true)

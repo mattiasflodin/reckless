@@ -13,7 +13,7 @@
 
 namespace {
     
-unsigned const THREAD_SLICE_SIZE = 128;
+unsigned const THREAD_SLICE_SIZE = 1024*16;
 
 void mandelbrot_thread(
     unsigned thread_index,

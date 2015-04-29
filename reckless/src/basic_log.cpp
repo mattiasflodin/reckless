@@ -51,21 +51,24 @@ void reckless::basic_log::open(writer* pwriter,
         std::size_t shared_input_queue_size,
         std::size_t thread_input_buffer_size)
 {
-    // FIXME we should base defaults on the common disk block size instead of
-    // page sizes (8KiB).
+    // The typical disk block size these days is 4 KiB (see
+    // https://en.wikipedia.org/wiki/Advanced_Format). We'll make it twice
+    // that just in case it grows larger, and to hide some of the effects of
+    // misalignment.
+    unsigned const ASSUMED_DISK_SECTOR_SIZE = 8192;
     if(output_buffer_max_capacity == 0 or shared_input_queue_size == 0
             or thread_input_buffer_size == 0)
     {
-        std::size_t page_size = detail::get_page_size();
         if(output_buffer_max_capacity == 0)
-            output_buffer_max_capacity = page_size;
+            output_buffer_max_capacity = ASSUMED_DISK_SECTOR_SIZE;
         // TODO is it right to just do g_page_size/sizeof(commit_extent) if we want
         // the buffer to use up one page? There's likely more overhead in the
         // buffer.
+        std::size_t page_size = detail::get_page_size();
         if(shared_input_queue_size == 0)
             shared_input_queue_size = page_size / sizeof(detail::commit_extent);
         if(thread_input_buffer_size == 0)
-            thread_input_buffer_size = page_size;
+            thread_input_buffer_size = ASSUMED_DISK_SECTOR_SIZE;
     }
     reset_shared_input_queue(shared_input_queue_size);
     thread_input_buffer_size_ = thread_input_buffer_size;
