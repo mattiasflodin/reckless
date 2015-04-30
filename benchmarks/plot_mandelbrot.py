@@ -33,7 +33,8 @@ GROUP_OFFSET = (1.0 - GROUP_WIDTH)/2
 def read_timing(lib, cores):
     with open(os.path.join('results', '%s_mandelbrot_%d.txt' % (lib, cores)), 'r') as f:
         data = f.readlines()
-    data = np.array([float(x)/1000.0 for x in data])
+    data = [float(x)/1000.0 for x in data]
+    data.sort()
     #return np.min(data), np.std(data)
     return np.mean(data), np.std(data)
 

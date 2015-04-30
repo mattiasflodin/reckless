@@ -78,14 +78,12 @@ the OS kernel, not actually writing to disk. Sending it to the kernel is enough
 to ensure that the data will survive a software crash, but not an OS crash or
 power loss.
 
-Methodology
-===========
 The specifications of the test machine are as follows:
-* Intel i7-3770K CPU at 3.5 Ghz with Hyper-threading and SpeedStep turned off.
+* Intel i7-3770K CPU at 3.5 Ghz with hyper-threading and SpeedStep turned off.
 * Western Digital Black WD7501AALS 750GB mechanical disk.
 * 8 GiB RAM.
 
-For all the tests that measure individual call timings, measurements were made
+For the tests that measure individual call timings, measurements were made
 according to the article “[How to Benchmark Code Execution Times on Intel IA-32
 and IA-64 Instruction Set
 Architectures](http://www.intel.com/content/www/us/en/intelligent-systems/embedded-systems-training/ia-32-ia-64-benchmark-code-execution-paper.html)”
