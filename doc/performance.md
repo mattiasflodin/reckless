@@ -137,9 +137,18 @@ up. Other than logging, the disk is not busy doing anything. It is the most
 forgiving scenario but it is probably also very common in interactive
 applications. The two asynchronous libraries predictably perform much better
 than the synchronous ones, since they do not have to wait for the I/O calls.
-Notably they also have a more predictable execution time. Since the
-synchronous alternatives dwarf the asynchronous ones on the chart, here is the
-same chart with only the asynchronous libraries.
+Notably they also have a more stable execution time. Since the synchronous
+alternatives dwarf the asynchronous ones on the chart, here is the same chart
+with only the asynchronous libraries.
 
 ![Periodic calls performance chart for asynchronous
 libraries](images/performance_periodic_calls_asynchronous.png)
+
+Call burst
+==========
+![Call burst performance chart](images/performance_call_burst_1.png)
+
+This scenario stresses the log by generating log messages as fast as it can,
+filling up the log buffer. Spdlog performs well until the buffer fills up, at
+which point it stalls to empty its buffer to disk. After that, it turns into
+the slowest performer.
