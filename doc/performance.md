@@ -147,6 +147,7 @@ with only the asynchronous libraries.
 libraries](images/performance_periodic_calls_asynchronous.png)
 
 The mean execution times are as follows:
+
 alternative | ticks
 ------------|------
 nop         | 111
