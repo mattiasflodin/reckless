@@ -131,7 +131,7 @@ Periodic calls
 ![Periodic calls performance
 chart](images/performance_periodic_calls_all.png)
 
-[Source](../benchmarks/periodic_calls.cpp)
+[benchmarks/periodic_calls.cpp](../benchmarks/periodic_calls.cpp)
 
 In this scenario we simulate a single-threaded program that makes regular
 calls to the log, but not so often that the buffer is anywhere near filling
@@ -150,7 +150,7 @@ Call burst
 ==========
 ![Call burst performance chart](images/performance_call_burst_1.png)
 
-[Source](../benchmarks/call_burst.cpp)
+[benchmarks/call_burst.cpp](../benchmarks/call_burst.cpp)
 
 This scenario stresses the log by generating log messages as fast as it can,
 filling up the log buffer. Spdlog performs well until the buffer fills up, at
