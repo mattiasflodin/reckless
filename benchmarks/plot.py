@@ -101,8 +101,8 @@ def main():
     threads = None
     window = None
     filename = None
-    width = 1024
-    height = 1024
+    width = 858
+    height = 858
     show_help = len(args) != 0
 
     for option, value in opts:
@@ -144,7 +144,7 @@ def main():
     plot(libs, tests, threads, window, filename, width, height)
     return 0
 
-def plot(libs, tests, threads_list, window, plot_filename=None, width=1024, height=1024, dpi=96):
+def plot(libs, tests, threads_list, window, plot_filename, width, height, dpi=96):
     import matplotlib
     matplotlib.rc('font', size=10)
     import matplotlib.pyplot as plt
@@ -181,6 +181,10 @@ def plot(libs, tests, threads_list, window, plot_filename=None, width=1024, heig
                 single_plot(filename, test, ', '.join(base_name), window, color)
     
     legend = ax.legend()
+    # set the linewidth of each legend object
+    for legobj in legend.legendHandles:
+        legobj.set_linewidth(4)
+        
     plt.xlabel('Iteration')
     plt.ylabel('Latency (CPU ticks)')
     if plot_filename is None:

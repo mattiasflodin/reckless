@@ -1,6 +1,30 @@
 These performance measurements were last made on 2015-21-29. The results may
 have changed since then.
 
+Libraries benchmarked
+=====================
+Apart from reckless, the libraries or logging techniques that are benchmarked
+here are:
+* fprintf. This uses the standard stdio string formatting and calls fflush()
+  after each call.
+* std::fstream. This uses an fstream object and streams `std::flush` after each
+  log line.
+* [spdlog](https://github.com/gabime/spdlog/). This is closest to reckless in
+  its design goals. It tries to be very fast, and offers an asynchronous mode.
+  See notes below on how it is used in the benchmark.
+* [pantheios](http://www.pantheios.org/) is often recommended as a good
+  library with high performance. The author describes it more as a
+  “logging API” that lets you plug in different libraries at the back
+  end. However, it offers some stock back ends, and I suspect that most people
+  use these built-in facilities. I use the “simple” frontend and the “file”
+  backend.
+* No operation. This means that the log call is ignored and no code is
+  generated apart from the timing code. For the scenarios that measure
+  individual call timings, this gives us an idea of how much overhead is added
+  by the measurement itself. For the scenarios that measure total execution
+  time, this lets us compare the execution time to what it would be if no
+  logging occurred at all.
+  
 How to read these benchmarks
 ============================
 When you make claims about performance, people expect that they are backed up
@@ -55,12 +79,12 @@ asynchronous queue and not the time for flushing all those messages to disk.
   written to disk.
 * It is OK to lose a large number of log messages in the event of a crash.
 
-But since the constraints are different in this benchmark,
-the spdlog asynchronous buffer size was set to roughly 8 KiB (128 entries),
-and the file sink was put in force-flush mode to ensure that messages are
-written early instead of being kept around indefinitely in the stdio buffer.
-This corresponds to the behavior of reckless, which flushes whenever it can and
-defaults to an 8 KiB buffer size.
+But since the constraints are different in this benchmark, the spdlog buffer
+size was set to roughly 8 KiB (128 entries), and the file sink was put in
+force-flush mode to ensure that messages are written early instead of being
+kept around indefinitely in the stdio buffer.  This corresponds to the
+behavior of reckless, which flushes whenever it can and defaults to an 8 KiB
+buffer size.
 
 The [Pantheios performance article](http://www.pantheios.org/performance.html)
 shows performance both when logging is turned on and off. It claims that
@@ -86,7 +110,7 @@ The specifications of the test machine are as follows:
 * gcc 4.8.4
 * Linux kernel 3.14.14
 
-For the tests that measure individual call timings, measurements were made
+For the scenarios that measure individual call timings, measurements were made
 according to the article “[How to Benchmark Code Execution Times on Intel IA-32
 and IA-64 Instruction Set
 Architectures](http://www.intel.com/content/www/us/en/intelligent-systems/embedded-systems-training/ia-32-ia-64-benchmark-code-execution-paper.html)”
@@ -94,13 +118,26 @@ by Gabriele Paoloni. To avoid problems with unsynchronized time-stamp counters
 across CPU cores, each measured thread is forced to run on a specific CPU core
 by setting the thread affinity. I have applied a moving average filter to the
 performance charts because noise would otherwise make it difficult to compare
-the lines. The size of the moving average window varies depending on the test;
-I made it just large enough to make the chart comprehensible.
+the lines. The size of the moving average window varies depending on the
+scnario; I made it just large enough to make the chart comprehensible.
 
 For tests that only measure total execution time, `std::chrono::steady_clock`
 is used.
-
+  
 Periodic calls
 ==============
 ![Periodic calls performance
-chart](images/performance_periodic_calls_all_1.png)
+chart](images/performance_periodic_calls_all.png)
+
+In this scenario we simulate a single-threaded program that makes regular
+calls to the log, but not so often that the buffer is anywhere near filling
+up. Other than logging, the disk is not busy doing anything. It is the most
+forgiving scenario but it is probably also very common in interactive
+applications. The two asynchronous libraries predictably perform much better
+than the synchronous ones, since they do not have to wait for the I/O calls.
+Notably they also have a more predictable execution time. Since the
+synchronous alternatives dwarf the asynchronous ones on the chart, here is the
+same chart with only the asynchronous libraries.
+
+![Periodic calls performance chart for asynchronous
+libraries](images/performance_periodic_calls_all.png)

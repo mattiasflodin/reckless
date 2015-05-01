@@ -61,10 +61,10 @@ ifdef PANTHEIOS
     EXTRA_CXXFLAGS = -Wno-error
     ifeq ($(CXX),g++)
         # This warning comes up a *lot* on pantheios for my version of g++,
-        # hiding everything else. It's not supported by clang though, so we need
-        # to be judicious about its use to avoid failed builds.  I suppose it
-        # would be best if we could test for its availability, or better yet if
-        # pantheios would fix its code.
+        # ofuscating everything else. It's not supported by clang though, so
+        # we need to be judicious about its use to avoid failed builds. I
+        # suppose it would be best if we could test for its availability, or
+        # better yet if pantheios would fix its code.
         EXTRA_CXXFLAGS += -Wno-unused-local-typedefs
     endif
     EXTRA_CXXFLAGS += -I@(PANTHEIOS)/include -I@(STLSOFT)/include
