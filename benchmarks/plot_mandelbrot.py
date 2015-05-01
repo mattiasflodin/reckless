@@ -36,6 +36,7 @@ def read_timing(lib, cores, offset=0.0):
     data = sorted([float(x)/1000.0+offset for x in data])
     # Use interquartile range as measure of scale.
     low, high = np.percentile(data, [25, 75])
+    
     # Samples generally center around a minimum point that represents the ideal
     # running time. There are no outliers below the ideal time; execution does
     # not accidentally take some kind of short cut. At least, not for this
@@ -48,9 +49,8 @@ def read_timing(lib, cores, offset=0.0):
     # CPU cycles from our benchmark. We don't want to include these because
     # they make it more difficult to reproduce the same statistics on multiple
     # runs. Or, in statistics speak, they make our benchmark less robust and
-    # less efficient. To counter this, we get rid of the worst outliers on the
+    # less efficient. To counter this we get rid of the worst outliers on the
     # upper end, but we leave the lower end intact.
-    
     outlier_index = int(len(data)*0.8)
     data = data[:outlier_index]
     mean = np.mean(data)

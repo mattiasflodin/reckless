@@ -55,7 +55,7 @@ def main():
         tests = sorted(ALL_TESTS)
 
     run_tests(libs, tests)
-
+    return 0
 
 def run_tests(libs, tests):
     for test in tests:
