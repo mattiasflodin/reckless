@@ -18,18 +18,6 @@ COLORS = [
     '#66a61e',
     '#e6ab02',
 ]
-#COLORS = [
-#    '#e41a1c',
-#    '#377eb8',
-#    '#4daf4a',
-#    '#984ea3',
-#    '#ff7f00',
-#    '#ffff33',
-#]
-
-def timing_library(name):
-    name = os.path.splitext(name)[0]
-    return name[:name.find('_')]
 
 def get_default_window(test):
     table = {
@@ -98,8 +86,8 @@ def parse_ranges(s):
         if len(parts)>2:
             raise ValueError("Invalid range specification: " + r)
         start=int(parts[0])
-        if len(parts) == 1:
-            end=int(parts[0])
+        if len(parts) == 2:
+            end=int(parts[1])
         else:
             end = start
         start, end = min(start, end), max(start, end)
@@ -159,11 +147,11 @@ def main():
 def plot(libs, tests, threads_list, window, plot_filename=None, width=1024, height=1024, dpi=96):
     import matplotlib
     matplotlib.rc('font', size=10)
-    #matplotlib.rcParams.update({'font.size': 12})
     import matplotlib.pyplot as plt
     fig, ax = plt.subplots()
     
     def single_plot(filename, test, name, window, color=None):
+        print(filename)
         with open(filename, 'r') as f:
             data = f.readlines()
         data = [int(x) for x in data]

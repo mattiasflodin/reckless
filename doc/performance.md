@@ -82,6 +82,7 @@ The specifications of the test machine are as follows:
 * Intel i7-3770K CPU at 3.5 Ghz with hyper-threading and SpeedStep turned off.
 * Western Digital Black WD7501AALS 750GB mechanical disk.
 * 8 GiB RAM.
+* Linux kernel 3.14.14
 
 For the tests that measure individual call timings, measurements were made
 according to the article “[How to Benchmark Code Execution Times on Intel IA-32
