@@ -95,7 +95,7 @@ def parse_ranges(s):
     return result
         
 def main():
-    opts, args = gnu_getopt(argv[1:], 'l:t:c:w:h', ['libs=', 'tests=', 'threads=', 'file=', 'help'])
+    opts, args = gnu_getopt(argv[1:], 'l:t:c:w:h', ['libs=', 'tests=', 'threads=', 'file=', 'top=', 'help'])
     libs = None
     tests = None
     threads = None
@@ -104,6 +104,7 @@ def main():
     width = 858
     height = 858
     show_help = len(args) != 0
+    top = None
 
     for option, value in opts:
         if option in ('-l', '--libs'):
@@ -118,7 +119,8 @@ def main():
             window = int(value)
         elif option == '--file':
             filename = value
-            
+        elif option == '--top':
+            top = int(value)
 
     if show_help:
         stderr.write(
@@ -128,6 +130,7 @@ def main():
             '-l,--libs     LIBS  comma-separated list of libs to plot\n'
             '-c,--threads  LIBS  thread-counts to include in a comma-separated list (e.g. 1-2,4)\n'
             '-w,--window   SIZE  Size of moving-average window\n'
+            '--top         TOP   Top y coordinate for chart\n'
             '-h,--help        show this help\n'
             'Available libraries: {}\n'
             'Available tests: {}\n'.format(
@@ -141,10 +144,10 @@ def main():
     if threads is None:
         threads = list(range(1, 5))
 
-    plot(libs, tests, threads, window, filename, width, height)
+    plot(libs, tests, threads, window, top, filename, width, height)
     return 0
 
-def plot(libs, tests, threads_list, window, plot_filename, width, height, dpi=96):
+def plot(libs, tests, threads_list, window, top, plot_filename, width, height, dpi=96):
     import matplotlib
     matplotlib.rc('font', size=10)
     import matplotlib.pyplot as plt
@@ -159,6 +162,7 @@ def plot(libs, tests, threads_list, window, plot_filename, width, height, dpi=96
             window = get_default_window(test)
         if window != 1:
             data = average2(window, data);
+        print("%s: max: %s" % (filename, max(data)))
         ax.plot(data, '-', label=name, color=color, linewidth=1)
         
     for test in tests:
@@ -179,6 +183,9 @@ def plot(libs, tests, threads_list, window, plot_filename, width, height, dpi=96
             else:
                 filename = "results/%s_%s.txt" % (lib, test)
                 single_plot(filename, test, ', '.join(base_name), window, color)
+
+    if top is not None:
+        ax.set_ylim(ymax=top)
     
     legend = ax.legend()
     # set the linewidth of each legend object

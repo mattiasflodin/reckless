@@ -70,7 +70,7 @@ the asynchronous queue is over 50 MiB in size, in order to fit all log messages
 without having to flush. The measurement does not include log setup and
 teardown.  In other words, it only measures time for pushing log entries on the
 asynchronous queue and not the time for flushing all those messages to disk.
-*This is fine if*:
+*This is fine*, if:
 
 * You can afford a large memory enough buffer that it will never run out of
   space (but keep in mind that if you make it too large, disk swapping can
@@ -107,8 +107,8 @@ The specifications of the test machine are as follows:
   SpeedStep is turned off.
 * Western Digital Black WD7501AALS 750GB mechanical disk.
 * 8 GiB RAM.
-* gcc 4.8.4
-* Linux kernel 3.14.14
+* gcc 4.8.4.
+* Linux kernel 3.14.14.
 
 For the scenarios that measure individual call timings, measurements were made
 according to the article “[How to Benchmark Code Execution Times on Intel IA-32
@@ -116,10 +116,12 @@ and IA-64 Instruction Set
 Architectures](http://www.intel.com/content/www/us/en/intelligent-systems/embedded-systems-training/ia-32-ia-64-benchmark-code-execution-paper.html)”
 by Gabriele Paoloni. To avoid problems with unsynchronized time-stamp counters
 across CPU cores, each measured thread is forced to run on a specific CPU core
-by setting the thread affinity. I have applied a moving average filter to the
-performance charts because noise would otherwise make it difficult to compare
-the lines. The size of the moving average window varies depending on the
-scnario; I made it just large enough to make the chart comprehensible.
+by setting the thread affinity.
+
+I have applied a moving average filter to the performance charts because noise
+would otherwise make it difficult to compare the lines. The size of the moving
+average window varies depending on the scenario. I made it just large enough to
+make the chart comprehensible.
 
 For tests that only measure total execution time, `std::chrono::steady_clock`
 is used.
