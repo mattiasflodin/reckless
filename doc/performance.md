@@ -68,20 +68,22 @@ shows performance both when logging is turned on and off. It claims that
 logging libraries currently in popular use.” I’m not sure that this can be
 concluded from the charts at all, but in the event that it can, it applies
 *only when logging is turned off*. For this benchmark I have only benchmarked
-Pantheios for the case when logging is turned on. Again, the Pantheios
+Pantheios for the case when logging is turned *on*. Again, the Pantheios
 developers have clearly set different goals with their benchmarks than I do
 here.
 
 On a similar notion, for stdio and fstream the file buffer is flushed after
-each write. Note in all libraries tested, flushing means sending the data to
-the OS kernel, not actually writing to disk. Sending it to the kernel is enough
-to ensure that the data will survive a software crash, but not an OS crash or
-power loss.
+each write. Note that in all libraries tested, flushing means sending the data
+to the OS kernel, not actually writing to disk. Sending it to the kernel is
+enough to ensure that the data will survive a software crash, but not an OS
+crash or power loss.
 
 The specifications of the test machine are as follows:
-* Intel i7-3770K CPU at 3.5 Ghz with hyper-threading and SpeedStep turned off.
+* Intel i7-3770K CPU at 3.5 Ghz with 4 CPU cores. Hyper-threading and
+  SpeedStep is turned off.
 * Western Digital Black WD7501AALS 750GB mechanical disk.
 * 8 GiB RAM.
+* gcc 4.8.4
 * Linux kernel 3.14.14
 
 For the tests that measure individual call timings, measurements were made
@@ -90,7 +92,15 @@ and IA-64 Instruction Set
 Architectures](http://www.intel.com/content/www/us/en/intelligent-systems/embedded-systems-training/ia-32-ia-64-benchmark-code-execution-paper.html)”
 by Gabriele Paoloni. To avoid problems with unsynchronized time-stamp counters
 across CPU cores, each measured thread is forced to run on a specific CPU core
-by setting the thread affinity.
+by setting the thread affinity. I have applied a moving average filter to the
+performance charts because noise would otherwise make it difficult to compare
+the lines. The size of the moving average window varies depending on the test;
+I made it just large enough to make the chart comprehensible.
 
 For tests that only measure total execution time, `std::chrono::steady_clock`
 is used.
+
+Periodic calls
+==============
+![Periodic calls performance
+chart](doc/images/performance_periodic_calls_1.svg)

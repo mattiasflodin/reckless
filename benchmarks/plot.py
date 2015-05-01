@@ -159,7 +159,7 @@ def plot(libs, tests, threads_list, window, plot_filename=None, width=1024, heig
             window = get_default_window(test)
         if window != 1:
             data = average2(window, data);
-        ax.plot(data, '-', label=name, color=color, linewidth=2)
+        ax.plot(data, '-', label=name, color=color, linewidth=1)
         
     for test in tests:
         for lib in libs:
