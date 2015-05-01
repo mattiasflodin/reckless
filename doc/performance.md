@@ -56,21 +56,21 @@ developed according to those assumptions:
   Pointers to global objects are usually fine, and so are string literals. For
   dynamically allocated strings you should use e.g. `std::string`.
 
-Another factor that is important in my opinion is that latency should be kept
-at a predictable and stable level. If the write buffer is very large then the
-user may experience sudden hangs as the logger suddenly needs to flush large
+Another factor that I care about is that latency should be kept at a
+predictable and stable level. If the write buffer is very large then the user
+may experience sudden hangs as the logger suddenly needs to flush large
 amounts of data to disk. The output-buffer size in reckless is configurable
 and could be set very large if desired, but the default size is 8 KiB. This is
-large enough to fit a modern disk sector (4 KiB) while still leaving
-some room to grow.
+large enough to fit a modern disk sector (4 KiB) while still leaving some room
+to grow.
   
 In the [benchmark made by the spdlog
 author](https://github.com/gabime/spdlog/blob/06e0b0387a27a6e77005adac87f235e744caeb87/bench/spdlog-async.cpp),
-the asynchronous queue is over 50 MiB in size, in order to fit all log messages
-without having to flush. The measurement does not include log setup and
-teardown.  In other words, it only measures time for pushing log entries on the
-asynchronous queue and not the time for flushing all those messages to disk.
-*This is fine*, if:
+the asynchronous queue at least 50 MiB in size, in order to fit all log
+messages without having to flush. The measurement does not include log setup
+and teardown.  In other words, it only measures time for pushing log entries
+on the asynchronous queue and not the time for flushing all those messages to
+disk. *This is fine*, if:
 
 * You can afford a large memory enough buffer that it will never run out of
   space (but keep in mind that if you make it too large, disk swapping can
@@ -145,6 +145,19 @@ with only the asynchronous libraries.
 
 ![Periodic calls performance chart for asynchronous
 libraries](images/performance_periodic_calls_asynchronous.png)
+
+The mean execution times are as follows:
+alternative | ticks
+------------|------
+nop         | 111
+reckless    | 812
+spdlog      | 1807
+fstream     | 22703
+stdio       | 26124
+pantheios   | 37683
+
+For reckless the mean execution time is 812 ticks and for spdlog it is 1806
+ticks.
 
 Call burst
 ==========
