@@ -1,39 +1,70 @@
 #!/usr/bin/python2
-import matplotlib.pyplot as plt
 import sys
-from sys import argv
+from sys import argv, stderr
 from getopt import gnu_getopt
 import os.path
 
-average_window = 128
-
 ALL_LIBS = ['nop', 'reckless', 'stdio', 'fstream', 'pantheios', 'spdlog']
-ALL_TESTS = ['periodic_calls', 'call_burst', 'write_files', 'mandelbrot']
+ALL_TESTS = ['periodic_calls', 'call_burst', 'write_files'] #, 'mandelbrot']
+
+THREADED_TESTS = {'call_burst', 'mandelbrot'}
+
+# color palette from colorbrewer2.org
+COLORS = [
+    '#1b9e77',
+    '#d95f02',
+    '#7570b3',
+    '#e7298a',
+    '#66a61e',
+    '#e6ab02',
+]
+#COLORS = [
+#    '#e41a1c',
+#    '#377eb8',
+#    '#4daf4a',
+#    '#984ea3',
+#    '#ff7f00',
+#    '#ffff33',
+#]
 
 def timing_library(name):
     name = os.path.splitext(name)[0]
     return name[:name.find('_')]
 
+def get_default_window(test):
+    table = {
+        'periodic_calls': 8,
+        'call_burst': 128,
+        'write_files': 128,
+        'mandelbrot': 1
+    }
+
+    return table.get(test, 1)
+
 def pretty_name(name):
     name_table = {
-            'nop': 'Timing overhead (~113 ticks)',
+            'nop': 'no operation',
             'stdio': 'fprintf (C)',
             'fstream': 'std::fstream (C++)',
-            'reckless': 'reckless'
+            'reckless': 'reckless',
+            'periodic_calls': 'periodic calls',
+            'call_burst': 'single call burst',
+            'write_files': 'heavy disk I/O',
+            'mandelbrot': 'mandelbrot render'
     }
             
-    return name_table.get(timing_library(name), timing_library(name))
+    return name_table.get(name, name)
 
-def timing_color(name):
+def lib_color(name):
     color_table = {
-            'nop': red,
-            'stdio': orange,
-            'fstream': green,
-            'pantheios': gray,
-            'spdlog': pink,
-            'reckless': blue,
+            'nop': COLORS[0],
+            'reckless': COLORS[3],
+            'spdlog': COLORS[2],
+            'stdio': COLORS[1],
+            'fstream': COLORS[4],
+            'pantheios': COLORS[5],
             }
-    return color_table[timing_library(name)]
+    return color_table[name]
 
     
 def average(average_window, data):
@@ -54,6 +85,9 @@ def average2(average_window, data):
         if len(window) == average_window:
             newdata.append(sum(window)/average_window)
             del window[:]
+    #if len(window) != 0:
+    #    window.extend([0]*(average_window-len(window)))
+    #    newdata.append(sum(window)/average_window)
     return newdata
 
 def parse_ranges(s):
@@ -65,7 +99,7 @@ def parse_ranges(s):
             raise ValueError("Invalid range specification: " + r)
         start=int(parts[0])
         if len(parts) == 1:
-            end=int(parts[1])
+            end=int(parts[0])
         else:
             end = start
         start, end = min(start, end), max(start, end)
@@ -73,9 +107,14 @@ def parse_ranges(s):
     return result
         
 def main():
-    opts, args = gnu_getopt(argv[1:], 'l:t:c:h', ['libs', 'tests', 'threads', 'help'])
+    opts, args = gnu_getopt(argv[1:], 'l:t:c:w:h', ['libs=', 'tests=', 'threads=', 'file=', 'help'])
     libs = None
     tests = None
+    threads = None
+    window = None
+    filename = None
+    width = 1024
+    height = 1024
     show_help = len(args) != 0
 
     for option, value in opts:
@@ -87,13 +126,20 @@ def main():
             threads = parse_ranges(value)
         elif option in ('-h', '--help'):
             show_help = True
+        elif option in ('-w', '--window'):
+            window = int(value)
+        elif option == '--file':
+            filename = value
+            
 
     if show_help:
         stderr.write(
             'usage: plot.py [OPTIONS]\n'
             'where OPTIONS are:\n'
-            '-t,--tests TESTS comma-separated list of tests to run\n'
-            '-l,--libs  LIBS  comma-separated list of libs to benchmark\n'
+            '-t,--tests    TESTS comma-separated list of tests to plot\n'
+            '-l,--libs     LIBS  comma-separated list of libs to plot\n'
+            '-c,--threads  LIBS  thread-counts to include in a comma-separated list (e.g. 1-2,4)\n'
+            '-w,--window   SIZE  Size of moving-average window\n'
             '-h,--help        show this help\n'
             'Available libraries: {}\n'
             'Available tests: {}\n'.format(
@@ -104,27 +150,56 @@ def main():
         libs = sorted(ALL_LIBS)
     if tests is None:
         tests = sorted(ALL_TESTS)
+    if threads is None:
+        threads = list(range(1, 5))
 
-    plot(libs, tests)
+    plot(libs, tests, threads, window, filename, width, height)
     return 0
 
-def plot(libs, tests):
+def plot(libs, tests, threads_list, window, plot_filename=None, width=1024, height=1024, dpi=96):
+    import matplotlib
+    matplotlib.rc('font', size=10)
+    #matplotlib.rcParams.update({'font.size': 12})
+    import matplotlib.pyplot as plt
     fig, ax = plt.subplots()
+    
+    def single_plot(filename, test, name, window, color=None):
+        with open(filename, 'r') as f:
+            data = f.readlines()
+        data = [int(x) for x in data]
+        if window is None:
+            window = get_default_window(test)
+        if window != 1:
+            data = average2(window, data);
+        ax.plot(data, '-', label=name, color=color, linewidth=2)
+        
     for test in tests:
         for lib in libs:
-            for threads in 
-            name = "results/%s_%s_%d
-            with open(name, 'r') as f:
-                data = f.readlines()
-            name = os.path.split(name)[-1]
-            data = [int(x) for x in data]
-            if average_window != 1:
-                data = average2(average_window, data);
-        ax.plot(data, '-', label=name) #, label=pretty_name(name) , color=timing_color(name))
-
+            color = lib_color(lib)
+            base_name = []
+            if len(libs)>1:
+                base_name.append(pretty_name(lib))
+            if len(tests)>1:
+                base_name.append(pretty_name(test))
+            if test in THREADED_TESTS:
+                for threads in threads_list:
+                    name = base_name[:]
+                    filename = "results/%s_%s_%d.txt" % (lib, test, threads)
+                    if len(threads_list)>1:
+                        name.append("%d threads" % threads)
+                    single_plot(filename, test, ', '.join(name), window, color)
+            else:
+                filename = "results/%s_%s.txt" % (lib, test)
+                single_plot(filename, test, ', '.join(base_name), window, color)
+    
     legend = ax.legend()
     plt.xlabel('Iteration')
     plt.ylabel('Latency (CPU ticks)')
-    plt.show()
-    #ax.set_size_inches(10, 10)
-    #plt.savefig('plot.png', dpi=150)
+    if plot_filename is None:
+        plt.show()
+    else:
+        fig.set_size_inches(width/dpi, height/dpi)
+        plt.savefig(plot_filename, dpi=dpi)
+
+if __name__ == "__main__":
+    sys.exit(main())
