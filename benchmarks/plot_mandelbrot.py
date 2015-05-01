@@ -30,36 +30,57 @@ WIDTH=1.0/(len(LIBS)+2)
 GROUP_WIDTH = WIDTH*len(LIBS)
 GROUP_OFFSET = (1.0 - GROUP_WIDTH)/2
 
-def read_timing(lib, cores):
+def read_timing(lib, cores, offset=0.0):
     with open(os.path.join('results', '%s_mandelbrot_%d.txt' % (lib, cores)), 'r') as f:
         data = f.readlines()
-    data = [float(x)/1000.0 for x in data]
-    data.sort()
-    #return np.min(data), np.std(data)
-    return np.mean(data), np.std(data)
+    data = sorted([float(x)/1000.0+offset for x in data])
+    # Use interquartile range as measure of scale.
+    low, high = np.percentile(data, [25, 75])
+    # Samples generally center around a minimum point that represents the ideal
+    # running time. There are no outliers below the ideal time; execution does
+    # not accidentally take some kind of short cut. At least, not for this
+    # particular benchmark. It could be conceivable for other tests where we
+    # are I/O-bound and we get lucky with the cache, but this test is not
+    # I/O-bound.
+    #
+    # However, outliers do exist on the other end of the spectrum. Something
+    # completely unrelated sometimes happens in the system and takes tons of
+    # CPU cycles from our benchmark. We don't want to include these because
+    # they make it more difficult to reproduce the same statistics on multiple
+    # runs. Or, in statistics speak, they make our benchmark less robust and
+    # less efficient. To counter this, we get rid of the worst outliers on the
+    # upper end, but we leave the lower end intact.
+    
+    outlier_index = int(len(data)*0.8)
+    data = data[:outlier_index]
+    mean = np.mean(data)
+    return low, mean, high
 
-nop_timings = []
+offsets = []
 for cores in range(1, MAX_CORES+1):
-    nop_timings.append(read_timing('nop', cores))
+    if ONLY_OVERHEAD:
+        _, mean, _ = read_timing('nop', cores)
+        offsets.append(-mean)
+    else:
+        offsets.append(0.0)
 
 rects = []
 for index, lib in enumerate(LIBS):
-    mean_timings = []
-    std_timings = []
+    means = []
+    error = [[], []]
     
     for cores in range(1, MAX_CORES+1):
-        mean, std = read_timing(lib, cores) 
-        print(lib, cores, mean, std)
-        if ONLY_OVERHEAD:
-            mean -= nop_timings[cores-1][0]
-        mean_timings.append(mean)
-        std_timings.append(std)
+        low, mean, high = read_timing(lib, cores, offsets[cores-1]) 
+        print(lib, cores, mean, low, high)
+        means.append(mean)
+        error[0].append(mean - low)
+        error[1].append(high - mean)
     if not ONLY_OVERHEAD:
         # Standard deviation is so small that it just clutters the plot in this
         # view
-        std_timings = None
-    rects.append(ax.bar(ind+index*WIDTH + GROUP_OFFSET, mean_timings, WIDTH, color=COLORS[index],
-        yerr=std_timings, ecolor='black'))
+        error = None
+    rects.append(ax.bar(ind+index*WIDTH + GROUP_OFFSET, means, WIDTH,
+        color=COLORS[index], yerr=error, ecolor='black'))
 
 ax.legend( rects, LIBS )
 

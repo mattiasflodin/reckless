@@ -15,6 +15,12 @@ MAX_THREADS = 4
 # /run_benchmark.py -t mandelbrot  1448.92s user 64.87s system 208% cpu 12:04.87 total
 # with SINGLE_SAMPLE_TEST_ITERATIONS=2 means we should have
 # about 80 for 8 hours runtime
+#
+# time ./run_benchmark.py -t mandelbrot  
+# mandelbrot: fstream/1234 nop/1234 pantheios/1234 reckless/1234 spdlog/1234 stdio/1234        
+# ./run_benchmark.py -t mandelbrot  58192.78s user 2484.45s system 208% cpu 8:04:15.16 total
+#
+# Then 100 = 10 hours runtime
 SINGLE_SAMPLE_TEST_ITERATIONS = 100
 
 def main():
