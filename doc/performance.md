@@ -140,4 +140,4 @@ synchronous alternatives dwarf the asynchronous ones on the chart, here is the
 same chart with only the asynchronous libraries.
 
 ![Periodic calls performance chart for asynchronous
-libraries](images/performance_periodic_calls_all.png)
+libraries](images/performance_periodic_calls_asynchronous.png)
