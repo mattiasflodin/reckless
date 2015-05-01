@@ -146,7 +146,7 @@ with only the asynchronous libraries.
 ![Periodic calls performance chart for asynchronous
 libraries](images/performance_periodic_calls_asynchronous.png)
 
-The mean execution times are as follows:
+The mean call latencies are as follows:
 
 alternative | ticks
 ------------|------
@@ -156,9 +156,6 @@ spdlog      | 1807
 fstream     | 22703
 stdio       | 26124
 pantheios   | 37683
-
-For reckless the mean execution time is 812 ticks and for spdlog it is 1806
-ticks.
 
 Call burst
 ==========
