@@ -103,4 +103,4 @@ is used.
 Periodic calls
 ==============
 ![Periodic calls performance
-chart](doc/images/performance_periodic_calls_1.svg)
+chart](images/performance_periodic_calls_all_1.svg)
