@@ -159,10 +159,9 @@ def plot(libs, tests, threads_list, window, top, plot_filename, width, height, d
         data = [int(x) for x in data]
         avg = float(sum(data))/len(data)
         if window is None:
-            window = get_default_window(test)
+            window = 1 #get_default_window(test)
         if window != 1:
             data = average2(window, data);
-        print("%s: max: %s average %s" % (filename, max(data), avg))
         ax.plot(data, '-', label=name, color=color, linewidth=1)
         
     for test in tests:

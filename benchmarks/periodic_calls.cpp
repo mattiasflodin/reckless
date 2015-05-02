@@ -10,18 +10,16 @@ int main()
 {
     unlink("log.txt");
     performance_log::rdtscp_cpuid_clock::bind_cpu(0);
-    performance_log::logger<8192, performance_log::rdtscp_cpuid_clock, std::uint32_t> performance_log;
+    performance_log::logger<256, performance_log::rdtscp_cpuid_clock, std::uint32_t> performance_log;
 
     {
         LOG_INIT();
 
-        for(int i=0; i!=600; ++i) {
-            usleep(333);
-            for(int j=0; j!=10; ++j) {
-                auto start = performance_log.start();
-                LOG(c, i, pi);
-                performance_log.stop(start);
-            }
+        for(int i=0; i!=250; ++i) {
+            usleep(200);
+            auto start = performance_log.start();
+            LOG(c, i, pi);
+            performance_log.stop(start);
         }
         
         LOG_CLEANUP();

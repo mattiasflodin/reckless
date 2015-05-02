@@ -18,12 +18,12 @@ int main()
     mkdir("data", full_access);
 
     performance_log::rdtscp_cpuid_clock::bind_cpu(0);
-    performance_log::logger<16384, performance_log::rdtscp_cpuid_clock, std::uint32_t> performance_log;
+    performance_log::logger<256, performance_log::rdtscp_cpuid_clock, std::uint32_t> performance_log;
 
     {
         LOG_INIT();
 
-        for(unsigned number=0; number!=1000u; ++number) {
+        for(unsigned number=0; number!=250u; ++number) {
             std::ostringstream ostr;
             ostr << "data/" << number;
             std::ofstream ofs(ostr.str().c_str());

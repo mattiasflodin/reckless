@@ -57,13 +57,12 @@ developed according to those assumptions:
   Pointers to global objects are usually fine, and so are string literals. For
   dynamically allocated strings you should use e.g. `std::string`.
 
-Another factor that I care about is that latency should be kept at a
-predictable and stable level. If the write buffer is very large then the user
-may experience sudden hangs as the logger suddenly needs to flush large
-amounts of data to disk. The output-buffer size in reckless is configurable
-and could be set very large if desired, but the default size is 8 KiB. This is
-large enough to fit a modern disk sector (4 KiB) while still leaving some room
-to grow.
+Another factor that I care about is that latency should be kept at a stable,
+insignificant level. If the write buffer is very large then the user may
+experience sudden hangs as the logger suddenly needs to flush large amounts of
+data to disk. The output-buffer size in reckless is configurable and could be
+set very large if desired, but the default size is 8 KiB. This is large enough
+to fit a modern disk sector (4 KiB) while still leaving some room to grow.
   
 In the [benchmark made by the spdlog
 author](https://github.com/gabime/spdlog/blob/06e0b0387a27a6e77005adac87f235e744caeb87/bench/spdlog-async.cpp),
@@ -118,11 +117,6 @@ Architectures](http://www.intel.com/content/www/us/en/intelligent-systems/embedd
 by Gabriele Paoloni. To avoid problems with unsynchronized time-stamp counters
 across CPU cores, each measured thread is forced to run on a specific CPU core
 by setting the thread affinity.
-
-I have applied a moving average filter to the performance charts because noise
-would otherwise make it difficult to compare the lines. The size of the moving
-average window varies depending on the scenario. I made it just large enough to
-make the chart comprehensible.
 
 For tests that only measure total execution time, `std::chrono::steady_clock`
 is used.
