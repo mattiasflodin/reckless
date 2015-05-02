@@ -158,13 +158,23 @@ Call burst
 [benchmarks/call_burst.cpp](../benchmarks/call_burst.cpp)
 
 This scenario stresses the log by generating messages as fast as it can,
-filling up the buffer. The plot is zoomed in to show all the libraries and the
-asynchronous libraries appear to perform well, but there are now spikes in the
-call latency that appear when the buffer fills up. These spikes in fact go as
-far as 25 000 000 ticks for spdlog, and 750 000 ticks for reckless. If we
-apply a moving average with a window size of 128 iterations, we get a better
-idea of the overall performance:
+filling up the buffer. The plot is zoomed in so we can see curves for all the
+libraries, and the asynchronous alternatives appear to perform well, but there
+are now spikes in the call latency that appear when the buffer fills up. These
+spikes in fact go as far as 750 000 ticks for reckless, and 25 000 000 ticks
+for spdlog. By applying a gaussian moving average we get a better idea of the
+overall performance:
 
-Spdlog performs well until the buffer fills up, at
-which point it stalls to empty its buffer to disk. After that it stabilizes,
-but comes out as the slowest performer, followed by pantheios.
+![Call burst performance chart with moving
+average](images/performance_call_burst_1_ma.png)
+
+Spdlog performs well until the buffer fills up, at which point it stalls
+waiting for the buffer to be emptied to disk. After that it stabilizes, but
+comes out as the slowest performer, followed by pantheios. It can now be seen
+that reckless is still on average the best performer, but it is clear that it
+stalls each time the buffer fills up.
+
+It should be noted that while reckless has been profiled and optimized to
+handle this situation as gracefully as it can, it is far from an ideal
+situation. In general, if your buffer fills up due to a sporadic burst of data
+then you should consider enlarging the buffer.
