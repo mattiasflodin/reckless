@@ -131,26 +131,21 @@ chart](images/performance_periodic_calls_all.png)
 In this scenario we simulate a single-threaded program that makes regular
 calls to the log, but not so often that the buffer is anywhere near filling
 up. Other than logging, the disk is not busy doing anything. It is the most
-forgiving scenario but it is probably also very common in interactive
-applications. The two asynchronous libraries predictably perform much better
-than the synchronous ones, since they do not have to wait for the I/O calls.
-Notably they also have a more stable execution time. Since the synchronous
-alternatives dwarf the asynchronous ones on the chart, here is the same chart
-with only the asynchronous libraries.
+forgiving scenario, but probably also very common in interactive applications.
+The two asynchronous libraries predictably perform much better than the
+synchronous ones, since they do not have to wait for the I/O calls. They also
+have a more stable execution time.
 
-![Periodic calls performance chart for asynchronous
-libraries](images/performance_periodic_calls_asynchronous.png)
+The average call latencies are as follows:
 
-The mean call latencies are as follows:
-
-alternative | ticks
-------------|------
-nop         | 111
-reckless    | 812
-spdlog      | 1807
-fstream     | 22703
-stdio       | 26124
-pantheios   | 37683
+Library   | Ticks
+----------|------
+nop       | 111
+reckless  | 812
+spdlog    | 1807
+fstream   | 22703
+stdio     | 26124
+pantheios | 37683
 
 Call burst
 ----------
