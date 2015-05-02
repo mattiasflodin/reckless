@@ -1,8 +1,9 @@
-These performance measurements were last made on 2015-21-29. The results may
-have changed since then.
+Benchmarks
+==========
 
-Libraries benchmarked
-=====================
+
+Libraries
+---------
 Apart from reckless, the libraries or logging techniques that are benchmarked
 here are:
 * fprintf. This uses the standard stdio string formatting and calls fflush()
@@ -25,8 +26,8 @@ here are:
   time, this lets us compare the execution time to what it would be if no
   logging occurred at all.
   
-How to read these benchmarks
-============================
+How to read the benchmarks
+--------------------------
 When you make claims about performance, people expect that they are backed up
 with measurements. But it is important to realize that your use case and
 constraints can have a big impact on how performance is measured and,
@@ -127,7 +128,7 @@ For tests that only measure total execution time, `std::chrono::steady_clock`
 is used.
   
 Periodic calls
-==============
+--------------
 ![Periodic calls performance
 chart](images/performance_periodic_calls_all.png)
 
@@ -158,7 +159,7 @@ stdio       | 26124
 pantheios   | 37683
 
 Call burst
-==========
+----------
 ![Call burst performance chart](images/performance_call_burst_1.png)
 
 [benchmarks/call_burst.cpp](../benchmarks/call_burst.cpp)
