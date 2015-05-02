@@ -159,20 +159,20 @@ Call burst
 
 This scenario stresses the log by generating messages as fast as it can,
 filling up the buffer. The plot is zoomed in so we can see curves for all the
-libraries, and the asynchronous alternatives appear to perform well, but there
-are now spikes in the call latency that appear when the buffer fills up. These
-spikes in fact go as far as 750 000 ticks for reckless, and 25 000 000 ticks
-for spdlog. By applying a gaussian moving average we get a better idea of the
-overall performance:
+libraries. At first sight the asynchronous alternatives appear to perform
+well, but there are now spikes in the call latency that appear when the buffer
+fills up. These spikes in fact go as far as 750 000 ticks for reckless, and 25
+000 000 ticks for spdlog. By applying a gaussian moving average we get a
+better idea of the overall performance:
 
 ![Call burst performance chart with moving
 average](images/performance_call_burst_1_ma.png)
 
-Spdlog performs well until the buffer fills up, at which point it stalls
-waiting for the buffer to be emptied to disk. After that it stabilizes, but
-comes out as the slowest performer, followed by pantheios. It can now be seen
-that reckless is still on average the best performer, but it is clear that it
-stalls each time the buffer fills up.
+Spdlog performs well until the buffer fills up, but then it stalls waiting for
+the buffer to be emptied to disk. After that it stabilizes, but comes out as
+the slowest performer, followed by pantheios. It can now be seen that reckless
+is still on average the best performer, but it is clear that it does stall
+each time the buffer fills up.
 
 It should be noted that while reckless has been profiled and optimized to
 handle this situation as gracefully as it can, it is far from an ideal
