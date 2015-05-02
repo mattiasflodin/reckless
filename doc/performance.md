@@ -134,7 +134,11 @@ up. Other than logging, the disk is not busy doing anything. It is the most
 forgiving scenario, but probably also very common in interactive applications.
 The two asynchronous libraries predictably perform much better than the
 synchronous ones, since they do not have to wait for the I/O calls. They also
-have a more stable execution time.
+have a more stable execution time. If we zoom in on the asynchronous
+libraries we also get a better idea of the measurement overhead.
+
+![Periodic calls performance chart for asynchronous
+libraries](images/performance_periodic_calls_asynchronous.png)
 
 The average call latencies are as follows:
 
