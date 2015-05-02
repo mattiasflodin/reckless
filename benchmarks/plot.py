@@ -3,6 +3,7 @@ import sys
 from sys import argv, stderr
 from getopt import gnu_getopt
 import os.path
+from math import pi, sqrt, exp
 
 ALL_LIBS = ['nop', 'reckless', 'stdio', 'fstream', 'pantheios', 'spdlog']
 ALL_TESTS = ['periodic_calls', 'call_burst', 'write_files'] #, 'mandelbrot']
@@ -71,11 +72,36 @@ def average2(average_window, data):
     for v in data:
         window.append(v)
         if len(window) == average_window:
-            newdata.append(sum(window)/average_window)
+            newdata.extend([sum(window)/average_window]*average_window)
             del window[:]
     #if len(window) != 0:
     #    window.extend([0]*(average_window-len(window)))
     #    newdata.append(sum(window)/average_window)
+    return newdata
+
+def gaussian_kernel(width):
+    kernel = []
+    std = float(width)/6
+    std = std*std
+    C = 1.0/sqrt(2*pi*std)
+    for x in range(0, width):
+        xd = x - float(width)/2
+        kernel.append(C*exp(-xd*xd/(2*std)))
+
+    n = sum(kernel)
+    kernel = [x/n for x in kernel]
+
+    return kernel
+
+def gaussian_average(average_window, data):
+    kernel = gaussian_kernel(average_window)
+    window = []
+    newdata = []
+    for v in data:
+        window.append(v)
+        if len(window) == average_window:
+            newdata.append(sum([x*k for x, k in zip(window, kernel)]))
+            del window[0]
     return newdata
 
 def parse_ranges(s):
@@ -95,7 +121,7 @@ def parse_ranges(s):
     return result
         
 def main():
-    opts, args = gnu_getopt(argv[1:], 'l:t:c:w:h', ['libs=', 'tests=', 'threads=', 'file=', 'top=', 'help'])
+    opts, args = gnu_getopt(argv[1:], 'l:t:c:w:h', ['libs=', 'tests=', 'threads=', 'file=', 'top=', 'iterations=', 'help'])
     libs = None
     tests = None
     threads = None
@@ -105,6 +131,7 @@ def main():
     height = 858
     show_help = len(args) != 0
     top = None
+    iterations = None
 
     for option, value in opts:
         if option in ('-l', '--libs'):
@@ -121,16 +148,19 @@ def main():
             filename = value
         elif option == '--top':
             top = int(value)
+        elif option == '--iterations':
+            iterations = int(value)
 
     if show_help:
         stderr.write(
             'usage: plot.py [OPTIONS]\n'
             'where OPTIONS are:\n'
-            '-t,--tests    TESTS comma-separated list of tests to plot\n'
-            '-l,--libs     LIBS  comma-separated list of libs to plot\n'
-            '-c,--threads  LIBS  thread-counts to include in a comma-separated list (e.g. 1-2,4)\n'
-            '-w,--window   SIZE  Size of moving-average window\n'
-            '--top         TOP   Top y coordinate for chart\n'
+            '-t,--tests    TESTS      comma-separated list of tests to plot\n'
+            '-l,--libs     LIBS       comma-separated list of libs to plot\n'
+            '-c,--threads  LIBS       thread-counts to include in a comma-separated list (e.g. 1-2,4)\n'
+            '-w,--window   SIZE       Size of moving-average window\n'
+            '--top         TOP        Top y coordinate for chart\n'
+            '--iterations  ITERATIONS Number of iterations to include\n'
             '-h,--help        show this help\n'
             'Available libraries: {}\n'
             'Available tests: {}\n'.format(
@@ -144,10 +174,10 @@ def main():
     if threads is None:
         threads = list(range(1, 5))
 
-    plot(libs, tests, threads, window, top, filename, width, height)
+    plot(libs, tests, threads, window, top, iterations, filename, width, height)
     return 0
 
-def plot(libs, tests, threads_list, window, top, plot_filename, width, height, dpi=96):
+def plot(libs, tests, threads_list, window, top, iterations, plot_filename, width, height, dpi=96):
     import matplotlib
     matplotlib.rc('font', size=10)
     import matplotlib.pyplot as plt
@@ -157,11 +187,12 @@ def plot(libs, tests, threads_list, window, top, plot_filename, width, height, d
         with open(filename, 'r') as f:
             data = f.readlines()
         data = [int(x) for x in data]
-        avg = float(sum(data))/len(data)
         if window is None:
             window = 1 #get_default_window(test)
         if window != 1:
-            data = average2(window, data);
+            data = gaussian_average(window, data);
+        if iterations is not None and iterations<len(data):
+            data = data[:iterations]
         ax.plot(data, '-', label=name, color=color, linewidth=1)
         
     for test in tests:

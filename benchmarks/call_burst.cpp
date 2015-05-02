@@ -10,12 +10,12 @@ int main()
 {
     unlink("log.txt");
     performance_log::rdtscp_cpuid_clock::bind_cpu(0);
-    performance_log::logger<1024, performance_log::rdtscp_cpuid_clock, std::uint32_t> performance_log;
+    performance_log::logger<16384, performance_log::rdtscp_cpuid_clock, std::uint32_t> performance_log;
 
     {
         LOG_INIT();
 
-        for(int i=0; i!=500; ++i) {
+        for(int i=0; i!=10000; ++i) {
             auto start = performance_log.start();
             LOG(c, i, pi);
             performance_log.stop(start);

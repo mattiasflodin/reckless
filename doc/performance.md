@@ -157,7 +157,14 @@ Call burst
 
 [benchmarks/call_burst.cpp](../benchmarks/call_burst.cpp)
 
-This scenario stresses the log by generating log messages as fast as it can,
-filling up the log buffer. Spdlog performs well until the buffer fills up, at
+This scenario stresses the log by generating messages as fast as it can,
+filling up the buffer. The plot is zoomed in to show all the libraries and the
+asynchronous libraries appear to perform well, but there are now spikes in the
+call latency that appear when the buffer fills up. These spikes in fact go as
+far as 25 000 000 ticks for spdlog, and 750 000 ticks for reckless. If we
+apply a moving average with a window size of 128 iterations, we get a better
+idea of the overall performance:
+
+Spdlog performs well until the buffer fills up, at
 which point it stalls to empty its buffer to disk. After that it stabilizes,
 but comes out as the slowest performer, followed by pantheios.
