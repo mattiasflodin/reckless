@@ -121,7 +121,8 @@ def parse_ranges(s):
     return result
         
 def main():
-    opts, args = gnu_getopt(argv[1:], 'l:t:c:w:h', ['libs=', 'tests=', 'threads=', 'file=', 'top=', 'iterations=', 'help'])
+    opts, args = gnu_getopt(argv[1:], 'l:t:c:w:h', ['libs=', 'tests=',
+        'threads=', 'window=', 'file=', 'top=', 'iterations=', 'help'])
     libs = None
     tests = None
     threads = None
@@ -157,7 +158,7 @@ def main():
             'where OPTIONS are:\n'
             '-t,--tests    TESTS      comma-separated list of tests to plot\n'
             '-l,--libs     LIBS       comma-separated list of libs to plot\n'
-            '-c,--threads  LIBS       thread-counts to include in a comma-separated list (e.g. 1-2,4)\n'
+            '-c,--threads  THREADS    thread-counts to include in a comma-separated list (e.g. 1-2,4)\n'
             '-w,--window   SIZE       Size of moving-average window\n'
             '--top         TOP        Top y coordinate for chart\n'
             '--iterations  ITERATIONS Number of iterations to include\n'

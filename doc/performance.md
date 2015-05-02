@@ -162,8 +162,8 @@ filling up the buffer. The plot is zoomed in so we can see curves for all the
 libraries. At first sight the asynchronous alternatives appear to perform
 well, but there are now spikes in the call latency that appear when the buffer
 fills up. These spikes in fact go as far as 750 000 ticks for reckless, and 25
-000 000 ticks for spdlog. By applying a gaussian moving average we get a
-better idea of the overall performance:
+000 000 ticks for spdlog. By applying a moving average we get a better idea of
+the overall performance:
 
 ![Call burst performance chart with moving
 average](images/performance_call_burst_1_ma.png)
