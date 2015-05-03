@@ -140,17 +140,17 @@ libraries we also get a better idea of the measurement overhead.
 ![Periodic calls performance chart for asynchronous
 libraries](images/performance_periodic_calls_asynchronous.png)
 
-The average call latencies are as follows:
+The average call latencies, relative to the mean measurement overhead, are as
+follows:
 
-  Library | Ticks |  IQR |  MAD | Std deviation
-----------|-------|------|------|--------------
-      nop |   108 |    3 |   10 |            18
- reckless |  2353 | 1147 |  676 |          2214
-   spdlog |  3915 |  231 |  534 |          3798
-    stdio | 45474 | 3355 | 3680 |         11856
-  fstream | 45593 | 1624 | 3047 |          8396
-pantheios | 77896 | 3882 | 4766 |         13610
-
+  Library | Relative time | IQR
+----------|---------------|----
+      nop |             1 |   0
+ reckless |            22 |  11
+   spdlog |            36 |   2
+    stdio |           421 |  31
+  fstream |           422 |  15
+pantheios |           722 |  36
 
 Call burst
 ----------

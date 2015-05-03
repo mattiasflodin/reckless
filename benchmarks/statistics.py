@@ -10,10 +10,12 @@ ALL_TESTS = ['periodic_calls', 'call_burst', 'write_files', 'mandelbrot']
 THREADED_TESTS = {'call_burst', 'mandelbrot'}
 
 def main():
-    opts, args = gnu_getopt(argv[1:], 'l:t:c:h', ['libs=', 'tests=', 'threads=', 'help'])
+    opts, args = gnu_getopt(argv[1:], 'l:t:c:n:p:h', ['libs=', 'tests=', 'threads=', 'normalizer=', 'precision=', 'help'])
     libs = None
     tests = None
     threads = None
+    normalizer = None
+    precision = None
     show_help = len(args) != 0
 
     for option, value in opts:
@@ -23,6 +25,10 @@ def main():
             tests = [test.strip() for test in value.split(',')]
         elif option in ('-c', '--threads'):
             threads = parse_ranges(value)
+        elif option in ('-n', '--normalizer'):
+            normalizer = float(value)
+        elif option in ('-p', '--precision'):
+            precision = int(value)
         elif option in ('-h', '--help'):
             show_help = True
 
@@ -30,9 +36,11 @@ def main():
         stderr.write(
             'usage: statistics.py [OPTIONS]\n'
             'where OPTIONS are:\n'
-            '-t,--tests    TESTS      comma-separated list of tests to plot\n'
-            '-l,--libs     LIBS       comma-separated list of libs to plot\n'
-            '-c,--threads  THREADS    thread-counts to include in a comma-separated list (e.g. 1-2,4)\n'
+            '-t,--tests      TESTS      comma-separated list of tests to plot\n'
+            '-l,--libs       LIBS       comma-separated list of libs to plot\n'
+            '-c,--threads    THREADS    thread-counts to include in a comma-separated list (e.g. 1-2,4)\n'
+            '-n,--normalizer NORMALIZER Normalizer value\n'
+            '-p,--precision  PRECISION  Precision.\n'
             '-h,--help        show this help\n'
             'Available libraries: {}\n'
             'Available tests: {}\n'.format(
@@ -46,7 +54,7 @@ def main():
     if threads is None:
         threads = list(range(1, 5))
 
-    make_stats(libs, tests, threads)
+    make_stats(libs, tests, threads, normalizer, precision)
     return 0
 
 def parse_ranges(s):
@@ -65,17 +73,24 @@ def parse_ranges(s):
         result.extend(list(range(start, end+1)))
     return result
         
-def make_stats(libs, tests, threads_list):
+def make_stats(libs, tests, threads_list, normalizer=None, precision=None):
     def single_file_stats(filename, columns):
         with open(filename, 'r') as f:
             data = f.readlines()
         data = np.array([float(x) for x in data])
-        low, high = np.percentile(data, [25, 75])
         mean = np.mean(data)
+        if normalizer is not None:
+            mean = mean/normalizer
+            data = [x/normalizer for x in data]
+        low, high = np.percentile(data, [25, 75])
         mad = np.mean(np.absolute(data - mean))
         std = np.std(data)
         cols = [mean, high - low, mad, std]
-        cols = ["%.0f" % x for x in cols]
+        if precision is None:
+            cols = ["%g" % x for x in cols]
+        else:
+            fmt = "%%.%df" % precision
+            cols = [fmt % x for x in cols]
         columns.extend(cols)
         return mean
     
@@ -98,6 +113,8 @@ def make_stats(libs, tests, threads_list):
     
     rows = [r for _, r in sorted(rows)]
     rows.insert(0, ["Library", "Ticks", "IQR", "MAD", "Std deviation"])
+    if normalizer is not None:
+        rows[0][1] = "Relative time"
     
     colwidths = [0]*len(rows[0])
     for row in rows:
