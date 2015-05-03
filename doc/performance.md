@@ -159,23 +159,37 @@ Call burst
 [benchmarks/call_burst.cpp](../benchmarks/call_burst.cpp)
 
 This scenario stresses the log by generating messages as fast as it can,
-filling up the buffer. The plot is zoomed in so we can see curves for all the
+filling up the buffer. The plot is zoomed in so we can see data for all the
 libraries. At first sight the asynchronous alternatives appear to perform
-well, but there are now spikes in the call latency that appear when the buffer
-fills up. These spikes in fact go as far as 750 000 ticks for reckless, and 25
-000 000 ticks for spdlog. By applying a moving average we get a better idea of
-the overall performance:
+well, but there are now spikes that appear when the buffer fills up. These
+spikes in fact go as far as 750 000 ticks for reckless, and 25 000 000 ticks for
+spdlog. By applying a moving average we get a better idea of the overall
+performance:
 
 ![Call burst performance chart with moving
 average](images/performance_call_burst_1_ma.png)
 
 Spdlog performs well until the buffer fills up, but then it stalls waiting for
-the buffer to be emptied to disk. After that it stabilizes, but comes out as
-the slowest performer, followed by pantheios. It can now be seen that reckless
-is still on average the best performer, but it is clear that it does stall
-each time the buffer fills up.
+the buffer to be emptied to disk. After that it comes out as the slowest
+performer, followed by pantheios. It can now be seen that reckless is still on
+the best performer on average, but it is clear that it does stall each time the
+buffer fills up.
 
 It should be noted that while reckless has been profiled and optimized to
 handle this situation as gracefully as it can, it is far from an ideal
 situation. In general, if your buffer fills up due to a sporadic burst of data
 then you should consider enlarging the buffer.
+
+The average call latencies relative to the measurement overhead are:
+  Library | Relative time | IQR
+----------|---------------|-----
+      nop |             1 |   0
+ reckless |            78 |   0
+  fstream |           126 |   3
+    stdio |           138 |   1
+pantheios |           337 |   6
+   spdlog |          1309 |   0
+
+
+In this scenario the disk is put under load by interleaving the log calls
+with heavy disk I/O.

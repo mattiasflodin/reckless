@@ -21,7 +21,7 @@ extern std::ofstream g_log;
     g_log_mutex.unlock()
 
 #define LOG_FILE_WRITE(FileNumber, Percent) \
-    ofs << "file " << FileNumber << " (" << Percent << "%)" << '\n' << std::flush
+    g_log << "file " << FileNumber << " (" << Percent << "%)" << '\n' << std::flush
 
 #define LOG_MANDELBROT(Thread, X, Y, FloatX, FloatY, Iterations) \
     g_log_mutex.lock(); \

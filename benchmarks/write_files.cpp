@@ -2,6 +2,8 @@
 #include <sstream>
 #include <iostream>
 #include <fstream>
+#include <cassert>
+#include <fcntl.h>
 #include <unistd.h>
 #include <sys/stat.h>
 
@@ -16,26 +18,30 @@ int main()
         S_IRGRP | S_IWGRP | S_IXGRP |
         S_IROTH | S_IWOTH | S_IXOTH;
     mkdir("data", full_access);
+    char data[1024*1024];
+    std::memset(data, 0xcd, sizeof(data));
 
     performance_log::rdtscp_cpuid_clock::bind_cpu(0);
-    performance_log::logger<256, performance_log::rdtscp_cpuid_clock, std::uint32_t> performance_log;
+    performance_log::logger<512, performance_log::rdtscp_cpuid_clock, std::uint32_t> performance_log;
 
     {
         LOG_INIT();
 
-        for(unsigned number=0; number!=250u; ++number) {
+        for(unsigned number=0; number!=256u; ++number) {
             std::ostringstream ostr;
             ostr << "data/" << number;
-            std::ofstream ofs(ostr.str().c_str());
+            int fd = open(ostr.str().c_str(), O_WRONLY | O_CREAT, full_access);
+            assert(fd != -1);
 
             auto start = performance_log.start();
-            LOG_FILE_WRITE(number, 100.0*number/1000.0);
+            LOG_FILE_WRITE(number, 100.0*number/256.0);
             performance_log.stop(start);
 
-            for(std::size_t i=0; i!=1024u*1024u; ++i) {
-                char const c = 'a';
-                ofs.write(&c, 1);
+            for(std::size_t i=0; i!=4*1024/256; ++i) {
+                auto res = write(fd, data, sizeof(data));
+                assert(res == sizeof(data));
             }
+            close(fd);
         }
 
         LOG_CLEANUP();

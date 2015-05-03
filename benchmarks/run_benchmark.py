@@ -82,6 +82,8 @@ def run_tests(libs, tests):
 def reset():
     if os.path.exists('log.txt'):
         os.unlink('log.txt')
+    for name in os.listdir('data'):
+        os.unlink(os.path.join('data', name))
     subprocess.call('sync')
     
 def run_test(lib, test, threads = None):

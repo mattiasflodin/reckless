@@ -16,7 +16,7 @@ extern reckless::severity_log<reckless::no_indent, ' ', reckless::severity_field
 #define LOG( c, i, f ) g_log.info("Hello World! %s %d %f", c, i, f)
 
 #define LOG_FILE_WRITE(FileNumber, Percent) \
-    g_log.info("file %u (%f%%)", FileNumber, Percent)
+    g_log.info("file %d (%f%%)", FileNumber, Percent)
 
 #define LOG_MANDELBROT(Thread, X, Y, FloatX, FloatY, Iterations) \
     g_log.info("[T%d] %d,%d/%f,%f: %d iterations", Thread, X, Y, FloatX, FloatY, Iterations)
