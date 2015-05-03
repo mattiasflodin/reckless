@@ -77,8 +77,9 @@ def make_stats(libs, tests, threads_list):
         cols = [mean, high - low, mad, std]
         cols = ["%.0f" % x for x in cols]
         columns.extend(cols)
+        return mean
     
-    rows = [["Library", "Ticks", "IQR", "MAD", "Std deviation"]]
+    rows = []
     for test in tests:
         for lib in libs:
             columns = []
@@ -89,12 +90,14 @@ def make_stats(libs, tests, threads_list):
                 for threads in threads_list:
                     name = base_name[:]
                     filename = "results/%s_%s_%d.txt" % (lib, test, threads)
-                    single_file_stats(filename, columns)
+                    mean = single_file_stats(filename, columns)
             else:
                 filename = "results/%s_%s.txt" % (lib, test)
-                single_file_stats(filename, columns)
-            rows.append(columns)
+                mean = single_file_stats(filename, columns)
+            rows.append((mean, columns))
     
+    rows = [r for _, r in sorted(rows)]
+    rows.insert(0, ["Library", "Ticks", "IQR", "MAD", "Std deviation"])
     
     colwidths = [0]*len(rows[0])
     for row in rows:

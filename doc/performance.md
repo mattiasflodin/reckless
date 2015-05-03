@@ -144,12 +144,12 @@ The average call latencies are as follows:
 
   Library | Ticks |  IQR |  MAD | Std deviation
 ----------|-------|------|------|--------------
-  fstream | 45593 | 1624 | 3047 |          8396
       nop |   108 |    3 |   10 |            18
-pantheios | 77896 | 3882 | 4766 |         13610
  reckless |  2353 | 1147 |  676 |          2214
    spdlog |  3915 |  231 |  534 |          3798
     stdio | 45474 | 3355 | 3680 |         11856
+  fstream | 45593 | 1624 | 3047 |          8396
+pantheios | 77896 | 3882 | 4766 |         13610
 
 
 Call burst
