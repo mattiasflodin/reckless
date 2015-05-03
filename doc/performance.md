@@ -142,14 +142,15 @@ libraries](images/performance_periodic_calls_asynchronous.png)
 
 The average call latencies are as follows:
 
-Library   | Ticks
-----------|------
-nop       | 111
-reckless  | 812
-spdlog    | 1807
-fstream   | 22703
-stdio     | 26124
-pantheios | 37683
+  Library | Ticks |  IQR |  MAD | Std deviation
+----------|-------|------|------|--------------
+  fstream | 45593 | 1624 | 3047 |          8396
+      nop |   108 |    3 |   10 |            18
+pantheios | 77896 | 3882 | 4766 |         13610
+ reckless |  2353 | 1147 |  676 |          2214
+   spdlog |  3915 |  231 |  534 |          3798
+    stdio | 45474 | 3355 | 3680 |         11856
+
 
 Call burst
 ----------
