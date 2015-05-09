@@ -181,6 +181,7 @@ situation. In general, if your buffer fills up due to a sporadic burst of data
 then you should consider enlarging the buffer.
 
 The average call latencies relative to the measurement overhead are:
+
   Library | Relative time | IQR
 ----------|---------------|-----
       nop |             1 |   0
