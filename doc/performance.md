@@ -194,7 +194,7 @@ pantheios |           337 |   6
 
 Disk I/O
 --------
-![Call burst performance chart](images/performance_call_burst_1.png)
+![Disk I/O performance chart](images/performance_write_files.png)
 
 [benchmarks/write_files.cpp](../benchmarks/write_files.cpp)
 
