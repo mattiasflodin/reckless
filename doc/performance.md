@@ -140,17 +140,16 @@ libraries we also get a better idea of the measurement overhead.
 ![Periodic calls performance chart for asynchronous
 libraries](images/performance_periodic_calls_asynchronous.png)
 
-The average call latencies, relative to the mean measurement overhead, are as
-follows:
+The average call latencies relative to reckless are as follows:
 
-  Library | Relative time | IQR
-----------|---------------|----
-      nop |             1 |   0
- reckless |            22 |  11
-   spdlog |            36 |   2
-    stdio |           421 |  31
-  fstream |           422 |  15
-pantheios |           722 |  36
+  Library | Relative time |  IQR
+----------|---------------|------
+      nop |          0.05 | 0.00
+ reckless |          1.00 | 0.46
+   spdlog |          1.60 | 0.08
+    stdio |         19.09 | 0.18
+  fstream |         20.18 | 0.21
+pantheios |         33.10 | 0.27
 
 Call burst
 ----------
@@ -180,17 +179,16 @@ handle this situation as gracefully as it can, it is far from an ideal
 situation. In general, if your buffer fills up due to a sporadic burst of data
 then you should consider enlarging the buffer.
 
-The average call latencies relative to the measurement overhead are:
-
-  Library | Relative time | IQR
-----------|---------------|-----
-      nop |             1 |   0
- reckless |            78 |   0
-  fstream |           126 |   3
-    stdio |           138 |   1
-pantheios |           337 |   6
-   spdlog |          1309 |   0
-
+The average call latencies relative to reckless are:
+  
+  Library | Relative time |    IQR |
+----------|---------------|--------|
+      nop |          0.01 | 0.0010 |
+ reckless |          1.00 | 0.0041 |
+  fstream |          1.54 | 0.0263 |
+    stdio |          1.76 | 0.0182 |
+pantheios |          4.23 | 0.0628 |
+   spdlog |         16.82 | 0.0041 |
 
 Disk I/O
 --------
