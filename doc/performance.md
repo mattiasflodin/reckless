@@ -192,5 +192,28 @@ pantheios |           337 |   6
    spdlog |          1309 |   0
 
 
+Disk I/O
+--------
+![Call burst performance chart](images/performance_call_burst_1.png)
+
+[benchmarks/write_files.cpp](../benchmarks/write_files.cpp)
+
 In this scenario the disk is put under load by interleaving the log calls
-with heavy disk I/O.
+with heavy disk I/O. Somewhere around iteration 75 the disk buffer appears to
+fill up, causing increased write latency in the kernel. Reckless can hide this
+by allowing logging to continue while the disk occurs, and then combining all
+outstanding writes into a single kernel call.
+
+
+The average call latencies relative to reckless are:
+
+  Library | Relative time |   IQR
+----------|---------------|-------
+      nop |          0.02 |  0.00
+ reckless |          1.00 |  0.35
+   spdlog |          9.08 |  3.51
+    stdio |         11.39 |  2.41
+  fstream |         14.64 |  6.20
+pantheios |        759.70 | 13.28
+
+
