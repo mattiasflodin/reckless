@@ -1,27 +1,36 @@
 #!/usr/bin/python2
 from __future__ import print_function
+import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
-import sys
+from sys import argv
 import os.path
+
+matplotlib.rc('font', size=10)
 
 # color palette from colorbrewer2.org
 COLORS = [
-    '#fdb462',
-    '#fb8072',
     '#8dd3c7',
+    '#fb8072',
+    '#80b1d3',
     '#ffffb3',
     '#bebada',
-    '#80b1d3',
+    '#fdb462',
 ]
+
+filename = None
+if len(argv) > 1:
+    filename = argv[1]
+    width = 858
+    height = 858
 
 fig, ax = plt.subplots()
 
-ONLY_OVERHEAD = 1
+ONLY_OVERHEAD = 0
 #LOG_LINES = 1048576
 MAX_CORES = 4
-#LIBS = ['nop', 'reckless', 'stdio', 'fstream', 'pantheios', 'spdlog']
-LIBS = ['nop', 'reckless', 'stdio', 'fstream']
+LIBS = ['nop', 'reckless', 'spdlog', 'stdio', 'fstream', 'pantheios']
+#LIBS = ['nop', 'reckless', 'stdio', 'fstream']
 if ONLY_OVERHEAD:
     del COLORS[0]
     del LIBS[0]
@@ -91,6 +100,11 @@ else:
 ax.set_xlabel('Number of worker threads')
 ax.set_xticks(ind + GROUP_OFFSET + GROUP_WIDTH/2)
 ax.set_xticklabels([str(x) for x in range(1, MAX_CORES+1)])
-ax.set_title('1024x1024 mandelbrot set render, one log line per pixel (i.e. 1.05 million log lines)')
-
-plt.show()
+#ax.set_title('1024x1024 mandelbrot set render, one log line per pixel (i.e. 1.05 million log lines)')
+    
+if filename is None:
+    plt.show()
+else:
+    dpi = 96
+    fig.set_size_inches(width/dpi, height/dpi)
+    plt.savefig(filename, dpi=dpi)

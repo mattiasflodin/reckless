@@ -13,18 +13,17 @@ here are:
 * [spdlog](https://github.com/gabime/spdlog/). This is closest to reckless in
   its design goals. It tries to be very fast, and offers an asynchronous mode.
   See notes below on how it is used in the benchmark.
-* [pantheios](http://www.pantheios.org/) is often recommended as a good
-  library with high performance. The author describes it more as a
-  “logging API” that lets you plug in different libraries at the back
-  end. However, it offers some stock back ends, and I suspect that most people
-  use these built-in facilities. I use the “simple” frontend and the “file”
-  backend.
+* [pantheios](http://www.pantheios.org/) is often seen recommended as a good
+  library with high performance. The author describes it more as a “logging
+  API” that lets you plug in different libraries at the back end. However, it
+  offers some stock back ends, and I suspect that most people use these
+  built-in facilities. I use the “simple” frontend and the “file” backend.
 * No operation. This means that the log call is ignored and no code is
   generated apart from the timing code. For the scenarios that measure
   individual call timings, this gives us an idea of how much overhead is added
   by the measurement itself. For the scenarios that measure total execution
-  time, this lets us compare the execution time to what it would be if no
-  logging occurred at all.
+  time, this lets us compare the execution time to what it is when logging
+  occurs at all.
   
 How to read the benchmarks
 --------------------------
@@ -171,7 +170,7 @@ average](images/performance_call_burst_1_ma.png)
 Spdlog performs well until the buffer fills up, but then it stalls waiting for
 the buffer to be emptied to disk. After that it comes out as the slowest
 performer, followed by pantheios. It can now be seen that reckless is still on
-the best performer on average, but it is clear that it does stall each time the
+the best performer on average, but it is clear that it stalls each time the
 buffer fills up.
 
 It should be noted that while reckless has been profiled and optimized to
@@ -196,12 +195,12 @@ Disk I/O
 
 [benchmarks/write_files.cpp](../benchmarks/write_files.cpp)
 
-In this scenario the disk is put under load by interleaving the log calls
-with heavy disk I/O. Somewhere around iteration 75 the disk buffer appears to
-fill up, causing increased write latency in the kernel. Reckless can hide this
-by allowing logging to continue while the disk occurs, and then combining all
-outstanding writes into a single kernel call.
-
+In this scenario the disk is put under load by interleaving the log calls with
+heavy disk I/O. 256 log entries are produced while writing 4 GiB of raw data to
+a, file. Somewhere around iteration 75 (i.e. after writing about 1.2 GiB) the
+disk buffer appears to fill up, causing increased write latency in the kernel.
+Reckless can hide this by allowing logging to continue while the writes are in
+process, and then combining all outstanding writes into a single I/O operation.
 
 The average call latencies relative to reckless are:
 
