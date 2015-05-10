@@ -267,9 +267,9 @@ Conclusions
 -----------
 Based on the different scenarios I think I can say with some confidence that,
 given the use case and constraints outlined in the introduction, reckless will
-perform significantly better in most cases. The advantage is smaller when the
-log is heavily loaded, but reckless still remains the best performer. For more
-typical loads, the speed advantage over a simple `fprintf` can be a factor of
-20. Coupled with its relative ease of use and similarity to plain `fprintf`
-calls (yet type-safe behavior), it should be enough to make reckless a very
-serious contender when you decide on which logging library to use.
+perform significantly better. The advantage is smaller when the log is heavily
+loaded, but reckless still remains the best performer. For more typical loads,
+the speed advantage over a simple `fprintf` can be a factor of 20. Coupled
+with its relative ease of use and similarity to plain `fprintf` calls (yet
+type-safe behavior), it should be enough to make reckless a serious
+contender when you decide on which logging library to use.
