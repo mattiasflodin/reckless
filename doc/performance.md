@@ -235,12 +235,13 @@ I have difficulty explaining these charts fully, and hope that someone with a
 better understanding will check out the benchmark code and help with some
 insights. The benchmarks that use reckless perform *better than the benchmarks
 that perform no logging at all*. In other words, doing more work is taking
-less time. My hypothesis is that the short interruptions to perform I/O is
-enough to give the CPU cache time to prepare for the next batch of pixels. I
-do not think there is a measurement error, since the measurement itself is
-very simple (one timestamp at the beginning and one at the end, then print the
-difference). Since the data is based on 100 separate runs a random fluke is
-not likely.
+less time. It gives me an eerie feeling of similarity to Stephen King’s [Mrs.
+Todd’s Shortcut](http://en.wikipedia.org/wiki/Mrs._Todd%27s_Shortcut). My
+hypothesis is that the short interruptions to perform I/O is enough to give
+the CPU cache time to prepare for the next batch of pixels. I do not think
+there is a measurement error, since the measurement itself is very simple (one
+timestamp at the beginning and one at the end, then print the difference).
+Since the data is based on 100 separate runs a random fluke is not likely.
 
 ![Bar chart showing total running
 time](images/performance_mandelbrot_difference.png)
@@ -257,9 +258,9 @@ Conclusions
 -----------
 Based on the different scenarios I think I can say with some confidence that,
 given the use case and constraints outlined in the introduction, reckless will
-perform significantly better in most cases. Typically the advantage is smaller
-when the log is heavily loaded, but it still remains the best performer. For
-more typical loads, the speed advantage over a simple `fprintf` can be a
-factor of 20. Coupled with its relative ease of use and similarity to plain
-`fprintf` calls (yet type-safe behavior), it should be enough to make reckless
-a very serious contender when you decide on which logging library to use.
+perform significantly better in most cases. The advantage is smaller when the
+log is heavily loaded, but reckless still remains the best performer. For more
+typical loads, the speed advantage over a simple `fprintf` can be a factor of
+20. Coupled with its relative ease of use and similarity to plain `fprintf`
+calls (yet type-safe behavior), it should be enough to make reckless a very
+serious contender when you decide on which logging library to use.
