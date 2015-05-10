@@ -8,10 +8,6 @@
 	- [Rolling your own logger](#)
 	- [Performance](#)
 
-Overview of the library
-=======================
-<Graph>
-
 basic_log
 =========
 The base class for all logs is `basic_log`. It provides common functionality

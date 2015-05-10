@@ -1,4 +1,4 @@
-![Performance chart](doc/images/performance_periodic_calls.png)
+![Performance chart](doc/images/performance_periodic_calls_all.png)
 
 Introduction
 ============
