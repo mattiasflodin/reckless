@@ -1,0 +1,30 @@
+#include <reckless/severity_log.hpp>
+#include <reckless/file_writer.hpp>
+
+// It is possible to build custom loggers for various ways of formatting the
+// log. The severity log is a stock policy-based logger that allows you to
+// configure fields that should be put on each line, including a severity
+// marker for debug/info/warning/error.
+using log_t = reckless::severity_log<
+    reckless::indent<4>,       // 4 spaces of indent
+    ' ',                       // Field separator
+    reckless::severity_field,  // Show severity marker (D/I/W/E) first
+    reckless::timestamp_field  // Then timestamp field
+    >;
+    
+reckless::file_writer writer("log.txt");
+log_t g_log(&writer);
+
+int main()
+{
+    std::string s("Hello World!");
+    g_log.debug("Pointer: %p", s.c_str());
+    g_log.info("Info line: %s", s);
+    for(int i=0; i!=4; ++i) {
+        reckless::scoped_indent indent;  // The indent object causes the lines
+        g_log.warn("Warning: %d", i);  // within this scope to be indented
+    }
+    g_log.error("Error: %f", 3.14);
+
+    return 0;
+}
