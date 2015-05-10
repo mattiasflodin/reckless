@@ -1,0 +1,4 @@
+include_rules
+CXXFLAGS += -DUNIT_TEST -Wno-strict-aliasing
+: foreach ../src/*.cpp |> !cxx |> %B.o
+: *.o | $(RECKLESS_LIB)/libreckless.a $(PERFORMANCE_LOG_LIB)/libperformance_log.a |> !ld |> unit_test

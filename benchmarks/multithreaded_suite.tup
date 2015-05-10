@@ -1,0 +1,3 @@
+: call_burst.cpp |> !pcxxld |> $(LIB)_call_burst_$(THREADS)
+: foreach benchmark_mandelbrot.cpp |> !pcxx |> $(LIB)_%B_$(THREADS).o
+: $(LIB)_mandelbrot.o $(LIB)_benchmark_mandelbrot_$(THREADS).o |> !pld |> $(LIB)_mandelbrot_$(THREADS)
