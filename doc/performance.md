@@ -255,10 +255,10 @@ not likely.
 ![Bar chart showing total running
 time](images/performance_mandelbrot_difference.png)
 
-If we chart just the difference from the “nop” case then we get the result
-above. The error bars show the interquartile range (IQR) of the runs. For each
-worker thread added the overhead decreases, because multiple CPU cores
-are cooperating to schedule log messages. However, with 4 worker threads the
+If we chart just the difference from the “nop” case then we get the above
+result. The error bars show the interquartile range (IQR). For each worker
+thread added the overhead decreases, because multiple CPU cores are
+cooperating to schedule log messages. However, with 4 worker threads the
 overhead increases significantly for both of the asynchronous alternatives.
 This can be explained by the fact that there is no CPU core available for the
 background thread to perform its work.
