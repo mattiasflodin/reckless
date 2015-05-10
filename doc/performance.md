@@ -213,4 +213,15 @@ The average call latencies relative to reckless are:
   fstream |         14.64 |  6.20
 pantheios |        759.70 | 13.28
 
+Mandelbrot set
+--------------
+![Mandelbrot image](images/mandelbrot.jpeg)
+
+The mandelbrot scenario tries to emulate a slightly more realistic situation by
+performing a CPU-intensive workload and logging information about it. It
+computes a 1024x1024-pixel section of the mandelbrot set and logs statistics
+about each pixel produced. In other words, it produces about one million log
+lines over the course of 10-20 seconds of computation time.
+
+![Bar chart showing total running time](images/performance_mandelbrot.png)
 
