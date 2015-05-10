@@ -55,7 +55,7 @@ thread, there are a few caveats you need to be aware of:
 * You must take special care to handle crashes if you want to make sure
   that all log data prior to the crash is saved. This is not unique to
   asynchronous logging&mdash;for example fprintf will buffer data until you
-  flush it--but asynchronous logging arguably makes the issue worse. The
+  flush it&mdash;but asynchronous logging arguably makes the issue worse. The
   library provides convenience functions to aid with this.
 * As all string formatting is done in a single thread, it could theoretically
   limit the scalability of your application if the formatting is very
