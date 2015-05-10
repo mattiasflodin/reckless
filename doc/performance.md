@@ -271,5 +271,5 @@ perform significantly better. The advantage is smaller when the log is heavily
 loaded, but reckless still remains the best performer. For more typical loads,
 the speed advantage over a simple `fprintf` can be a factor of 20. Coupled
 with its relative ease of use and similarity to plain `fprintf` calls (yet
-type-safe behavior), it should be enough to make reckless a serious
-contender when you decide on which logging library to use.
+type-safe behavior), it should be enough to make reckless a serious contender
+when you decide on which logging library to use.
