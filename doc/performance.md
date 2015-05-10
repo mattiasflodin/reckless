@@ -221,7 +221,32 @@ The mandelbrot scenario tries to emulate a slightly more realistic situation by
 performing a CPU-intensive workload and logging information about it. It
 computes a 1024x1024-pixel section of the mandelbrot set and logs statistics
 about each pixel produced. In other words, it produces about one million log
-lines over the course of 10-20 seconds of computation time.
+lines over the course of 5-50 seconds of computation time, depending on the
+number of CPU cores taking part in the computation
 
 ![Bar chart showing total running time](images/performance_mandelbrot.png)
+
+The chart above shows the average total running time over 100 runs with the
+various alternatives, where “nop” does not perform any logging. The error bars
+show the interquartile range of the runs. The code is trivally parallelizable
+and is written to compute multiple chunks of the image several threads. Each
+separate computation thread writes to the log individually.
+
+I will admit that I have difficulty explaining these charts fully, and hope
+that someone with a better understanding will check out the benchmark code and
+help with some insights. The benchmarks that use reckless perform *better than
+the benchmarks that perform no logging at all*. In other words, doing more
+work is taking less time. My own hypothesis is that the short interruptions to
+perform I/O is enough to give the CPU cache time to prepare for the next batch
+of pixels. I do not think there is a measurement error, since the measurement
+itself is very simple (one timestamp at the beginning and one at the end, then
+print the difference). Since the data is based on 100 separate runs it can’t be
+just a fluke.
+
+
+![Bar chart showing total running
+time](images/performance_mandelbrot_difference.png)
+
+If we chart just the difference from the “nop” case then we get the above
+chart.
 
