@@ -54,7 +54,7 @@ thread, there are a few caveats you need to be aware of:
   `std::shared_ptr`.
 * You must take special care to handle crashes if you want to make sure
   that all log data prior to the crash is saved. This is not unique to
-  asynchronous logging&emdash;for example fprintf will buffer data until you
+  asynchronous logging&mdash;for example fprintf will buffer data until you
   flush it--but asynchronous logging arguably makes the issue worse. The
   library provides convenience functions to aid with this.
 * As all string formatting is done in a single thread, it could theoretically
