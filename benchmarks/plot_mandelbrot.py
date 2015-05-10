@@ -26,7 +26,7 @@ if len(argv) > 1:
 
 fig, ax = plt.subplots()
 
-ONLY_OVERHEAD = 0
+ONLY_OVERHEAD = 1
 #LOG_LINES = 1048576
 MAX_CORES = 4
 LIBS = ['nop', 'reckless', 'spdlog', 'stdio', 'fstream', 'pantheios']
