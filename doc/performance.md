@@ -43,8 +43,8 @@ For reckless the following assumptions were made, and the benchmarks were
 developed according to those assumptions:
 * It is important to minimize the risk of losing log messages in the event of
   a crash.
-* It is OK to trade some precision in floating-point output for added
-  performance.
+* It is OK to trade [some precision in floating-point
+  output](manual.md#limited-floating-point-accuracy) for added performance.
 * We are concerned with the impact of actual logging, not of logging calls
   that are filtered out at runtime (say, debug messages that are disabled via
   some compile-time or run-time switch). We expect to produce many log
