@@ -132,6 +132,6 @@ For more details, see the [manual](doc/manual.md).
 
 Alternatives
 ============
-spdlog
-g2log
-
+Two other logging libraries with a similar, asynchronous design are
+[spdlog](https://github.com/gabime/spdlog/) and
+[g2log](https://bitbucket.org/KjellKod/g2log/).
