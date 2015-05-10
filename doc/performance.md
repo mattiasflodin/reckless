@@ -43,20 +43,20 @@ For reckless the following assumptions were made, and the benchmarks were
 developed according to those assumptions:
 * It is important to minimize the risk of losing log messages in the event of
   a crash.
-* It is OK to trade [some precision in floating-point
+* It is OK to [trade some precision in floating-point
   output](manual.md#limited-floating-point-accuracy) for added performance.
 * We are concerned with the impact of actual logging, not of logging calls
   that are filtered out at runtime (say, debug messages that are disabled via
   some compile-time or run-time switch). We expect to produce many log
-  messages in production environments, not just in debug mode. It is too late
-  to enable log messages post-mortem.
+  messages in production environments and not just in debug mode. It is too
+  late to enable log messages post-mortem.
 * We care enough about performance that we will accept the risk for
-  dangling pointer references. Note that I do not think will be a problem in
-  practice, but I still thought it is significant enough to at least point
-  out. You should be OK as long as you never pass a raw pointer to dynamically
-  allocated or stack-allocated memory.  Pointers to global objects are usually
-  fine, and so are string literals. For dynamically allocated strings you
-  should use e.g. `std::string`.
+  dangling pointer references. Note that I do not think this will be a problem
+  in practice, but I still thought it is significant enough to at least point
+  out. You should be OK as long as you never use a raw pointer to dynamically
+  allocated or stack-allocated memory in your log call. Pointers to global
+  objects are usually fine, and so are string literals. For dynamically
+  allocated strings you should use e.g. `std::string`.
 
 Another factor that I care about is that latency should be kept at a stable,
 insignificant level. If the write buffer is very large then the user may
@@ -67,7 +67,7 @@ to fit a modern disk sector (4 KiB) while still leaving some room to grow.
   
 In the [benchmark made by the spdlog
 author](https://github.com/gabime/spdlog/blob/06e0b0387a27a6e77005adac87f235e744caeb87/bench/spdlog-async.cpp),
-the asynchronous queue at least 50 MiB in size, in order to fit all log
+the asynchronous queue is at least 50 MiB in size, in order to fit all log
 messages without having to flush. The measurement does not include log setup
 and teardown.  In other words, it only measures time for pushing log entries
 on the asynchronous queue and not the time for flushing all those messages to
@@ -92,7 +92,7 @@ shows performance both when logging is turned on and off. It claims that
 “Pantheios is 10-100+ times more efficient than any of the leading diagnostic
 logging libraries currently in popular use.” I’m not sure that this can be
 concluded from the charts at all, but in the event that it can, it applies
-*only when logging is turned off*. For this benchmark I have only benchmarked
+*only when logging is turned off*. For this benchmark I have only tested
 Pantheios for the case when logging is turned *on*. Again, the Pantheios
 developers have clearly set different goals with their benchmarks than I do
 here.
@@ -136,7 +136,7 @@ forgiving scenario, but probably also very common in interactive applications.
 The two asynchronous libraries predictably perform much better than the
 synchronous ones, since they do not have to wait for the I/O calls. They also
 have a more stable execution time. If we zoom in on the asynchronous
-libraries we also get a better idea of the measurement overhead.
+libraries we get a better idea of the measurement overhead.
 
 ![Periodic calls performance chart for asynchronous
 libraries](images/performance_periodic_calls_asynchronous.png)
@@ -161,10 +161,11 @@ Call burst
 This scenario stresses the log by generating messages as fast as it can,
 filling up the buffer. The plot is zoomed in so we can see data for all the
 libraries. At first sight the asynchronous alternatives appear to perform
-well, but there are now spikes that appear when the buffer fills up. These
-spikes in fact go as far as 750 000 ticks for reckless, and 25 000 000 ticks for
-spdlog. By applying a moving average we get a better idea of the overall
-performance:
+well, but there are now spikes that appear when the buffer fills up and the
+caller has to wait for data to be written, effectively causing synchronous
+behavior. These spikes in fact go as far as 750 000 ticks for reckless, and 25
+000 000 ticks for spdlog. By applying a moving average we get a better idea of
+the overall performance:
 
 ![Call burst performance chart with moving
 average](images/performance_call_burst_1_ma.png)

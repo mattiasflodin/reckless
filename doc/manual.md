@@ -496,7 +496,7 @@ floating-point is generally expected to be performed so that it generates as
 few digits as possible, but still yields the exact same floating-point number
 when it is converted back from a string. Statistical tests on 100 million
 randomly generated values show that this is true for 98.5% of the numbers.
-99.4% of the numbers are correctly converted, but the additional 1% include
+99.4% of the numbers are correctly converted, but of those about 1% include
 more digits than necessary. 
 
 For the numbers that are not correctly converted, the following table shows the
