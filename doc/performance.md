@@ -232,8 +232,8 @@ number of CPU cores taking part in the computation
 
 The chart above shows the average total running time over 100 runs with the
 various alternatives, where “nop” does not perform any logging. The code is
-trivally parallelizable and is written compute chunks of the image in several
-threads. Each separate worker thread writes to the log individually.
+trivally parallelizable and is written to compute chunks of the image in
+several threads. Each separate worker thread writes to the log individually.
 
 I have difficulty explaining these charts fully, and hope that someone with a
 better understanding will check out the benchmark code and help with some
@@ -241,11 +241,12 @@ insights. The benchmarks that use reckless perform *better than the benchmarks
 that perform no logging at all*. In other words, doing more work is taking
 less time. It gives me an eerie feeling of similarity to Stephen King’s [Mrs.
 Todd’s Shortcut](http://en.wikipedia.org/wiki/Mrs._Todd%27s_Shortcut). My
-hypothesis is that the short interruptions to perform I/O is enough to give
-the CPU cache time to prepare for the next batch of pixels. I do not think
-there is a measurement error, since the measurement itself is very simple (one
-timestamp at the beginning and one at the end, then print the difference).
-Since the data is based on 100 separate runs a random fluke is not likely.
+hypothesis is that the short interruptions to push data on the log queue is
+enough to give the CPU cache time to prepare for the next batch of pixels. I
+do not think there is a measurement error, since the measurement itself is
+very simple (one timestamp at the beginning and one at the end, then print the
+difference).  Since the data is based on 100 separate runs a random fluke is
+not likely.
 
 ![Bar chart showing total running
 time](images/performance_mandelbrot_difference.png)
