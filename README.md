@@ -68,7 +68,8 @@ thread, there are a few caveats you need to be aware of:
 Basic use
 =========
 ```c++
-#include <reckless.hpp>
+#include <reckless/severity_log.hpp>
+#include <reckless/file_writer.hpp>
 
 // It is possible to build custom loggers for various ways of formatting the
 // log. The severity log is a stock policy-based logger that allows you to
