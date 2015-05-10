@@ -221,6 +221,10 @@ Mandelbrot set
 --------------
 ![Mandelbrot image](images/mandelbrot.jpeg)
 
+[benchmarks/benchmark_mandelbrot.cpp](../benchmarks/benchmark_mandelbrot.cpp)
+
+[benchmarks/mandelbrot.cpp](../benchmarks/mandelbrot.cpp)
+
 The mandelbrot scenario tries to emulate a slightly more realistic situation by
 performing a CPU-intensive workload and logging information about it. It
 computes a 1024x1024-pixel section of the mandelbrot set and logs statistics
