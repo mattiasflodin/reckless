@@ -228,23 +228,38 @@ number of CPU cores taking part in the computation
 
 The chart above shows the average total running time over 100 runs with the
 various alternatives, where “nop” does not perform any logging. The code is
-trivally parallelizable and is written to compute multiple chunks of the image
-several threads. Each separate computation thread writes to the log
-individually.
+trivally parallelizable and is written compute chunks of the image in several
+threads. Each separate worker thread writes to the log individually.
 
-I will admit that I have difficulty explaining these charts fully, and hope
-that someone with a better understanding will check out the benchmark code and
-help with some insights. The benchmarks that use reckless perform *better than
-the benchmarks that perform no logging at all*. In other words, doing more
-work is taking less time. My hypothesis is that the short interruptions to
-perform I/O is enough to give the CPU cache time to prepare for the next batch
-of pixels. I do not think there is a measurement error, since the measurement
-itself is very simple (one timestamp at the beginning and one at the end, then
-print the difference). Since the data is based on 100 separate runs a random
-fluke is not likely.
+I have difficulty explaining these charts fully, and hope that someone with a
+better understanding will check out the benchmark code and help with some
+insights. The benchmarks that use reckless perform *better than the benchmarks
+that perform no logging at all*. In other words, doing more work is taking
+less time. My hypothesis is that the short interruptions to perform I/O is
+enough to give the CPU cache time to prepare for the next batch of pixels. I
+do not think there is a measurement error, since the measurement itself is
+very simple (one timestamp at the beginning and one at the end, then print the
+difference). Since the data is based on 100 separate runs a random fluke is
+not likely.
 
 ![Bar chart showing total running
 time](images/performance_mandelbrot_difference.png)
 
-If we chart just the difference from the “nop” case then we get the above
-chart. The error bars show the interquartile range of the runs.
+If we chart just the difference from the “nop” case then we get the result
+above. The error bars show the interquartile range (IQR) of the runs. For each
+worker thread added the overhead decreases, because multiple CPU cores
+are cooperating to schedule log messages. However, with 4 worker threads the
+overhead increases significantly for both of the asynchronous alternatives.
+This can be explained by the fact that there is no CPU core available for the
+background thread to perform its work.
+
+Conclusions
+-----------
+Based on the different scenarios I think I can say with some confidence that,
+given the use case and constraints outlined in the introduction, reckless will
+perform significantly better in most cases. Typically the advantage is smaller
+when the log is heavily loaded, but it still remains the best performer. For
+more typical loads, the speed advantage over a simple `fprintf` can be a
+factor of 20. Coupled with its relative ease of use and similarity to plain
+`fprintf` calls (yet type-safe behavior), it should be enough to make reckless
+a very serious contender when you decide on which logging library to use.
