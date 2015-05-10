@@ -32,7 +32,7 @@ This removes or hides several costs:
   this *makes your non-logging code run faster* than if you were using a
   library that has to enter the kernel to perform its work.
 * No locks need to be taken for synchronization between threads (unless
-  the queue fills up; see the performance section for more information
+  the queue fills up; see the performance article for more information
   about the implications of this).
 * It doesn't have to wait for the actual I/O operation to complete.
 * If there are bursts of log calls, multiple items on the queue can be
@@ -54,7 +54,7 @@ thread, there are a few caveats you need to be aware of:
   `std::shared_ptr`.
 * You must take special care to handle crashes if you want to make sure
   that all log data prior to the crash is saved. This is not unique to
-  asynchronous logging--for example fprintf will buffer data until you
+  asynchronous logging&emdash;for example fprintf will buffer data until you
   flush it--but asynchronous logging arguably makes the issue worse. The
   library provides convenience functions to aid with this.
 * As all string formatting is done in a single thread, it could theoretically
