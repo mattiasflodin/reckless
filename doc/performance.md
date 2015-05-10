@@ -6,10 +6,10 @@ Libraries
 ---------
 Apart from reckless, the libraries or logging techniques that are benchmarked
 here are:
-* fprintf. This uses the standard stdio string formatting and calls fflush()
+* fprintf. This uses the standard stdio string formatting and calls `fflush()`
   after each call.
-* std::fstream. This uses an fstream object and streams `std::flush` after each
-  log line.
+* std::fstream. This uses an `std::fstream` object and streams `std::flush`
+  after each log line.
 * [spdlog](https://github.com/gabime/spdlog/). This is closest to reckless in
   its design goals. It tries to be very fast, and offers an asynchronous mode.
   See notes below on how it is used in the benchmark.
@@ -51,10 +51,12 @@ developed according to those assumptions:
   messages in production environments, not just in debug mode. It is too late
   to enable log messages post-mortem.
 * We care enough about performance that we will accept the risk for
-  dangling pointer references. Note that you should be OK as long as you never
-  pass a raw pointer to dynamically allocated or stack-allocated memory.
-  Pointers to global objects are usually fine, and so are string literals. For
-  dynamically allocated strings you should use e.g. `std::string`.
+  dangling pointer references. Note that I do not think will be a problem in
+  practice, but I still thought it is significant enough to at least point
+  out. You should be OK as long as you never pass a raw pointer to dynamically
+  allocated or stack-allocated memory.  Pointers to global objects are usually
+  fine, and so are string literals. For dynamically allocated strings you
+  should use e.g. `std::string`.
 
 Another factor that I care about is that latency should be kept at a stable,
 insignificant level. If the write buffer is very large then the user may
