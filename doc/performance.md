@@ -199,11 +199,12 @@ Disk I/O
 [benchmarks/write_files.cpp](../benchmarks/write_files.cpp)
 
 In this scenario the disk is put under load by interleaving the log calls with
-heavy disk I/O. 256 log entries are produced while writing 4 GiB of raw data to
-a, file. Somewhere around iteration 75 (i.e. after writing about 1.2 GiB) the
-disk buffer appears to fill up, causing increased write latency in the kernel.
-Reckless can hide this by allowing logging to continue while the writes are in
-process, and then combining all outstanding writes into a single I/O operation.
+heavy disk I/O. 256 log entries are produced while writing 4 GiB of raw data
+to a set of files. Somewhere around iteration 75 (i.e. after writing about 1.2
+GiB) the disk buffer appears to fill up, causing increased write latency in
+the kernel.  Reckless can hide this by allowing logging to continue while the
+writes are in process, and then combining all outstanding writes into a single
+I/O operation.
 
 The average call latencies relative to reckless are:
 
