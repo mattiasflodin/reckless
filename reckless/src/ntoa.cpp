@@ -593,8 +593,6 @@ decimal18 binary64_to_decimal18(double v)
         e10i -= 1;
     }
 
-    long double p = powl(10, e10f + 16);
-    (void) p;
     m10 = m2*powl(10, e10f + 16);
     std::uint64_t mantissa = static_cast<std::uint64_t>(std::llrint(std::abs(m10)));
     if(mantissa < 100000000000000000u)
