@@ -1,5 +1,6 @@
 #include "mandelbrot.hpp"
 
+#include <vector>
 #include <thread>
 #include <fstream>
 #include <iostream>
@@ -18,11 +19,11 @@ double const BOX_HEIGHT = BOX_WIDTH*SAMPLES_HEIGHT/SAMPLES_WIDTH;
 
 int main()
 {
-    unsigned sample_buffer[SAMPLES_WIDTH*SAMPLES_HEIGHT];
+    std::vector<unsigned> sample_buffer(SAMPLES_WIDTH*SAMPLES_HEIGHT);
     auto start = std::chrono::steady_clock::now();
     {
         LOG_INIT();
-        mandelbrot(sample_buffer, SAMPLES_WIDTH, SAMPLES_HEIGHT,
+        mandelbrot(&sample_buffer[0], SAMPLES_WIDTH, SAMPLES_HEIGHT,
             BOX_LEFT, BOX_TOP, BOX_LEFT+BOX_WIDTH, BOX_TOP-BOX_HEIGHT,
             MAX_ITERATIONS, THREADS);
         LOG_CLEANUP();
@@ -32,7 +33,7 @@ int main()
             end - start).count() << std::endl;
     
     char image[3*SAMPLES_WIDTH*SAMPLES_HEIGHT];
-    color_mandelbrot(image, sample_buffer, SAMPLES_WIDTH, SAMPLES_HEIGHT,
+    color_mandelbrot(image, &sample_buffer[0], SAMPLES_WIDTH, SAMPLES_HEIGHT,
             MAX_ITERATIONS);
     
     std::ofstream ofs("bench_mandelbrot.data");
