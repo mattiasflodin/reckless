@@ -73,7 +73,7 @@ and teardown.  In other words, it only measures time for pushing log entries
 on the asynchronous queue and not the time for flushing all those messages to
 disk. *This is fine*, if:
 
-* You can afford a large memory enough buffer that it will never run out of
+* You can afford a large enough memory buffer that it will never run out of
   space (but keep in mind that if you make it too large, disk swapping can
   occur and nullify your gains).
 * Your process is long-running and you trust that the data will eventually get

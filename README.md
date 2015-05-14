@@ -6,7 +6,7 @@ Reckless is an [extremely low-latency, high-throughput logging
 library](doc/performance.md). It was created because I needed to perform
 extensive diagnostic logging without worrying about performance. [Other
 logging libraries](http://www.pantheios.org/performance.html) boast the
-ability to throw log messages away very quickly; reckless boasts the ability
+ability to throw log messages away very quickly. Reckless boasts the ability
 to keep them all, without worrying about the performance impact. Filtering can
 and should wait until you want to read the log, or need to clean up disk
 space.
