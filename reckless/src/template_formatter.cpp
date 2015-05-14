@@ -128,6 +128,7 @@ namespace {
             return generic_format_int(pbuffer, pformat, static_cast<int>(v));
         }
     }
+
 }   // anonymous namespace
 
 char const* format(output_buffer* pbuffer, char const* pformat, char v)
@@ -269,34 +270,39 @@ void template_formatter::append_percent(output_buffer* pbuffer)
 char const* template_formatter::next_specifier(output_buffer* pbuffer,
         char const* pformat)
 {
+#ifdef _GNU_SOURCE
     while(true) {
-        char const* pspecifier = std::strchr(pformat, '%');
-        if(pspecifier == nullptr) {
-            format(pbuffer, pformat);
-            return nullptr;
-        }
-
+        char const* pspecifier = strchrnul(pformat, '%');
+        
         auto len = pspecifier - pformat;
         auto p = pbuffer->reserve(len);
         std::memcpy(p, pformat, len);
         pbuffer->commit(len);
+        if(*pspecifier == '\0')
+            return nullptr;
 
         pformat = pspecifier + 1;
 
         if(*pformat != '%')
             return pformat;
 
+        // Found "%%". Add a single '%' and continue.
         ++pformat;
         append_percent(pbuffer);
     }
+#else
+    static_assert(false, "need replacement for strchrnul");
+#endif
 }
 
 void template_formatter::format(output_buffer* pbuffer, char const* pformat)
 {
-    auto len = std::strlen(pformat);
-    char* p = pbuffer->reserve(len);
-    std::memcpy(p, pformat, len);
-    pbuffer->commit(len);
+    // There are no remaining arguments to format, so we will ignore additional
+    // format specifications that might occur in the format string. However, we
+    // still need to treat "%%" as "%". We'll iterate over on next_specifier
+    // and when it finds a format specifier, we append a '%' and move on.
+    while((pformat = next_specifier(pbuffer, pformat)) != nullptr)
+        append_percent(pbuffer);
 }
 
 }   // namespace reckless
