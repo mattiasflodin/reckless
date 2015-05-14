@@ -109,7 +109,7 @@ The specifications of the test machine are as follows:
 * Western Digital Black WD7501AALS 750GB mechanical disk.
 * 8 GiB RAM.
 * gcc 4.8.4.
-* Linux kernel 3.14.14.
+* Linux kernel 3.18.11.
 
 For the scenarios that measure individual call timings, measurements were made
 according to the article “[How to Benchmark Code Execution Times on Intel IA-32
@@ -239,21 +239,8 @@ various alternatives, where “nop” does not perform any logging. The code is
 trivally parallelizable and is written to compute chunks of the image in
 several threads. Each separate worker thread writes to the log individually.
 
-I have difficulty explaining these charts fully, and hope that someone with a
-better understanding will check out the benchmark code and help with some
-insights. The benchmarks that use reckless perform *better than the benchmarks
-that perform no logging at all*. In other words, doing more work is taking
-less time. It gives me an eerie feeling of similarity to Stephen King’s [Mrs.
-Todd’s Shortcut](http://en.wikipedia.org/wiki/Mrs._Todd%27s_Shortcut). My
-hypothesis is that the short interruptions to push data on the log queue is
-enough to give the CPU cache time to prepare for the next batch of pixels. I
-do not think there is a measurement error, since the measurement itself is
-very simple (one timestamp at the beginning and one at the end, then print the
-difference).  Since the data is based on 100 separate runs a random fluke is
-not likely.
-
 ![Bar chart showing total running
-time](images/performance_mandelbrot_difference.png)
+time relative to no-logging base case](images/performance_mandelbrot_difference.png)
 
 If we chart just the difference from the “nop” case then we get the above
 result. The error bars show the interquartile range (IQR). For each worker
@@ -261,7 +248,38 @@ thread added the overhead decreases, because multiple CPU cores are
 cooperating to schedule log messages. However, with 4 worker threads the
 overhead increases significantly for both of the asynchronous alternatives.
 This can be explained by the fact that there is no CPU core available for the
-background thread to perform its work.
+background thread to perform its work. Note, however, that reckless still
+performs better than the synchronous alternatives.
+
+The average overhead for the single-thread case relative to reckless is:
+
+  Library | Relative time | IQR
+----------|---------------|-----
+ reckless |          1.00 | 0.22
+   spdlog |          7.80 | 0.66
+    stdio |         21.31 | 0.46
+  fstream |         21.73 | 0.41
+pantheios |         49.37 | 1.21
+
+With three worker threads we have:
+
+  Library | Relative time |  IQR
+----------|---------------|-----
+ reckless |          1.00 | 0.12
+   spdlog |          5.34 | 0.41
+    stdio |         22.01 | 0.46
+  fstream |         22.81 | 0.30
+pantheios |         37.53 | 0.60
+
+And finally, with four worker threads, we have:
+
+  Library | Relative time |    IQR
+----------|---------------|-------
+ reckless |          1.00 |  0.054
+    stdio |          1.42 |  0.024
+  fstream |          1.52 |  0.027
+pantheios |          2.24 |  0.035
+   spdlog |          4.66 |  0.935
 
 Conclusions
 -----------

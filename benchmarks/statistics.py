@@ -10,11 +10,12 @@ ALL_TESTS = ['periodic_calls', 'call_burst', 'write_files', 'mandelbrot']
 THREADED_TESTS = {'call_burst', 'mandelbrot'}
 
 def main():
-    opts, args = gnu_getopt(argv[1:], 'l:t:c:n:p:h', ['libs=', 'tests=', 'threads=', 'normalizer=', 'precision=', 'help'])
+    opts, args = gnu_getopt(argv[1:], 'l:t:c:n:o:p:h', ['libs=', 'tests=', 'threads=', 'normalizer=', 'offset=', 'precision=', 'help'])
     libs = None
     tests = None
     threads = None
     normalizer = None
+    offset = None
     precision = None
     show_help = len(args) != 0
 
@@ -27,6 +28,8 @@ def main():
             threads = parse_ranges(value)
         elif option in ('-n', '--normalizer'):
             normalizer = float(value)
+        elif option in ('-o', '--offset'):
+            offset = float(value)
         elif option in ('-p', '--precision'):
             precision = int(value)
         elif option in ('-h', '--help'):
@@ -40,6 +43,7 @@ def main():
             '-l,--libs       LIBS       comma-separated list of libs to plot\n'
             '-c,--threads    THREADS    thread-counts to include in a comma-separated list (e.g. 1-2,4)\n'
             '-n,--normalizer NORMALIZER Normalizer value\n'
+            '-o,--offset     OFFSET     Offset/displacement for values\n'
             '-p,--precision  PRECISION  Precision.\n'
             '-h,--help        show this help\n'
             'Available libraries: {}\n'
@@ -54,7 +58,7 @@ def main():
     if threads is None:
         threads = list(range(1, 5))
 
-    make_stats(libs, tests, threads, normalizer, precision)
+    make_stats(libs, tests, threads, normalizer, offset, precision)
     return 0
 
 def parse_ranges(s):
@@ -73,12 +77,14 @@ def parse_ranges(s):
         result.extend(list(range(start, end+1)))
     return result
         
-def make_stats(libs, tests, threads_list, normalizer=None, precision=None):
+def make_stats(libs, tests, threads_list, normalizer=None, offset=None, precision=None):
     def single_file_stats(filename, columns):
         with open(filename, 'r') as f:
             data = f.readlines()
         data = np.array([float(x) for x in data])
         mean = np.mean(data)
+        if offset is not None:
+            mean -= offset
         if normalizer is not None:
             mean = mean/normalizer
             data = [x/normalizer for x in data]

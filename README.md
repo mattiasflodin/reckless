@@ -1,4 +1,4 @@
-![Performance chart](doc/images/performance_periodic_calls_all.png)
+[![Performance chart for a quad-core CPU](doc/images/performance_mandelbrot_difference.png)](doc/performance.md)
 
 Introduction
 ============
