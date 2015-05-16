@@ -4,6 +4,7 @@
 #include <reckless/detail/thread_input_buffer.hpp>
 #include <reckless/detail/spsc_event.hpp>
 #include <reckless/detail/branch_hints.hpp> // likely
+#include <reckless/detail/optional.hpp>
 #include <reckless/output_buffer.hpp>
 
 #include <boost_1_56_0/lockfree/queue.hpp>
@@ -98,7 +99,7 @@ private:
     //typedef detail::thread_object<detail::thread_input_buffer, std::size_t, std::size_t> thread_input_buffer_t;
     //thread_input_buffer_t pthread_input_buffer_;
     
-    shared_input_queue_t shared_input_queue_;
+    std::experimental::optional<shared_input_queue_t> shared_input_queue_;
     spsc_event shared_input_queue_full_event_;
     spsc_event shared_input_consumed_event_;
     pthread_key_t thread_input_buffer_key_;

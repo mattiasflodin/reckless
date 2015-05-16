@@ -15,7 +15,6 @@ void destroy_thread_input_buffer(void* p)
 }
 
 reckless::basic_log::basic_log() :
-    shared_input_queue_(0),
     thread_input_buffer_size_(0),
     panic_flush_(false)
 {
@@ -27,7 +26,6 @@ reckless::basic_log::basic_log(writer* pwriter,
         std::size_t output_buffer_max_capacity,
         std::size_t shared_input_queue_size,
         std::size_t thread_input_buffer_size) :
-    shared_input_queue_(0),
     thread_input_buffer_size_(0),
     panic_flush_(false)
 {
@@ -70,6 +68,7 @@ void reckless::basic_log::open(writer* pwriter,
         if(thread_input_buffer_size == 0)
             thread_input_buffer_size = ASSUMED_DISK_SECTOR_SIZE;
     }
+    assert(!is_open());
     reset_shared_input_queue(shared_input_queue_size);
     thread_input_buffer_size_ = thread_input_buffer_size;
     output_buffer_ = output_buffer(pwriter, output_buffer_max_capacity);
@@ -84,7 +83,7 @@ void reckless::basic_log::close()
     // second before the thread exits.
     queue_commit_extent({nullptr, nullptr});
     output_thread_.join();
-    assert(shared_input_queue_.empty());
+    assert(shared_input_queue_->empty());
     // FIXME reverse everything that open() does, including getting rid of the
     // buffers etc.
 }
@@ -107,7 +106,7 @@ void reckless::basic_log::output_worker()
     while(true) {
         commit_extent ce;
         unsigned wait_time_ms = 0;
-        if(not shared_input_queue_.pop(ce)) {
+        if(not shared_input_queue_->pop(ce)) {
             if(unlikely(panic_flush_)) {
                 on_panic_flush_done();
             } else {
@@ -119,7 +118,7 @@ void reckless::basic_log::output_worker()
                 touched_input_buffers.clear();
                 if(not output_buffer_.empty())
                     output_buffer_.flush();
-                while(not shared_input_queue_.pop(ce)) {
+                while(not shared_input_queue_->pop(ce)) {
                     shared_input_queue_full_event_.wait(wait_time_ms);
                     wait_time_ms += std::max(1u, wait_time_ms/4);
                     wait_time_ms = std::min(wait_time_ms, 1000u);
@@ -171,11 +170,11 @@ void reckless::basic_log::queue_commit_extent(detail::commit_extent const& ce)
         while(true)
             sleep(3600);
     }
-    if(unlikely(not shared_input_queue_.push(ce))) {
+    if(unlikely(not shared_input_queue_->push(ce))) {
         do {
             shared_input_queue_full_event_.signal();
             shared_input_consumed_event_.wait();
-        } while(not shared_input_queue_.push(ce));
+        } while(not shared_input_queue_->push(ce));
     }
 }
 
@@ -184,10 +183,10 @@ void reckless::basic_log::reset_shared_input_queue(std::size_t node_count)
     // boost's lockfree queue has no move constructor and provides no reserve()
     // function when you use fixed_sized policy. So we'll just explicitly
     // destroy the current queue and create a new one with the desired size. We
-    // are guaranteed that the queue is empty since close() clears it.
-    shared_input_queue_.~shared_input_queue_t();
-    // TODO how do we handle an exception here?
-    new (&shared_input_queue_) shared_input_queue_t(node_count);
+    // are guaranteed that the queue is nullopt since this is only called when
+    // opening the log.
+    assert(!shared_input_queue_);
+    shared_input_queue_.emplace(node_count);
 }
 
 reckless::detail::thread_input_buffer* reckless::basic_log::init_input_buffer()
