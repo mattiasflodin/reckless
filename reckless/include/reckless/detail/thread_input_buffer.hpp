@@ -1,9 +1,9 @@
 #ifndef RECKLESS_DETAIL_INPUT_HPP
 #define RECKLESS_DETAIL_INPUT_HPP
 
-#include "reckless/detail/spsc_event.hpp"
-#include "reckless/output_buffer.hpp"
-#include "reckless/detail/utility.hpp"    // is_power_of_two
+#include <reckless/detail/spsc_event.hpp>
+#include <reckless/output_buffer.hpp>
+#include <reckless/detail/utility.hpp>    // is_power_of_two
 
 namespace reckless {
 
