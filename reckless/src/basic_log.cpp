@@ -84,8 +84,12 @@ void reckless::basic_log::close()
     queue_commit_extent({nullptr, nullptr});
     output_thread_.join();
     assert(shared_input_queue_->empty());
-    // FIXME reverse everything that open() does, including getting rid of the
-    // buffers etc.
+    
+    output_buffer_ = output_buffer();
+    thread_input_buffer_size_ = 0;
+    shared_input_queue_ = std::experimental::nullopt;
+    assert(!is_open());
+
 }
 
 void reckless::basic_log::panic_flush()
