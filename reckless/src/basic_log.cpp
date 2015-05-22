@@ -144,7 +144,20 @@ void reckless::basic_log::output_worker()
                 pinput_start = ce.pinput_buffer->wraparound();
                 pdispatch = *reinterpret_cast<formatter_dispatch_function_t**>(pinput_start);
             }
-            auto frame_size = (*pdispatch)(&output_buffer_, pinput_start);
+            std::size_t frame_size;
+            try {
+                frame_size = (*pdispatch)(&output_buffer_, pinput_start);
+            } catch(format_error const& e) {
+                frame_size = e.frame_size();
+                std::lock_guard<std::mutex> lk(callback_mutex_);
+                if(format_error_callback_) {
+                    try {
+                        format_error_callback_(&output_buffer_, e.nested_ptr(),
+                            e.argument_tuple_type());
+                    } catch(...) {
+                    }
+                }
+            }
             pinput_start = ce.pinput_buffer->discard_input_frame(frame_size);
             if(likely(!panic_flush_)) {
                 // If we're in panic-flush mode then we don't try to touch the

@@ -12,6 +12,9 @@
 #include <thread>
 #include <functional>
 #include <tuple>
+#include <exception>    // current_exception, exception_ptr
+#include <typeinfo>     // type_info
+#include <mutex>
 
 #include <pthread.h>    // pthread_key_t
 
@@ -24,6 +27,8 @@ namespace detail {
 // TODO generic_log better name?
 class basic_log {
 public:
+    using format_error_callback_t = std::function<void (output_buffer*, std::exception_ptr const&, std::type_info const&)>;
+    
     basic_log();
     // FIXME shared_input_queue_size seems like the least interesting of these
     // and should be moved to the end.
@@ -41,6 +46,12 @@ public:
             std::size_t shared_input_queue_size = 0,
             std::size_t thread_input_buffer_size = 0);
     virtual void close();
+
+    void format_error_callback(format_error_callback_t callback = format_error_callback_t())
+    {
+        std::lock_guard<std::mutex> lk(callback_mutex_);
+        format_error_callback_ = move(callback);
+    }
 
     void panic_flush();
 
@@ -105,14 +116,47 @@ private:
     pthread_key_t thread_input_buffer_key_;
     std::size_t thread_input_buffer_size_;
     output_buffer output_buffer_;
+    std::mutex callback_mutex_;
+    format_error_callback_t format_error_callback_; // access synchronized by callback_mutex_
     std::thread output_thread_;
     spsc_event panic_flush_done_event_;
     bool panic_flush_;
 };
 
+class format_error : public std::exception {
+public:
+    format_error(std::exception_ptr nested_ptr, std::size_t frame_size,
+            std::type_info const& argument_tuple_type) :
+        nested_ptr_(nested_ptr),
+        frame_size_(frame_size),
+        argument_tuple_type_(argument_tuple_type)
+    {
+    }
+
+    std::exception_ptr const& nested_ptr() const
+    {
+        return nested_ptr_;
+    }
+
+    std::size_t frame_size() const
+    {
+        return frame_size_;
+    }
+
+    std::type_info const& argument_tuple_type() const
+    {
+        return argument_tuple_type_;
+    }
+
+private:
+    std::exception_ptr nested_ptr_;
+    std::size_t frame_size_;
+    std::type_info const& argument_tuple_type_;
+};
+
 namespace detail {
 template <class Formatter, typename... Args, std::size_t... Indexes>
-void call_formatter(output_buffer* poutput, std::tuple<Args...>& args, index_sequence<Indexes...>)
+void formatter_dispatch_helper(output_buffer* poutput, std::tuple<Args...>& args, index_sequence<Indexes...>)
 {
     Formatter::format(poutput, std::move(std::get<Indexes>(args))...);
 }
@@ -125,12 +169,31 @@ std::size_t formatter_dispatch(output_buffer* poutput, char* pinput)
     std::size_t const args_align = alignof(args_t);
     std::size_t const args_offset = (sizeof(formatter_dispatch_function_t*) + args_align-1)/args_align*args_align;
     std::size_t const frame_size = args_offset + sizeof(args_t);
-    args_t& args = *reinterpret_cast<args_t*>(pinput + args_offset);
+    struct args_owner {
+        args_owner(args_t& args) :
+            args(args)
+        {
+        }
+        ~args_owner()
+        {
+            // We need to do this from a destructor in case calling the
+            // formatter throws an exception. We can't just do it in a catch
+            // clause because we want uncaught_exception to return true during
+            // the call.
+            args.~args_t();
+        }
+        args_t& args;
+    };
+    args_owner args(*reinterpret_cast<args_t*>(pinput + args_offset));
 
     typename make_index_sequence<sizeof...(Args)>::type indexes;
-    call_formatter<Formatter>(poutput, args, indexes);
+    try {
+        formatter_dispatch_helper<Formatter>(poutput, args.args, indexes);
+    } catch(...) {
+        throw format_error(std::current_exception(), frame_size,
+                typeid(args_t));
+    }
 
-    args.~args_t();
     return frame_size;
 }
 

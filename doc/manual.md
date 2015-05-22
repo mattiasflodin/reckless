@@ -35,6 +35,10 @@ but does not provide any public functions for writing to the log.
 
 class basic_log {
 public:
+    using format_error_callback_t = std::function<
+        void (output_buffer*, std::exception_ptr const&, std::type_info const&)
+    >;
+
     basic_log();
     basic_log(writer* pwriter, 
             std::size_t output_buffer_max_capacity = 0,
@@ -51,7 +55,8 @@ public:
             std::size_t thread_input_buffer_size = 0);
     virtual void close();
 
-    bool is_open();
+    void format_error_callback(
+        format_error_callback_t callback = format_error_callback_t());
     void panic_flush();
 
 protected:
@@ -73,6 +78,9 @@ associates the log with a writer, and starts up the writer thread.</td></tr>
 <tr><td><code>close</code></td><td>Close the log. This flushes all queued log data in a
 controlled manner, then shuts down the background thread and disassociates the
 writer.</td></tr>
+<tr><td><code>format_error_callback</code></td><td>Set a function that will be
+called if an exception is caught while performing string formatting of a log
+entry in the background thread.</td></tr>
 <tr><td><code>panic_flush</code></td><td>Perform the minimum required work to
 write everything that has been sent to the log up to now. This is meant to be
 called when a fatal program error (i.e. crash) has occurred, and it is expected
@@ -103,6 +111,18 @@ log buffers and the current write position in them.</td></tr>
 that may be pushed on the thread-local log buffer. This stores the actual
 arguments passed to <code>write()</code> and a function pointer, for each log
 entry.</td></tr>
+<tr><td><code>callback</code></td><td>A function object with the signature
+<code>void (output_buffer*, std::exception_ptr const&, std::type_info
+const&)</code> that is called when an exception occurs.
+The callback must not write to the <code>basic_log</code> instance, since this
+can cause a deadlock or a never-ending loop. However, it may write directly to
+the output buffer. The <code>exception_ptr</code> points to the exception that
+was caught. The <code>type_info</code> instance provides type information for
+the arguments that were passed to the formatting function (i.e. the arguments
+that were passed to <code>basic_log::write</code>) wrapped as template
+arguments for <code>std::tuple</code>. The callback argument may be a
+default-constructed <code>std::function</code> instance, causing formatting
+errors to be ignored.</td></tr>
 <tr><td><code>Formatter</code></td><td>A type that provides the function
 <code>static void format(output_buffer*, Args...)</code>. <code>Args</code>
 should be compatible with the arguments that you intend to pass to
