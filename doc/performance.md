@@ -172,7 +172,7 @@ average](images/performance_call_burst_1_ma.png)
 
 Spdlog performs well until the buffer fills up, but then it stalls waiting for
 the buffer to be emptied to disk. After that it comes out as the slowest
-performer, followed by pantheios. It can now be seen that reckless is still on
+performer, followed by pantheios. It can now be seen that reckless is still
 the best performer on average, but it is clear that it stalls each time the
 buffer fills up.
 
@@ -203,7 +203,7 @@ heavy disk I/O. 256 log entries are produced while writing 4 GiB of raw data
 to a set of files. Somewhere around iteration 75 (i.e. after writing about 1.2
 GiB) the disk buffer appears to fill up, causing increased write latency in
 the kernel.  Reckless can hide this by allowing logging to continue while the
-writes are in process, and then combining all outstanding writes into a single
+writes are in progress, and then combining all outstanding writes into a single
 I/O operation.
 
 The average call latencies relative to reckless are:
