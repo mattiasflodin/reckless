@@ -22,6 +22,8 @@ namespace reckless {
 namespace detail {
     template <class Formatter, typename... Args>
     std::size_t formatter_dispatch(output_buffer* poutput, char* pinput);
+    template <std::size_t FrameSize>
+    std::size_t null_dispatch(output_buffer* poutput, char* pinput);
 }
 
 // TODO generic_log better name?
@@ -70,9 +72,17 @@ protected:
         *reinterpret_cast<formatter_dispatch_function_t**>(pframe) =
             &detail::formatter_dispatch<Formatter, typename std::decay<Args>::type...>;
 
-        // FIXME exception safety when copy constructing arguments, both here
-        // and in the output thread.
-        new (pframe + args_offset) args_t(std::forward<Args>(args)...);
+        try {
+            new (pframe + args_offset) args_t(std::forward<Args>(args)...);
+        } catch(...) {
+            // Replace the formatter dispatch function pointer with a no-op
+            // equivalent that ignores the frame data and just returns the
+            // frame size. That way the frame will simply be consumed and ignored
+            *reinterpret_cast<formatter_dispatch_function_t**>(pframe) =
+                &detail::null_dispatch<frame_size>;
+            queue_commit_extent({pbuffer, pbuffer->input_end()});
+            throw;
+        }
 
         // TODO ideally queue_commit_extent would be called in a separate
         // commit() or flush() function, but then we have to call
@@ -195,6 +205,12 @@ std::size_t formatter_dispatch(output_buffer* poutput, char* pinput)
     }
 
     return frame_size;
+}
+
+template <std::size_t FrameSize>
+std::size_t null_dispatch(output_buffer*, char*)
+{
+    return FrameSize;
 }
 
 }   // namespace detail

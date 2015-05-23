@@ -42,7 +42,7 @@ public:
         p->~thread_input_buffer();
         delete [] static_cast<char*>(static_cast<void*>(p));
     }
-    // returns pointer to allocated input frame, moves input_end() forward.
+    // return pointer to allocated input frame, move input_end() forward.
     char* allocate_input_frame(std::size_t size);
     // returns pointer to following input frame
     char* discard_input_frame(std::size_t size);
