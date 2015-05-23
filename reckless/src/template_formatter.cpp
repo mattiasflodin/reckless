@@ -95,7 +95,7 @@ namespace {
             itoa_base16(pbuffer, v, spec);
             return pformat + 1;
         } else if(f == 'b') {
-            // FIXME
+            // TODO
             return nullptr;
         } else {
             return nullptr;
