@@ -15,12 +15,14 @@ public:
     output_buffer();
     // TODO hide functions that are not relevant to the client, e.g. move
     // assignment, empty(), flush etc?
+    // throw bad_alloc if unable to malloc() the buffer.
     output_buffer(output_buffer&& other);
     output_buffer(writer* pwriter, std::size_t max_capacity);
     ~output_buffer();
 
     output_buffer& operator=(output_buffer&& other);
 
+    // throw bad_alloc if unable to malloc() the buffer.
     void reset(writer* pwriter, std::size_t max_capacity);
 
     char* reserve(std::size_t size)

@@ -55,11 +55,13 @@ reckless::output_buffer& reckless::output_buffer::operator=(output_buffer&& othe
 void reckless::output_buffer::reset(writer* pwriter, std::size_t max_capacity)
 {
     using namespace detail;
+    auto pbuffer = static_cast<char*>(std::malloc(max_capacity));
+    if(!pbuffer)
+        throw std::bad_alloc();
     std::free(pbuffer_);
+    pbuffer_ = pbuffer;
 
     pwriter_ = pwriter;
-    pbuffer_ = static_cast<char*>(std::malloc(max_capacity));
-    // FIXME check return value of malloc here 
     pcommit_end_ = pbuffer_;
     pbuffer_end_ = pbuffer_ + max_capacity;
     auto page = detail::get_page_size();
