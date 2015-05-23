@@ -14,8 +14,6 @@ void destroy_thread_input_buffer(void* p)
 }
 }
 
-// FIXME we need to destroy the pthreads key in dtor
-
 reckless::basic_log::basic_log() :
     shared_input_queue_(0),
     thread_input_buffer_size_(0),
@@ -44,6 +42,8 @@ reckless::basic_log::~basic_log()
         return;
     if(is_open())
         close();
+    auto result = pthread_key_delete(thread_input_buffer_key_);
+    assert(result == 0);
 }
 
 void reckless::basic_log::open(writer* pwriter, 
