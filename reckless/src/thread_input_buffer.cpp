@@ -120,7 +120,6 @@ char* reckless::detail::thread_input_buffer::allocate_input_frame(std::size_t si
  
     while(true) {
         auto pinput_end = pinput_end_;
-        // FIXME these asserts should / can be enabled again?
         assert(static_cast<std::size_t>(pinput_end - buffer_start()) < size_);
         assert(is_aligned(pinput_end));
 
