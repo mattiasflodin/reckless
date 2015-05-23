@@ -76,7 +76,6 @@ protected:
 private:
     void output_worker();
     void queue_commit_extent(detail::commit_extent const& ce);
-    char* allocate_input_frame(std::size_t frame_size);
     void reset_shared_input_queue(std::size_t node_count);
     detail::thread_input_buffer* get_input_buffer()
     {
