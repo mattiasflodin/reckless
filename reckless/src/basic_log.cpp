@@ -101,6 +101,8 @@ void reckless::basic_log::panic_flush()
 
 void reckless::basic_log::output_worker()
 {
+    pthread_setname_np(pthread_self(), "reckless output worker");
+
     // TODO if possible we should call signal_input_consumed() whenever the
     // output buffer is flushed, so threads aren't kept waiting indefinitely if
     // the queue never clears up.
