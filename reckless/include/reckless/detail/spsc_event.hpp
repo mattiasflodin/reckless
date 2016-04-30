@@ -27,6 +27,8 @@ public:
     {
         int signal = atomic_exchange_explicit(&signal_, 0, std::memory_order_acquire);
         while(not signal) {
+            // TODO may be beneficial to just put a cpu pause here before
+            // reading the value again, i.e. a spinlock kind of construction.
             sys_futex(&signal_, FUTEX_WAIT, 0, nullptr, nullptr, 0);
             signal = atomic_exchange_explicit(&signal_, 0, std::memory_order_acquire);
         }
