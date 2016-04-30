@@ -101,6 +101,9 @@ void reckless::basic_log::panic_flush()
 
 void reckless::basic_log::output_worker()
 {
+#ifdef RECKLESS_DEBUG
+    output_worker_native_handle_ = pthread_self();
+#endif
     pthread_setname_np(pthread_self(), "reckless output worker");
 
     // TODO if possible we should call signal_input_consumed() whenever the

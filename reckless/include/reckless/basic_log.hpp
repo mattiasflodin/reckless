@@ -67,6 +67,14 @@ protected:
         std::size_t const args_offset = (sizeof(formatter_dispatch_function_t*) + args_align-1)/args_align*args_align;
         std::size_t const frame_size = args_offset + sizeof(args_t);
 
+#ifdef RECKLESS_DEBUG
+        // If this assert triggers then you have tried to write to the log from
+        // within the worker thread (from flush_error_callback?). That's bad
+        // because it can lead to a deadlock. Instead, you need to format your
+        // string yourself and write directly to the output_buffer.
+        assert(!pthread_equal(pthread_self(), output_worker_native_handle_));
+#endif
+
         auto pbuffer = get_input_buffer();
         char* pframe = pbuffer->allocate_input_frame(frame_size);
         *reinterpret_cast<formatter_dispatch_function_t**>(pframe) =
@@ -131,6 +139,10 @@ private:
     std::thread output_thread_;
     spsc_event panic_flush_done_event_;
     bool panic_flush_;
+
+#ifdef RECKLESS_DEBUG
+    pthread_t output_worker_native_handle_;
+#endif
 };
 
 class format_error : public std::exception {
