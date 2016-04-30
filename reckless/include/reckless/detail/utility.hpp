@@ -40,6 +40,12 @@ struct make_index_sequence
     typedef typename make_index_sequence_helper<0, N>::type type;
 };
 
+void unreachable() __attribute__((noreturn));
+inline void unreachable()
+{
+    __builtin_trap();
+}
+
 }
 }
 

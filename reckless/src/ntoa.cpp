@@ -11,7 +11,7 @@
 
 namespace reckless {
 namespace {
-    
+
 char const decimal_digits[] =
     "00010203040506070809"
     "10111213141516171819"
@@ -1058,6 +1058,11 @@ void ftoa_base10_g(output_buffer* pbuffer, double value, conversion_specificatio
 
 namespace reckless {
 namespace detail {
+class whitebox_output_buffer : public output_buffer {
+public:
+    using output_buffer::output_buffer;
+    using output_buffer::flush;
+};
 
 class log10_suite {
 public:
@@ -1098,11 +1103,12 @@ unit_test::suite<log10_suite> log10_tests = {
 
 class string_writer : public writer {
 public:
-    Result write(void const* pbuffer, std::size_t count) override
+    std::size_t write(void const* pbuffer, std::size_t count, std::error_code& ec) noexcept override
     {
         auto pc = static_cast<char const*>(pbuffer);
         buffer_.insert(buffer_.end(), pc, pc + count);
-        return SUCCESS;
+        ec.clear();
+        return count;
     }
 
     void reset()
@@ -1300,7 +1306,7 @@ private:
     }
     
     string_writer writer_;
-    output_buffer output_buffer_;
+    whitebox_output_buffer output_buffer_;
 };
 
 unit_test::suite<itoa_base10_suite> itoa_base10_tests = {
@@ -1520,7 +1526,7 @@ private:
     }
     
     string_writer writer_;
-    output_buffer output_buffer_;
+    whitebox_output_buffer output_buffer_;
 };
 
 unit_test::suite<itoa_base16_suite> itoa_base16_tests = {
@@ -1619,7 +1625,7 @@ private:
     }
 
     string_writer writer_;
-    output_buffer output_buffer_;
+    whitebox_output_buffer output_buffer_;
 };
 
 unit_test::suite<ftoa_base10_f> ftoa_base10_precision_tests = {
@@ -1905,7 +1911,7 @@ private:
     }
 
     string_writer writer_;
-    output_buffer output_buffer_;
+    whitebox_output_buffer output_buffer_;
 };
 
 unit_test::suite<ftoa_base10_g> ftoa_base10_tests = {

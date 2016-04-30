@@ -2,44 +2,82 @@
 #define RECKLESS_OUTPUT_BUFFER_HPP
 
 #include "detail/branch_hints.hpp"
+#include "detail/spsc_event.hpp"
 
 #include <cstddef>  // size_t
 #include <new>      // bad_alloc
 #include <cstring>  // strlen, memcpy
+#include <functional>   // function
+#include <mutex>
+#include <system_error> // system_error, error_code
+#include <cassert>
 
 namespace reckless {
 class writer;
+class output_buffer;
+
+enum class error_policy {
+    ignore,
+    notify_on_recovery,
+    block,
+    fail_immediately
+    // TODO: policy to invoke callback from background thread
+};
+
+// Thrown if output_buffer::reserve() is used to allocate more than can fit in
+// the output buffer during formatting of a single input frame. If this happens
+// then you need to either enlarge the output buffer or reduce the amount of
+// data produced by your formatter.
+class excessive_output_by_frame : public std::bad_alloc {
+public:
+    char const* what() const noexcept override;
+};
+
+// Thrown if output_buffer::flush fails. This inherits from bad_alloc because
+// it makes sense in the context where the formatter calls
+// output_buffer::reserve(), and a flush intended to create more space in the
+// buffer fails. In that context, it is essentially an allocation error. The
+// formatter may catch this if it wishes, but it is expected that most will
+// just let it fall through to the worker thread, where it will be dealt with
+// appropriately.
+//
+// TODO we need to make flush() private, clients can't go around calling it in
+// the formatter because if it fails and the exception reaches the worker
+// thread then we'll end up assuming the buffer ran out of space and something
+// was lost.
+class flush_error : public std::bad_alloc {
+public:
+    flush_error(std::error_code const& error_code) :
+        error_code_(error_code)
+    {
+    }
+    char const* what() const noexcept override;
+    std::error_code const& code() const
+    {
+        return error_code_;
+    }
+
+private:
+    std::error_code error_code_;
+};
+
+using writer_error_callback_t = std::function<void (output_buffer* pbuffer, std::error_code ec, unsigned lost_record_count)>;
 
 class output_buffer {
 public:
     output_buffer();
     // TODO hide functions that are not relevant to the client, e.g. move
     // assignment, empty(), flush etc?
-    // throw bad_alloc if unable to malloc() the buffer.
-    output_buffer(output_buffer&& other);
     output_buffer(writer* pwriter, std::size_t max_capacity);
     ~output_buffer();
 
-    output_buffer& operator=(output_buffer&& other);
-
-    // throw bad_alloc if unable to malloc() the buffer.
-    void reset(writer* pwriter, std::size_t max_capacity);
-
     char* reserve(std::size_t size)
     {
-        if(detail::unlikely(static_cast<std::size_t>(pbuffer_end_ - pcommit_end_) < size)) {
-            flush();
-            // TODO if the flush fails above, the only thing we can do is discard
-            // the data. But perhaps we should invoke a callback that can do
-            // something, such as log a message about the discarded data.
-            // FIXME when does it actually fail though? Do we need an exception
-            // handler? This block should perhaps be made non-inline. Looks
-            // like we're not actually handling the return value of
-            // pwriter_->write().
-            if(static_cast<std::size_t>(pbuffer_end_ - pbuffer_) < size)
-                throw std::bad_alloc();
-        }
-        return pcommit_end_;
+        std::size_t remaining = pbuffer_end_ - pcommit_end_;
+        if(detail::likely(size <= remaining))
+            return pcommit_end_;
+        else
+            return reserve_slow_path(size);
     }
 
     void commit(std::size_t size)
@@ -61,20 +99,92 @@ public:
         commit(1);
     }
     
-    bool empty() const
+protected:
+    void reset() noexcept;
+    // throw bad_alloc if unable to malloc() the buffer.
+    void reset(writer* pwriter, std::size_t max_capacity);
+
+    // Put a watermark indicating where the last complete output frame ends.
+    void frame_end()
     {
-        return pcommit_end_ == pbuffer_;
+        pframe_end_ = pcommit_end_;
     }
+    // Notify that an input frame was lost because of a flush error.
+    void lost_frame()
+    {
+        ++lost_input_frames_;
+        // Undo everything that has been written during the current input frame.
+        pcommit_end_ = pframe_end_;
+    }
+
+    bool has_complete_frame() const
+    {
+        return pframe_end_ != pbuffer_;
+    }
+
+    // Need to make flush() public because of g++ bug 66957
+    // <https://gcc.gnu.org/bugzilla/show_bug.cgi?id=66957>
+#ifdef __GNUC__
+public:
+#endif
     void flush();
+#ifdef __GNUC__
+protected:
+#endif
+
+    // Must not write to the log since it may cause a deadlock. May not throw
+    // exceptions.
+    void writer_error_callback(writer_error_callback_t callback = writer_error_callback_t())
+    {
+        std::lock_guard<std::mutex> lk(writer_error_callback_mutex_);
+        writer_error_callback_ = move(callback);
+    }
+
+    error_policy temporary_error_policy() const
+    {
+        return temporary_error_policy_.load(std::memory_order_relaxed);
+    }
+
+    void temporary_error_policy(error_policy ep)
+    {
+        temporary_error_policy_.store(ep, std::memory_order_relaxed);
+    }
+
+    error_policy permanent_error_policy() const
+    {
+        return permanent_error_policy_.load(std::memory_order_relaxed);
+    }
+
+    void permanent_error_policy(error_policy ep)
+    {
+        assert(ep != error_policy::notify_on_recovery
+                && ep != error_policy::block);
+        permanent_error_policy_.store(ep, std::memory_order_relaxed);
+    }
+
+    spsc_event shared_input_queue_full_event_; // FIXME rename to something that indicates this is used for all "notifications" to the worker thread
+
+    std::atomic<error_policy> temporary_error_policy_{error_policy::ignore};
+    std::atomic<error_policy> permanent_error_policy_{error_policy::fail_immediately};
+    std::error_code error_code_;    // error code for error state
+    std::atomic_bool error_flag_{false};   // error state
+    std::atomic_bool panic_flush_{false};
 
 private:
     output_buffer(output_buffer const&) = delete;
     output_buffer& operator=(output_buffer const&) = delete;
 
-    writer* pwriter_;
-    char* pbuffer_;
-    char* pcommit_end_;
-    char* pbuffer_end_;
+    char* reserve_slow_path(std::size_t size);
+
+    writer* pwriter_ = nullptr;
+    char* pbuffer_ = nullptr;
+    char* pframe_end_ = nullptr;
+    char* pcommit_end_ = nullptr;
+    char* pbuffer_end_ = nullptr;
+    unsigned lost_input_frames_ = 0;
+    std::error_code initial_error_;         // Keeps track of the first error that caused lost_input_frames_ to become non-zero.
+    std::mutex writer_error_callback_mutex_;
+    writer_error_callback_t writer_error_callback_;
 };
 
 }

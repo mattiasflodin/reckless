@@ -11,7 +11,11 @@ class basic_log;
 
 namespace detail {
 
-typedef std::size_t formatter_dispatch_function_t(output_buffer*, char*);
+enum dispatch_operation {
+    invoke_formatter,
+    get_typeid
+};
+typedef std::size_t formatter_dispatch_function_t(dispatch_operation, void*, void*);
 // TODO these checks need to be done at runtime now
 //static_assert(alignof(dispatch_function_t*) <= RECKLESS_FRAME_ALIGNMENT,
 //        "RECKLESS_FRAME_ALIGNMENT must at least match that of a function pointer");
@@ -42,9 +46,24 @@ public:
         p->~thread_input_buffer();
         delete [] static_cast<char*>(static_cast<void*>(p));
     }
+
+    // return marker to be used for revert_allocation()
+    char const* allocation_marker() const
+    {
+        return pinput_end_;
+    }
+
     // return pointer to allocated input frame, move input_end() forward.
     char* allocate_input_frame(std::size_t size);
-    // returns pointer to following input frame
+
+    // revert allocation made by allocate_input_frame. Can only be used to
+    // revert the last allocation attempt made, and must use marker returned by
+    // allocation_marker() right before the last allocation.
+    void revert_allocation(char const* marker)
+    {
+        pinput_end_ = const_cast<char*>(marker);
+    }
+    // return pointer to following input frame
     char* discard_input_frame(std::size_t size);
     char* wraparound();
     char* input_start() const
