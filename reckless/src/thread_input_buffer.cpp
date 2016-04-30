@@ -24,9 +24,9 @@ reckless::detail::thread_input_buffer::~thread_input_buffer()
     // called on a dangling pointer.
  
     // Wait for the output thread to consume all the contents of the buffer
-    // before release it.
-    // Both write() and wait_input_consumed should create full memory barriers,
-    // so no need for strict memory ordering in this load.
+    // before we release it. Both write() and wait_input_consumed should
+    // create full memory barriers, so no need for strict memory ordering in
+    // this load.
     while(pinput_start_.load(std::memory_order_relaxed) != pinput_end_)
         wait_input_consumed();
 }
@@ -108,15 +108,15 @@ char* reckless::detail::thread_input_buffer::allocate_input_frame(std::size_t si
     //   non-contiguous, and the free memory is contiguous (it still starts at
     //   pinput_end and ends at pinput_start modulo circular buffer size).
     //   
-    // (This is easier to understand by drawing it on a paper than by reading
-    // the comment text).
+    // All of this code is easier to understand by simply drawing the buffer on
+    // a paper than by reading the comment text.
     auto mask = frame_alignment_mask();
     size = (size + mask) & ~mask;
 
     // We can't write a frame that is larger than the entire capacity of the
     // input buffer. If you hit this assert then you either need to write a
     // smaller log entry, or you need to make the input buffer larger.
-    assert(size < size_);
+    assert(size < size_-1);
  
     while(true) {
         auto pinput_end = pinput_end_;
@@ -132,7 +132,31 @@ char* reckless::detail::thread_input_buffer::allocate_input_frame(std::size_t si
         // fine here.
         auto pinput_start = pinput_start_.load(std::memory_order_relaxed);
         std::ptrdiff_t free = pinput_start - pinput_end;
-        if(free > 0) {
+        if(free == 0) {
+            // If free == 0 then pinput_start == pinput_end, i.e. the entire
+            // buffer is unused. But pinput_start may still point to the middle
+            // of the buffer, making the free space appear non-contiguous. If
+            // neither segment contains enough space for the input frame then
+            // we might end up waiting for space to become available forever
+            // (c.f. handling of non-contiguous case below), since there is no
+            // actual input data available for the worker thread to consume.
+            //
+            // This clause exists to handle that specific case. Because the
+            // background thread currently has no data to consume, we know that
+            // it is not going to touch pinput_start_. We can use this
+            // situation to "rewind" the pointers to the beginning of the
+            // buffer, to make the entire contiguous buffer available to us.
+            //
+            // The memory ordering can be relaxed because there are no
+            // dependent writes. Also the background thread does not need to
+            // see an updated value until the input frame has been put on the
+            // shared queue, and doing so requires at least a release
+            // synchronization.
+            pinput_start = buffer_start();
+            pinput_start_.store(pinput_start, std::memory_order_relaxed);
+            pinput_end_ = advance_frame_pointer(pinput_start, size);
+            return pinput_start;
+        } else if(free > 0) {
             // Free space is contiguous.
             // Technically, there is enough room if size == free. But the
             // problem with using the free space in this situation is that when
