@@ -53,14 +53,14 @@ typename std::make_unsigned<T>::type unsigned_cast(T v)
     return static_cast<typename std::make_unsigned<T>::type>(v);
 }
 
-void prefetch_digits()
-{
-    detail::prefetch(decimal_digits, sizeof(decimal_digits));
-}
-void prefetch_power_lut()
-{
-    detail::prefetch(power_lut, sizeof(power_lut));
-}
+//void prefetch_digits()
+//{
+//    detail::prefetch(decimal_digits, sizeof(decimal_digits));
+//}
+//void prefetch_power_lut()
+//{
+//    detail::prefetch(power_lut, sizeof(power_lut));
+//}
 
 template <typename Unsigned>
 typename std::enable_if<std::is_unsigned<Unsigned>::value, unsigned>::type
