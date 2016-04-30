@@ -1,30 +1,18 @@
-**Table of Contents**
+Table of Contents
+=================
 
-- [basic_log](#)
-	- [Member functions](#)
-	- [Arguments](#)
-- [policy_log](#)
-	- [Member functions](#)
-	- [Arguments](#)
-- [severity_log](#)
-- [Custom writers](#)
-- [file_writer](#)
-- [Custom string formatting](#)
-- [output_buffer](#)
-	- [Member functions](#)
-	- [Parameters](#)
-- [Custom fields in policy_log](#)
-- [Rolling your own logger](#)
-	- [A note on move semantics](#)
-- [Handling crashes](#)
-- [Limited floating-point accuracy](#)
-- [basic_log](#)
-	- [Member functions](#)
-	- [Arguments](#)
-- [policy_log](#)
-	- [severity_log](#)
-	- [Rolling your own logger](#)
-	- [Performance](#)
+- [basic_log](#basic_log)
+- [policy_log](#policy_log)
+- [severity_log](#severity_log)
+- [Custom writers](#custom-writers)
+- [file_writer](#file_writer)
+- [Custom string formatting](#custom-string-formatting)
+- [output_buffer](#output_buffer)
+- [Custom fields in policy_log](#custom-fields-in-policy_log)
+- [Rolling your own logger](#rolling-your-own-logger)
+- [A note on move semantics](#a-note-on-move-semantics)
+- [Handling crashes](#handling-crashes)
+- [Limited floating-point accuracy](#limited-floating-point-accuracy)
 
 basic_log
 =========
@@ -33,11 +21,16 @@ but does not provide any public functions for writing to the log.
 ```c++
 // #include <reckless/basic_log.hpp>
 
+using format_error_callback_t = std::function<
+    void (output_buffer*, std::exception_ptr const&, std::type_info const&)
+>;
+
+using writer_error_callback_t = std::function<
+    void (output_buffer* pbuffer, std::error_code ec, unsigned lost_record_count)
+>;
+
 class basic_log {
 public:
-    using format_error_callback_t = std::function<
-        void (output_buffer*, std::exception_ptr const&, std::type_info const&)
-    >;
 
     basic_log();
     basic_log(writer* pwriter, 
@@ -53,10 +46,22 @@ public:
             std::size_t output_buffer_max_capacity = 0,
             std::size_t shared_input_queue_size = 0,
             std::size_t thread_input_buffer_size = 0);
+    virtual void close(std::error_code& ec) noexcept;
     virtual void close();
+    
+    virtual void flush(std::error_code& ec);
+    virtual void flush();
 
-    void format_error_callback(
-        format_error_callback_t callback = format_error_callback_t());
+    void format_error_callback();
+    void format_error_callback(format_error_callback_t format_error_callback);
+    void writer_error_callback();
+    void writer_error_callback(writer_error_callback_t writer_error_callback);
+
+    error_policy temporary_error_policy() const;
+    void temporary_error_policy(error_policy ep);
+    error_policy permanent_error_policy() const
+    void permanent_error_policy(error_policy ep);
+        
     void panic_flush();
 
 protected:
@@ -68,61 +73,153 @@ protected:
 Member functions
 ----------------
 <table>
-<tr><td><code>(constructor)</code></td><td>Construct a log and optionally open
-it if a writer is provided.</td></tr>
-<tr><td><code>(destructor)</code></td><td>Destruct the log. It will be closed
-if open.
-</td></tr>
-<tr><td><code>open</code></td><td>Open the log. This allocates the necessary buffers,
-associates the log with a writer, and starts up the writer thread.</td></tr>
-<tr><td><code>close</code></td><td>Close the log. This flushes all queued log data in a
-controlled manner, then shuts down the background thread and disassociates the
-writer.</td></tr>
-<tr><td><code>format_error_callback</code></td><td>Set a function that will be
-called if an exception is caught while performing string formatting of a log
-entry in the background thread.</td></tr>
-<tr><td><code>panic_flush</code></td><td>Perform the minimum required work to
-write everything that has been sent to the log up to now. This is meant to be
-called when a fatal program error (i.e. crash) has occurred, and it is expected
-that the process will be terminated after the call. The log object is left in a
-"panic" state that prevents any cleanup in the destructor. Any thread that
-tries to write to the log after this will sleep indefinitely.</td></tr>
-<tr><td><code>write</code></td><td>Store <code>args</code> on the
-asynchronous queue and invoke the static function
-<code>Formatter::format(output_buffer*, Args...)</code>
-from the background thread. This is meant to be called from derived classes.
+<tr><td><code>(constructor)</code></td>
+<td>Construct a log and optionally open it if a writer is provided.</td></tr>
+
+<tr><td><code>(destructor)</code></td> <td>Destruct the log. It will be closed
+if open.</td></tr>
+
+<tr><td><code>open</code></td>
+<td>Open the log. This allocates the necessary buffers, associates the log with
+a writer, and starts up the writer thread.</td></tr>
+
+<tr><td><code>close</code></td>
+<td>Close the log. This flushes all queued log data in a controlled manner,
+then shuts down the background thread and disassociates the writer. Trying to
+close a log that is not open leads to undefined behavior.</td></tr>
+
+<tr><td><code>flush</code></td>
+<td><p>Wake up the output worker thread and then block until it has formatted
+and written all log messages up until the most recent one.</p>
+This function can be used to ensure that all log messages have reached the
+writer before continuing execution of the program, or possibly to check whether
+the writer is still successfully writing data. It is not meant to be a low-
+latency call and involves creating a temporary thread synchronization
+object.</td></tr>
+
+<tr><td><code>format_error_callback</code></td>
+<td>Set a function that will be called if an exception is caught while
+performing formatting of a log entry in the background thread.</td></tr>
+
+<tr><td><code>writer_error_callback</code></td>
+<td>Set a function that will be called when the writer returns to a working
+state after log messages have been lost due to failed writes. It will only be
+called when the error policy is <code>notify_on_recovery</code>. Passing no
+argument will disable error recovery notifications.</td></tr>
+
+<tr><td><code>temporary_error_policy</code></td>
+<td>Set or get the policy how to behave when temporary errors occur. The
+classification of errors as temporary is up to the <code>writer</code>
+object.</td></tr>
+
+<tr><td><code>permanent_error_policy</code></td>
+<td>Set or get the policy for how to behave when permanent errors occur. The
+classification of errors as permanent is up to the <code>writer</code>
+object.</td></tr>
+
+<tr><td><code>panic_flush</code></td>
+<td>Perform the minimum required work to write everything that has been sent to
+the log up to now. This is meant to be called when a fatal program error (i.e.
+crash) has occurred, and it is expected that the process will be terminated
+after the call. The log object is left in a "panic" state that prevents any
+cleanup in the destructor. Any thread that tries to write to the log after this
+will be suspended.</td></tr>
+
+<tr><td><code>write</code></td>
+<td>Store <code>args</code> on the asynchronous queue and invoke the static
+function <code>Formatter::format(output_buffer*, Args...)</code> from the
+background thread. This is meant to be called from derived classes.</td></tr>
 </table>
 
 Arguments
 ---------
 <table>
-<tr><td><code>pwriter</code></td><td>Pointer to a writer to use for writing
-formatted log data to disk or other targets.</td></tr>
-<tr><td><code>output_buffer_max_capacity</code></td><td>Maximum number of bytes
-that may be allocated for the final, formatted output buffer. If 0 is
-specified, the CPU page size is used (on Intel this is commonly 4
-KiB).</td></tr>
-<tr><td><code>shared_input_queue_size</code></td><td>Maximum number of log
-entries in the queue shared between application threads and the background
-writer thread.  If 0 is specified, the library picks a number that fits in a
-single CPU memory page. The shared queue stores references to the thread-local
-log buffers and the current write position in them.</td></tr>
-<tr><td><code>thread_input_buffer_size</code></td><td>Maximum number of bytes
-that may be pushed on the thread-local log buffer. This stores the actual
-arguments passed to <code>write()</code> and a function pointer, for each log
-entry.</td></tr>
-<tr><td><code>callback</code></td><td>A function object with the signature
-<code>void (output_buffer*, std::exception_ptr const&, std::type_info
-const&)</code> that is called when an exception occurs.
-The callback must not write to the <code>basic_log</code> instance, since this
-can cause a deadlock or a never-ending loop. However, it may write directly to
-the output buffer. The <code>exception_ptr</code> points to the exception that
-was caught. The <code>type_info</code> instance provides type information for
-the arguments that were passed to the formatting function (i.e. the arguments
-that were passed to <code>basic_log::write</code>) wrapped as template
-arguments for <code>std::tuple</code>. The callback argument may be a
-default-constructed <code>std::function</code> instance, causing formatting
-errors to be ignored.</td></tr>
+<tr><td><code>pwriter</code></td>
+<td>Pointer to a writer to use for writing formatted log data to disk or other
+targets.</td></tr>
+
+<tr><td><code>output_buffer_max_capacity</code></td>
+<td>Maximum number of bytes that may be allocated for the final, formatted
+output buffer. If 0 is specified, the CPU page size is used (on Intel this is
+normally 4 KiB).</td></tr>
+
+<tr><td><code>shared_input_queue_size</code></td>
+<td>Maximum number of log entries in the queue shared between application
+threads and the background writer thread.  If 0 is specified, the library picks
+a number that fits in a single CPU memory page. The shared queue stores
+references to the thread-local log buffers and the current write position in
+them.</td></tr>
+
+<tr><td><code>thread_input_buffer_size</code></td>
+<td>Maximum number of bytes that may be pushed on the thread-local log buffer.
+This stores the actual arguments passed to <code>write()</code> and a function
+pointer, for each log entry.</td></tr>
+
+<tr><td><code>ec</code></td>
+<td><code>std::error_code</code> instance to use for reporting errors from the
+writer. If no error occurs, <code>ec.clear()</code> is called. If
+<code>ec</code> is not given, then the error will be thrown as a
+<code>writer_error</code> exception instead.</td></tr>
+
+<tr><td><code>format_error_callback</code></td>
+<td><p>A function object with the signature <code>void (output_buffer*,
+std::exception_ptr const&, std::type_info const&)</code> that is called when an
+exception occurs during formatting of a log message. The callback must not write
+to the <code>basic_log</code> instance, since this can cause a deadlock or a
+never-ending loop. However, it may write directly to the output buffer. The
+<code>exception_ptr</code> points to the exception that was caught. The
+<code>type_info</code> instance provides type information for the arguments that
+were passed to the formatting function (i.e. the arguments that were passed to
+<code>basic_log::write</code>) wrapped as template arguments for
+<code>std::tuple</code>.</p>
+Omitting this argument will cause formatting errors to be ignored, and
+failed messages will be discarded.</td></tr>
+
+<tr><td><code>writer_error_callback</code></td>
+<td>A function object with the signature <code>void (output_buffer*,
+std::error_code, unsigned)</code> that is called when the writer returns to a
+working state after log messages have been lost due to failed writes. The
+callback must not write to the <code>basic_log</code> instance, since this can
+cause a deadlock or a never-ending loop. However, it may write directly to the
+output buffer. The <code>error_code</code> provides the error code returned by
+the writer. The integer argument will be at least 1, and specifies how many log
+messages have been discarded because of failed writes since the last successful
+write. The callback may not throw any exceptions.</td></tr>
+
+<tr><td><code>ep</code></td>
+<td>Indicates policy for handling writer errors as follows:
+<table>
+<tr><td><code>ignore</code></td>
+<td>Ignore errors and discard messages that could not be written.</td></tr>
+<tr><td><code>notify_on_recovery</code></td>
+<td>Discard messages that could not be written but keep a tally on how many
+messages were lost. Once the writer is able to successfully write again,
+notify the <code>writer_error_callback</code> about how many messages were
+lost.</td></tr>
+<tr><td><code>block</code></td>
+<td>Leave messages in the queue. Once the queue fills up, any attempts to write
+to the log will block until the writer succeeds again.</td></tr>
+<tr><td><code>fail_immediately</code></td>
+<td><p>As soon as a write fails the log instance will enter an error state, and
+all attempts to write to the log will throw <code>writer_error</code>
+indicating the <code>error_code</code> that occurred. Note that because of the
+asynchronous one-way nature of the log, a failure to write message A will not
+be seen by the log call that puts message A on the queue. Rather, it is when
+message A reaches the point where it will be written by the background thread
+that the error will be known. A message B which is put on the queue later may
+then throw an exception due to the error that occured when A was sent to the
+writer.</p>
+
+<p>In other words, a writer_error exception cannot indicate the exact point at
+which the error occurred. Instead it should be seen as a mechanism for aborting
+a subroutine as soon as possible when it becomes known that messages are not
+reaching the log file properly.</p>
+
+If the writer begins successfully writing data again, then the internal error
+state will be cleared and it will be possible to put new messages on the queue
+again.</td></tr>
+</table>
+
 <tr><td><code>Formatter</code></td><td>A type that provides the function
 <code>static void format(output_buffer*, Args...)</code>. <code>Args</code>
 should be compatible with the arguments that you intend to pass to
@@ -133,7 +230,7 @@ of <code>Args</code>.</td></tr>
 
 policy_log
 ==========
-`policy_log` supports `printf`-like formatting, configurable header
+`policy_log` supports `printf`-like typesafe formatting, configurable header
 fields, and scope-based indenting.
 
 ```c++
@@ -178,15 +275,15 @@ log fields.</td></tr>
 <tr><td><code>HeaderFields</code></td><td>One or more fields to use for
 prefixing each log line. The only field currently available is
 <code>timestamp_field</code> which will output the time in ISO 8601 compliant
-time format. Other fields can be be implemented by the client; see the
-implementation of <code>timestamp_field</code> for more information.</td></tr>
-<tr><td><code>fmt</code></td><td>Format string. The conversion specifiers are
-parsed differently depending on the type of each converted argument, but are
-roughly equivalent to <code>printf</code> for native types. There is no need
-to end the string with a newline as <code>write</code> always writes each
-string on a separate line. This behavior is mostly to avoid spending CPU
-cycles on splitting the output to insert the header fields at
-the beginning of each new line, but also to make logging simpler for the
+time format. Other fields can be be implemented by the client; see <a href
+="#custom-fields-in-policy_log">Custom fields in policy_log</a> for more
+information.</td></tr> <tr><td><code>fmt</code></td><td>Format string. The
+conversion specifiers are parsed differently depending on the type of each
+converted argument, but are roughly equivalent to <code>printf</code> for native
+types. There is no need to end the string with a newline as <code>write</code>
+always writes each string on a separate line. This behavior is mostly to avoid
+spending CPU cycles on splitting the output to insert the header fields at the
+beginning of each new line, but also to make logging simpler for the
 caller.</td></tr>
 <tr><td><code>args</code></td><td>Data to print. For each argument,
 <code>format(output_buffer*, char const* fmt, T&&)</code> is invoked to write
@@ -256,39 +353,56 @@ which of the four functions was called.
 
 Custom writers
 ==============
-To customize how reckless logs data, you implement the `writer`
-interface.
+To customize where log data ends up, you implement the `writer` interface.
 ```c++
 // #include <reckless/writer.hpp>
 
-class writer {
-public:
-    enum Result
-    {
-        SUCCESS,
-        ERROR_TRY_LATER,
-        ERROR_GIVE_UP
+namespace reckless
+{
+    class writer {
+    public:
+        enum errc
+        {
+            temporary_failure = 1,
+            permanent_failure = 2
+        };
+        static std::error_category const& error_category();
+    
+        virtual ~writer() = 0;
+        virtual std::size_t write(void const* pbuffer, std::size_t count,
+            std::error_code& ec) noexcept = 0;
     };
-    virtual ~writer() = 0;
-    virtual Result write(void const* pbuffer, std::size_t count) = 0;
-};
+    
+    std::error_condition make_error_condition(writer::errc);
+    std::error_code make_error_code(writer::errc);
+}   // namespace reckless
+
+namespace std
+{
+    template <>
+    struct is_error_condition_enum<reckless::writer::errc> : public true_type {};
+}
 ```
 
 The `write` function should attempt to write `count` bytes from the
-buffer pointed to by `pbuffer`. If it returns `SUCCESS` then the log
-will consider the data to be persisted and will discard it from memory.
+buffer pointed to by `pbuffer`. It should call `ec.clear()` and return `count`
+to indicate a successful write. The log will then consider the data to be
+persisted and will discard it from memory.
 
-The other two return values are not yet honored by the log at the time
-of this writing, but their meaning will be as follows. If
-`ERROR_GIVE_UP` is returned then the background thread will stop
-writing. The log will continue to operate but all data will be silently
-ignored. If `ERROR_TRY_LATER` is returned then the background thread
-will keep trying as new data is received. This is intended to be used
-for temporary situations, for example shortage of disk space or memory.
-If any buffers fill up then log functions will not block but discard
-data to prevent the program from freezing. The implementation may wish
-to output some kind of diagnostic message about this when the writer is
-again able to write data.
+If an error occurs then an error code should be stored in `ec` and the number of
+successfully written bytes should be returned. The log will discard only the
+successfully written bytes from the log.
+
+Error codes returned by the writer must have an `error_category` that implements
+`equivalent` such that either `ec == writer::temporary_failure` or `ec ==
+writer::permanent_failure` is true. If neither is true then reckless will assume
+that it is a permanent error. By permanent we mean that it is assumed that the
+writer will never recover from the error condition.
+
+Implementing an error category does not take a lot of code and is fairly simple,
+however at present time documentation on this subject is pretty scarce. You
+may wish to refer to the source code for `file_writer` for an example of how
+to correctly implement an error category for your error codes.
 
 file_writer
 ===========
@@ -304,9 +418,15 @@ class file_writer : public writer {
 public:
     file_writer(char const* path);
     ~file_writer();
-    Result write(void const* pbuffer, std::size_t count);
+    std::size_t write(void const* pbuffer, std::size_t count,
+        std::error_code& ec) noexcept override;
 };
 ```
+
+On Linux, the writer classifies following error codes as temporary errors:
+<code>ENOSPC</code> (disk full), <code>ENOBUFS</code> (out of memory),
+<code>EDQUOT</code> (user quota reached), <code>EIO</code>
+(low-level I/O error). All other errors are classified as permanent.
 
 Custom string formatting
 ================================================
@@ -316,14 +436,23 @@ allows the caller to define formatting for user-defined types. For every
 argument of type `T&&` passed to the log function,
 
 ```c++
-format(output_buffer*, char const* fmt, T&&)
+char const* format(output_buffer*, char const* fmt, T&&)
 ```
 
-is called to write a formatted version of it to the output buffer.
-argument-dependent lookup applies for the call, so the caller may declare
-`format` in the same namespace as `T`. The library provides a `format`
-implementation for all the native types, so you may piggy-back on that for
-your own implementation.
+is called to write a formatted version of it to the output buffer. The `fmt`
+parameter points to the current position in the format string, after the `%`
+escape character. The function should consume one or more characters from fmt to
+use as a format specification, write formatted output to the `output_buffer`
+pointer, and return a pointer to the first character in the format string that
+is not considered part of the format specification. If the format specification
+is ill-formed then `nullptr` should be returned.
+
+For example, in the format string `"Hello %s, how are you"`, `fmt` would point
+to `s`. The function would return a pointer to the blank space after `s`.
+
+Argument-dependent lookup applies for the call, so you can declare `format` in
+the same namespace as `T`. The library provides a `format` implementation for
+all the native types, so you may piggy-back on that for your own implementation.
 
 output_buffer
 =============
@@ -366,10 +495,10 @@ memory once and commit multiple times, as long as the sum of what you commit
 is never larger than what you reserved. Calling `reserve` multiple times will
 obtain the same pointer each time until `commit` has been called.
 
-`write` is a shorthand for a combined `reserve` and `commit` call, but does
-take any opportunities it can to optimize the operation. If you write a large
-enough piece of data, it may be passed directly to the writer from your buffer
-instead of being copied to the intermediate buffer.
+`write` is a shorthand for a combined `reserve` and `commit` call, but has the
+opportunity to optimize the operation. In the future it might pass the data
+directly to the writer instead of using an intermediate buffer, if you are
+writing enough data.
 
 Parameters
 ----------
@@ -461,7 +590,7 @@ int main()
 For more examples, see the source code for the existing loggers.
 
 A note on move semantics
-------------------------
+========================
 Whenever it can, reckless tries to move objects rather than copy them. In the
 example above, when `puts` is called a temporary `std::wstring` object is
 created to hold the string.  Because it is an rvalue, this string is moved
@@ -475,6 +604,18 @@ stack and `wstring`'s move constructor would be called. If `s` was accepted as
 an lvalue or rvalue reference then no new object would be created. A const
 lvalue reference is usually the right choice as this avoids creating any new
 objects, unless you need to modify the object.
+
+This also means that the following code is valid (assuming that there exists a
+formatter for `unique_ptr<char>`):
+```c++
+reckless::file_writer writer("log.txt");
+reckless::policy_log<> log(&writer);
+log.write("%c", std::make_unique<char>('A'));
+```
+
+That is, you can send an object pointer through the logging queue and have it
+automatically deleted after it was written, without the use of any reference
+counting.
 
 Handling crashes
 ================

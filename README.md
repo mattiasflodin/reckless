@@ -23,8 +23,8 @@ call site consists of
    external dependency) to register the write request on a shared
    lockless queue.
 
-The actual writing is performed asynchronously by a separate thread.
-This removes or hides several costs:
+The actual message formatting and writing is performed asynchronously by a
+separate thread. This removes or hides several costs:
 
 * No transition to the kernel at the call site. The kernel is an easily
   overlooked but important cost, not only because the transition costs
@@ -36,8 +36,8 @@ This removes or hides several costs:
   about the implications of this).
 * It doesn't have to wait for the actual I/O operation to complete.
 * If there are bursts of log calls, multiple items on the queue can be
-  batched into a single write, improving throughput without sacrificing write
-  latency.
+  batched into a single I/O operation, improving throughput without sacrificing
+  write latency.
 
 For a more detailed performance discussion and statistics, see the
 [performance article](doc/performance.md). 
@@ -50,8 +50,8 @@ thread, there are a few caveats you need to be aware of:
   must ensure that the referenced data remains valid at least until the
   log has been flushed or closed (unless you're only interested in
   logging the value of the pointer itself). The best option for
-  dynamically allocated data is typically `std::string` or
-  `std::shared_ptr`.
+  dynamically allocated data is typically `std::string`,
+  `std::shared_ptr` or `std::unique_ptr`.
 * You must take special care to handle crashes if you want to make sure
   that all log data prior to the crash is saved. This is not unique to
   asynchronous logging&mdash;for example fprintf will buffer data until you
@@ -60,10 +60,10 @@ thread, there are a few caveats you need to be aware of:
 * As all string formatting is done in a single thread, it could theoretically
   limit the scalability of your application if the formatting is very
   expensive.
-* Performance becomes somewhat less predictable. Rather than putting the
-  cost of the logging on the thread that calls the logging library, the
-  OS may suspend some other thread to make room for the logging thread
-  to run.
+* Performance becomes somewhat less predictable and harder to measure. Rather
+  than putting the cost of the logging on the thread that calls the logging
+  library, the OS may suspend some other thread to make room for the logging
+  thread to run.
 
 Basic use
 =========
@@ -88,12 +88,17 @@ log_t g_log(&writer);
 int main()
 {
     std::string s("Hello World!");
+    
+    // You can use ordinary printf-style syntax, but unlike stdio this
+    // is type-safe and extensible.
     g_log.debug("Pointer: %p", s.c_str());
     g_log.info("Info line: %s", s);
+    
     for(int i=0; i!=4; ++i) {
         reckless::scoped_indent indent;  // The indent object causes the lines
-        g_log.warn("Warning: %d", i);  // within this scope to be indented
+        g_log.warn("Warning: %d", i);    // within this scope to be indented.
     }
+    
     g_log.error("Error: %f", 3.14);
 
     return 0;
