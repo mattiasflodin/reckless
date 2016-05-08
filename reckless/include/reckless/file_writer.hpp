@@ -29,10 +29,13 @@ namespace reckless {
 class file_writer : public detail::fd_writer {
 public:
     file_writer(char const* path);
+#if defined(_WIN32)
+    file_writer(wchar_t const* path);
+#endif
+
     ~file_writer();
 };
 
 }   // namespace reckless
 
 #endif  // RECKLESS_FILE_WRITER_HPP
-

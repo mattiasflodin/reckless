@@ -20,26 +20,24 @@
  * SOFTWARE.
  */
 #include <reckless/basic_log.hpp>
+#include <reckless/detail/platform.hpp>
 
 #include <vector>
-#include <ciso646>
-
-#include <unistd.h>     // sleep
+#include <algorithm>    // max, min
+#include <thread>       // sleep_for
+#include <chrono>       // hours
 
 using reckless::detail::likely;
-using reckless::detail::unlikely;
 
 namespace reckless {
 
 namespace {
-
-void destroy_thread_input_buffer(void* p)
-{
-    using reckless::detail::thread_input_buffer;
-    thread_input_buffer* pbuffer = static_cast<thread_input_buffer*>(p);
-    thread_input_buffer::destroy(pbuffer);
-}
-
+// Since logger threads do not normally signal any event (unless the queue
+// fills up), we have to poll the input buffer. We use an exponential back off
+// to not use too many CPU cycles and allow other threads to run, but we don't
+// wait for more than one second.
+unsigned max_input_buffer_poll_period_ms = 1000u;
+unsigned input_buffer_poll_period_inverse_growth_factor = 4;
 }   // anonymous namespace
 
 char const* writer_error::what() const noexcept
@@ -49,59 +47,54 @@ char const* writer_error::what() const noexcept
 
 basic_log::basic_log()
 {
-    if(0 != pthread_key_create(&thread_input_buffer_key_, &destroy_thread_input_buffer))
-        throw std::bad_alloc();
-}
-
-basic_log::basic_log(writer* pwriter,
-        std::size_t output_buffer_max_capacity,
-        std::size_t shared_input_queue_size,
-        std::size_t thread_input_buffer_size)
-{
-    if(0 != pthread_key_create(&thread_input_buffer_key_, &destroy_thread_input_buffer))
-        throw std::bad_alloc();
-    open(pwriter, output_buffer_max_capacity, shared_input_queue_size, thread_input_buffer_size);
 }
 
 basic_log::~basic_log()
 {
-    halt_on_panic_flush();
     if(is_open()) {
         std::error_code error;
         close(error);
     }
-    auto result = pthread_key_delete(thread_input_buffer_key_);
-    assert(result == 0);
+}
+
+void basic_log::open(writer* pwriter)
+{
+    open(pwriter, 0, 0);
 }
 
 void basic_log::open(writer* pwriter,
-        std::size_t output_buffer_max_capacity,
-        std::size_t shared_input_queue_size,
-        std::size_t thread_input_buffer_size)
+    std::size_t input_buffer_capacity,
+    std::size_t output_buffer_capacity)
 {
+    assert(!is_open());
+
     // The typical disk block size these days is 4 KiB (see
     // https://en.wikipedia.org/wiki/Advanced_Format). We'll make it twice
     // that just in case it grows larger, and to hide some of the effects of
     // misalignment.
-    unsigned const ASSUMED_DISK_SECTOR_SIZE = 8192;
-    if(output_buffer_max_capacity == 0 or shared_input_queue_size == 0
-            or thread_input_buffer_size == 0)
-    {
-        if(output_buffer_max_capacity == 0)
-            output_buffer_max_capacity = ASSUMED_DISK_SECTOR_SIZE;
-        // TODO is it right to just do g_page_size/sizeof(commit_extent) if we want
-        // the buffer to use up one page? There's likely more overhead in the
-        // buffer.
-        std::size_t page_size = detail::get_page_size();
-        if(shared_input_queue_size == 0)
-            shared_input_queue_size = page_size / sizeof(detail::commit_extent);
-        if(thread_input_buffer_size == 0)
-            thread_input_buffer_size = ASSUMED_DISK_SECTOR_SIZE;
-    }
-    assert(!is_open());
-    reset_shared_input_queue(shared_input_queue_size);
-    thread_input_buffer_size_ = thread_input_buffer_size;
-    output_buffer::reset(pwriter, output_buffer_max_capacity);
+    unsigned const assumed_disk_sector_size = 8192;
+
+    // We used to use the page size for input buffer capacity.
+    // However, after introducing the new ring buffer for Windows
+    // support, it is impossible to have a size less than 64 KiB on
+    // Windows due to granularity constraints. Additionally, since we
+    // are storing the entire input frame in this buffer and have
+    // stricter alignment requests, we need a larger buffer to fit a
+    // reasonable amount of frames.  So, for better performance and
+    // more similar behavior between Unix/Windows, we set this to 64
+    // KiB.
+    //
+    // The downside to this fairly big size is that during load the
+    // latency of log calls may become erratic, as a large queue means
+    // there will be a long wait for it to flush if it happens to fill
+    // up.
+    if(input_buffer_capacity == 0)
+        input_buffer_capacity = 64*1024;
+    if(output_buffer_capacity == 0)
+        output_buffer_capacity =  assumed_disk_sector_size;
+
+    input_buffer_.reserve(input_buffer_capacity);
+    output_buffer::reset(pwriter, output_buffer_capacity);
     output_thread_ = std::thread(std::mem_fn(&basic_log::output_worker), this);
 }
 
@@ -110,23 +103,24 @@ void basic_log::close(std::error_code& ec) noexcept
     using namespace detail;
     assert(is_open());
 
-    send_log_entries_blind({nullptr, nullptr});
-    shared_input_queue_full_event_.signal();
+    frame_header* pframe = push_input_frame_blind(RECKLESS_CACHE_LINE_SIZE);
+    atomic_store_relaxed(&pframe->status, frame_status::shutdown_marker);
+    input_buffer_full_event_.signal();
 
     // We're going to assume that join() will not throw here, since all the
     // documented error conditions would be the result of a bug.
     output_thread_.join();
-    assert(shared_input_queue_->empty());
-    
-    output_buffer::reset();
-    thread_input_buffer_size_ = 0;
-    shared_input_queue_ = std::experimental::nullopt;
-    assert(!is_open());
+    assert(input_buffer_.size() == 0);
 
-    if(error_flag_.load(std::memory_order_acquire))
+    output_buffer::reset();
+    input_buffer_.reserve(0);
+
+    if(atomic_load_acquire(&error_flag_))
         ec = error_code_;
     else
         ec.clear();
+
+    assert(!is_open());
 }
 
 void basic_log::close()
@@ -140,14 +134,15 @@ void basic_log::close()
 void basic_log::flush(std::error_code& ec)
 {
     struct formatter {
-        static void format(output_buffer* poutput, spsc_event* pevent,
+        static void format(output_buffer* poutput, detail::spsc_event* pevent,
                 std::error_code* perror)
         {
-            // Need downcast to get access to protected members.
+            // Need downcast to get access to protected members in
+            // output_buffer.
             auto const plog = static_cast<basic_log*>(poutput);
             try {
                 if(plog->has_complete_frame())
-                    poutput->flush();
+                    plog->output_buffer::flush();
                 perror->clear();
             } catch(flush_error const& e) {
                 *perror = e.code();
@@ -155,9 +150,9 @@ void basic_log::flush(std::error_code& ec)
             pevent->signal();
         }
     };
-    spsc_event event;
+    detail::spsc_event event;
     write<formatter>(&event, &ec);
-    shared_input_queue_full_event_.signal();
+    input_buffer_full_event_.signal();
     event.wait();
 }
 
@@ -169,167 +164,65 @@ void basic_log::flush()
         throw writer_error(error);
 }
 
-void basic_log::panic_flush()
+void basic_log::start_panic_flush()
 {
-    panic_flush_ = true;
-    shared_input_queue_full_event_.signal();
+    using namespace detail;
+    frame_header* pframe = push_input_frame_blind(RECKLESS_CACHE_LINE_SIZE);
+    // To reduce interference from other running threads that write to the log
+    // during a panic flush, we set panic_flush_ = true. This stops the
+    // background thread from releasing consumed memory to the buffer. Then we
+    // call input_buffer_.deplete(), which will eat up all available memory
+    // from the buffer, effectively preventing all other threads from pushing
+    // more data to the buffer. Instead, they'll sit nicely and block until
+    // the flush is done.
+
+    // I'm uncertain about the theoretical correctness of this, but at least
+    // I'm pretty sure it will work on x86/x64, since Intel has a strongly-
+    // ordered cache coherency model. The thing we don't want to happen is that
+    // the store to panic_flush_ (below) becomes visible to the background
+    // thread before the input frame is allocated (above). Since panic_flush_
+    // signals to the background thread that it should no longer free up space
+    // in the buffer, that could mean that if the buffer is full then the
+    // allocation above will block indefinitely.
+    //
+    // It seems to me that what I need is a memory ordering that is the opposite
+    // of memory_order_release: store operations *below* the barrier may not be
+    // moved above it.
+    //
+    // Anyway, until we run into problems in practice, I think it will be
+    // sufficient to tell the *compiler* that it may not move anything
+    // above this barrier.
+    std::atomic_signal_fence(std::memory_order_seq_cst);
+    atomic_store_relaxed(&panic_flush_, true);
+    input_buffer_.deplete();
+
+    atomic_store_release(&pframe->status, frame_status::panic_shutdown_marker);
+    input_buffer_full_event_.signal();
+}
+
+void basic_log::await_panic_flush()
+{
     panic_flush_done_event_.wait();
 }
 
-void basic_log::output_worker()
+bool basic_log::await_panic_flush(unsigned int milliseconds)
+{
+    return panic_flush_done_event_.wait(milliseconds);
+}
+
+detail::frame_header* basic_log::push_input_frame_slow_path(
+    detail::frame_header* pframe, bool error, std::size_t size)
 {
     using namespace detail;
-
-#ifdef RECKLESS_DEBUG
-    output_worker_native_handle_ = pthread_self();
-#endif
-    pthread_setname_np(pthread_self(), "reckless output worker");
-
-    // TODO if possible we should call signal_input_consumed() whenever the
-    // output buffer is flushed, so threads aren't kept waiting indefinitely if
-    // the queue never clears up.
-    std::vector<thread_input_buffer*> touched_input_buffers;
-    touched_input_buffers.reserve(std::max(
-                8u, 2*std::thread::hardware_concurrency()));
-
-    while(true) {
-        commit_extent ce;
-        if(unlikely(not shared_input_queue_->pop(ce))) {
-            // The shared input queue is empty, no new log messages to process.
-            // It's not exactly unlikely that this will happen, but we want
-            // this to be a "cold path" so that we perform best when there is a
-            // lot of load.
-            if(unlikely(panic_flush_)) {
-                // We are in panic-flush mode and the queue is empty. That
-                // means we are done.
-                on_panic_flush_done();  // never returns
-            }
-
-            // For all messages that we processed during this iteration, notify
-            // the originating threads that we have cleared their thread-local
-            // queues (they may be waiting for the queue to clear up). Then
-            // flush the output buffer.
-            shared_input_consumed_event_.signal();
-            for(thread_input_buffer* pinput_buffer : touched_input_buffers)
-                pinput_buffer->signal_input_consumed();
-            for(thread_input_buffer* pbuffer : touched_input_buffers)
-                pbuffer->input_consumed_flag = false;
-            touched_input_buffers.clear();
-            if(output_buffer::has_complete_frame())
-                flush_output_buffer();
-
-            // Loop until something comes in to the shared queue. Since logger
-            // threads do not normally signal any event (unless the queue fills
-            // up), we have to poll the queue. We use an exponential back off
-            // to not use too many CPU cycles and allow other threads to run,
-            // but we don't wait for more than one second.
-            unsigned wait_time_ms = 0;
-            while(not shared_input_queue_->pop(ce)) {
-                shared_input_consumed_event_.signal();
-                shared_input_queue_full_event_.wait(wait_time_ms);
-                wait_time_ms += std::max(1u, wait_time_ms/4u);
-                wait_time_ms = std::min(wait_time_ms, 1000u);
-
-                // If the flush above failed due to a temporary error then there
-                // may still be data lingering, so we'll need to keep trying to
-                // flush while we wait for more data.
-                if(output_buffer::has_complete_frame())
-                    flush_output_buffer();
-            }
-        }
-
-        if(not ce.pinput_buffer) {
-            // A null input-buffer pointer is the termination signal. Finish up
-            // and exit the worker thread.
-            if(unlikely(panic_flush_))
-                on_panic_flush_done();  // never returns
-            if(output_buffer::has_complete_frame()) {
-                // Can't do much if there is a flush error here since we are
-                // shutting down. The error code will be checked by close() when
-                // the worker thread finishes.
-                flush_output_buffer();
-            }
-            return;
-        }
-
-        // For this thread-local input buffer, run through all available log
-        // entries and invoke their formatter to generate data for the output
-        // buffer.
-        char* pinput_start = ce.pinput_buffer->input_start();
-        while(pinput_start != ce.pcommit_end) {
-            auto pdispatch = *reinterpret_cast<formatter_dispatch_function_t**>(pinput_start);
-            if(WRAPAROUND_MARKER == pdispatch) {
-                pinput_start = ce.pinput_buffer->wraparound();
-                pdispatch = *reinterpret_cast<formatter_dispatch_function_t**>(pinput_start);
-            }
-
-            std::size_t frame_size;
-
-            try {
-                // Call formatter.
-                frame_size = (*pdispatch)(invoke_formatter, static_cast<output_buffer*>(this), pinput_start);
-            } catch(flush_error const&) {
-                // A flush error occurs here if there was not enough space in
-                // the output buffer and it had to be flushed to make room, but
-                // the flush failed. This means that we lose the frame.
-                std::type_info const* pti;
-                frame_size = (*pdispatch)(get_typeid, &pti, nullptr);
-                output_buffer::lost_frame();
-            } catch(...) {
-                std::type_info const* pti;
-                frame_size = (*pdispatch)(get_typeid, &pti, nullptr);
-                std::lock_guard<std::mutex> lk(callback_mutex_);
-                if(format_error_callback_) {
-                    try {
-                        format_error_callback_(this, std::current_exception(),
-                                *pti);
-                    } catch(...) {
-                    }
-                }
-            }
-
-            output_buffer::frame_end();
-            pinput_start = ce.pinput_buffer->discard_input_frame(frame_size);
-
-            // Mark the originating thread's input buffer as having been
-            // accessed, i.e. if the thread is waiting for more space to become
-            // available then it should be notified once we are done processing
-            // log entries. We don't do this in panic-flush mode since it will
-            // unnecessarily risk a heap allocation.
-            if(likely(not panic_flush_)) {
-                if(not ce.pinput_buffer->input_consumed_flag) {
-                    touched_input_buffers.push_back(ce.pinput_buffer);
-                    ce.pinput_buffer->input_consumed_flag = true;
-                }
-            }
-        }
-    }
-}
-
-void basic_log::send_log_entries(detail::commit_extent const& ce)
-{
-    halt_on_panic_flush();
-    if(likely(not error_flag_.load(std::memory_order_acquire)))
-        send_log_entries_blind(ce);
-    else
-        throw writer_error(error_code_);
-}
-
-
-void basic_log::send_log_entries_blind(detail::commit_extent const& ce)
-{
-    if(likely(shared_input_queue_->push(ce)))
-        return;
-
-    do {
-        shared_input_queue_full_event_.signal();
+    while(pframe == nullptr && !error) {
+        input_buffer_full_event_.signal();
         // TODO: This wait releases *one* thread. If another thread is also
-        // waiting to push data to the shared queue and it is selected for
-        // release, then this thread will "miss" the signal and stay here
-        // waiting. However, we are guaranteed to eventually be released (modulo
-        // starvation issues) because if another thread gets the ticket then it
-        // will push an entry to the queue. When the queue gets cleared then
-        // this thread will get another shot at receiving the event.
+        // waiting to push data to the input buffer and it is selected for
+        // release, then this thread will miss the signal and stay here
+        // waiting. However, we are guaranteed to eventually be released
+        // (modulo starvation issues) because if another thread gets the ticket
+        // then it will push an entry to the queue. When the queue gets cleared
+        // then this thread will get another shot at receiving the event.
         //
         // Eventually this might be changed into an alternative event object
         // that releases all threads, but it's not clear if that will actually
@@ -338,8 +231,224 @@ void basic_log::send_log_entries_blind(detail::commit_extent const& ce)
         // simultaneously which could lead to cache-line ping pong and hurt
         // performance (but maybe queue entries could be made so they end up in
         // different cache lines?)
-        shared_input_consumed_event_.wait();
-    } while(not shared_input_queue_->push(ce));
+        input_buffer_empty_event_.wait();
+        pframe = static_cast<frame_header*>(input_buffer_.push(size));
+        error = atomic_load_acquire(&error_flag_);
+    }
+    if(!error) {
+        return pframe;
+    } else {
+        if(pframe) {
+            pframe->frame_size = size;
+            atomic_store_release(&pframe->status, frame_status::failed_error_check);
+        }
+        throw writer_error(error_code_);
+    }
+}
+
+void basic_log::output_worker()
+{
+    using namespace detail;
+
+    // This code is compiled into a static library, whereas write() is inlined
+    // and compiled in the client application's environment.
+    // We don't know if the client application defines RECKLESS_DEBUG or not,
+    // so we have to assume it does and make sure to set the worker-thread ID,
+    // lest write() will misbehave.
+#if defined(__unix__)
+    output_worker_native_handle_ = pthread_self();
+#elif defined(_WIN32)
+    output_worker_native_id_ = GetCurrentThreadId();
+#endif
+
+    set_thread_name("reckless output worker");
+
+    frame_status status = frame_status::uninitialized;
+    while(likely(status < frame_status::shutdown_marker)) {
+        auto batch_size = wait_for_input();
+        auto pbatch_start = static_cast<char*>(input_buffer_.front());
+        auto pbatch_end = pbatch_start + batch_size;
+        auto pframe = pbatch_start;
+
+        bool panic_flush = false;
+        do
+        {
+            while(pframe != pbatch_end &&
+                 likely(status < frame_status::shutdown_marker))
+            {
+                status = acquire_frame(pframe);
+
+                std::size_t frame_size;
+                if(likely(status == frame_status::initialized))
+                    frame_size = process_frame(pframe);
+                else if(status == frame_status::failed_error_check)
+                    frame_size = char_cast<frame_header*>(pframe)->frame_size;
+                else if(status == frame_status::failed_initialization)
+                    frame_size = skip_frame(pframe);
+                else if(status == frame_status::shutdown_marker)
+                    frame_size = RECKLESS_CACHE_LINE_SIZE;
+                else {
+                    assert(status == frame_status::panic_shutdown_marker);
+                    // We are in panic-flush mode and reached the shutdown marker. That
+                    // means we are done.
+                    on_panic_flush_done();  // never returns
+                }
+
+                clear_frame(pframe, frame_size);
+                pframe += frame_size;
+            }
+            assert(pframe == pbatch_end);
+
+            // Return memory to the input buffer to be used by other threads,
+            // but only if we are not in a panic-flush state.
+            // See start_panic_flush() for more information.
+            panic_flush = atomic_load_relaxed(&panic_flush_);
+            if(likely(!panic_flush)) {
+                input_buffer_.pop_release(batch_size);
+            } else {
+                // As a consequence of not returning memory to the input buffer,
+                // on the next batch iteration input_buffer_.front() is going
+                // to return exactly the same frame address that we already
+                // processed, meaning we will hang waiting for it to become
+                // initialized. So instead of continuing normally we just update
+                // the batch end to reflect the current size of the buffer
+                // (which is going to end up equal to the full capacity of the
+                // buffer), let pframe remain at its current position, and loop
+                // around until we reach the panic_shutdown_marker frame.
+                batch_size = input_buffer_.size();
+                pbatch_end = pbatch_start + batch_size;
+            }
+        } while(unlikely(panic_flush));
+    }
+
+    if(output_buffer::has_complete_frame()) {
+        // Can't do much here if there is a flush error here since we are
+        // shutting down. The error code will be checked by close() when
+        // the worker thread finishes.
+        // FIXME if the error policy is e.g. block then we may never leave here
+        // and if it's ignore then the error won't be seen. Can we change the
+        // policy during exit?
+        flush_output_buffer();
+    }
+}
+
+std::size_t basic_log::wait_for_input()
+{
+    auto size = input_buffer_.size();
+    if(likely(size != 0)) {
+        // It's not exactly *likely* that there is input in the buffer, but we
+        // want this to be a "hot path" so that we perform our best when there
+        // is a lot of load.
+        return size;
+    }
+
+    // Poll the input buffer until something comes in.
+    unsigned wait_time_ms = 0;
+    while(true) {
+        // The output buffer is flushed at least once before checking for more
+        // input. This makes sure that data gets sent to the writer immediately
+        // whenever there's a pause in incoming log messages. If this flush
+        // fails due to a temporary error then there may still be data
+        // lingering, so we need to keep trying to flush with each iteration as
+        // long as data remains in the output buffer.
+        if(output_buffer::has_complete_frame()) {
+            input_buffer_empty_event_.signal();
+            flush_output_buffer();
+            size = input_buffer_.size();
+            if(size != 0)
+                return size;
+        }
+
+        input_buffer_empty_event_.signal();
+        input_buffer_full_event_.wait(wait_time_ms);
+        size = input_buffer_.size();
+        if(size != 0)
+            return size;
+
+        wait_time_ms += std::max(1u,
+            wait_time_ms/input_buffer_poll_period_inverse_growth_factor);
+        wait_time_ms = std::min(wait_time_ms, max_input_buffer_poll_period_ms);
+    }
+}
+
+detail::frame_status basic_log::acquire_frame(void* pframe)
+{
+    using namespace detail;
+    auto pheader = static_cast<frame_header*>(pframe);
+    auto status = atomic_load_acquire(&pheader->status);
+    if(likely(status != frame_status::uninitialized))
+        return status;
+
+    // Poll the frame status until it is no longer uninitialized. We don't need
+    // to be as sophisticated as in wait_for_input and try to flush the output
+    // buffer etc, since we know another thread is just in the process of
+    // putting data in the frame. If we have to wait more than a millisecond
+    // here then something has probably gone very wrong.
+    unsigned wait_time_ms = 0;
+    while(true) {
+        input_buffer_full_event_.wait(wait_time_ms);
+        status = atomic_load_acquire(&pheader->status);
+        if(status != frame_status::uninitialized)
+            return status;
+
+        wait_time_ms += std::max(1u,
+            wait_time_ms/input_buffer_poll_period_inverse_growth_factor);
+        wait_time_ms = std::min(wait_time_ms, max_input_buffer_poll_period_ms);
+    }
+}
+
+std::size_t basic_log::process_frame(void* pframe)
+{
+    using namespace detail;
+    auto pheader = static_cast<frame_header*>(pframe);
+    auto pdispatch = pheader->pdispatch_function;
+
+    try {
+        auto frame_size = (*pdispatch)(invoke_formatter,
+                static_cast<output_buffer*>(this), pframe);
+        output_buffer::frame_end();
+        return frame_size;
+    } catch(flush_error const&) {
+        // A flush error occurs here if there was not enough space in
+        // the output buffer and it had to be flushed to make room, but
+        // the flush failed. This means that we lose the frame.
+        output_buffer::lost_frame();
+        std::type_info const* pti;
+        return (*pdispatch)(get_typeid, &pti, nullptr);
+    } catch(...) {
+        output_buffer::revert_frame();
+        std::type_info const* pti;
+        auto frame_size = (*pdispatch)(get_typeid, &pti, nullptr);
+        std::lock_guard<std::mutex> lk(callback_mutex_);
+        if(format_error_callback_) {
+            try {
+                format_error_callback_(this, std::current_exception(),
+                        *pti);
+            } catch(...) {
+            }
+        }
+        return frame_size;
+    }
+}
+
+std::size_t basic_log::skip_frame(void* pframe)
+{
+    using namespace detail;
+    auto pdispatch = static_cast<frame_header*>(pframe)->pdispatch_function;
+    std::type_info const* pti;
+    return (*pdispatch)(get_typeid, &pti, nullptr);
+}
+
+void basic_log::clear_frame(void* pframe, std::size_t frame_size)
+{
+    using namespace detail;
+    auto pcframe = static_cast<char*>(pframe);
+    for(std::size_t offset=0; offset!=frame_size;
+            offset += RECKLESS_CACHE_LINE_SIZE)
+    {
+        auto pheader = char_cast<frame_header*>(pcframe + offset);
+        atomic_store_relaxed(&pheader->status, frame_status::uninitialized);
+    }
 }
 
 void basic_log::flush_output_buffer()
@@ -353,50 +462,6 @@ void basic_log::flush_output_buffer()
         // at this point. The only time we care about flush_error is
         // when it happens during formatting of an input frame,
         // because then we need to account for a lost frame.
-    }
-}
-
-void basic_log::halt_on_panic_flush()
-{
-    if(unlikely(panic_flush_))
-    {
-        // Another visitor! Stay a while; stay forever!  When we are in panic
-        // mode because of a crash, we want to flush all the log entries that
-        // were produced before the crash, but no more than that. We could put a
-        // watermark in the queue and whatnot, but really, when there's a crash
-        // in progress we will just confound the problem if we keep trying to
-        // push stuff on the queue and muck about with the heap.  Better to just
-        // suspend anything that tries, and wait for the kill.
-        while(true)
-            sleep(3600);
-    }
-}
-
-void basic_log::reset_shared_input_queue(std::size_t node_count)
-{
-    // boost's lockfree queue has no move constructor and provides no reserve()
-    // function when you use fixed_sized policy. So we'll just explicitly
-    // destroy the current queue and create a new one with the desired size. We
-    // are guaranteed that the queue is nullopt since this is only called when
-    // opening the log.
-    assert(!shared_input_queue_);
-    shared_input_queue_.emplace(node_count);
-}
-
-detail::thread_input_buffer* basic_log::init_input_buffer()
-{
-    auto p = detail::thread_input_buffer::create(thread_input_buffer_size_);
-    try {
-        int result = pthread_setspecific(thread_input_buffer_key_, p);
-        if(likely(result == 0))
-            return p;
-        else if(result == ENOMEM)
-            throw std::bad_alloc();
-        else
-            throw std::system_error(result, std::system_category());
-    } catch(...) {
-        detail::thread_input_buffer::destroy(p);
-        throw;
     }
 }
 
@@ -414,7 +479,7 @@ void basic_log::on_panic_flush_done()
     panic_flush_done_event_.signal();
     // Sleep and wait for death.
     while(true)
-        sleep(3600);
+        std::this_thread::sleep_for(std::chrono::hours(1));
 }
 
 }   // namespace reckless

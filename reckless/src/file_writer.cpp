@@ -20,16 +20,26 @@
  * SOFTWARE.
  */
 #include "reckless/file_writer.hpp"
-#include "posix_error_category.hpp"
 
 #include <system_error>
+#include <cassert>
+#include <limits>   // numeric_limits
 
+#if defined(__unix__)
 #include <sys/stat.h>   // open
 #include <sys/types.h>  // open, lseek
 #include <fcntl.h>      // open
 #include <errno.h>      // errno
 #include <unistd.h>     // lseek, close
 
+#elif defined(_WIN32)
+
+#define NOMINMAX
+#include <Windows.h>
+
+#endif
+
+#if defined(__unix__)
 namespace {
 int open_file(char const* path)
 {
@@ -42,6 +52,12 @@ int open_file(char const* path)
         throw std::system_error(errno, std::system_category());
     return fd;
 }
+
+}
+
+reckless::file_writer::file_writer(char const* path) :
+    fd_writer(open_file(path))
+{
 }
 
 reckless::file_writer::~file_writer()
@@ -54,7 +70,43 @@ reckless::file_writer::~file_writer()
     }
 }
 
+#elif defined(_WIN32)
+namespace {
+    template <class F, typename T>
+    HANDLE createfile_generic(F CreateFileX, T const* path)
+    {
+        // From NtCreateFile documentation:
+        // (https://msdn.microsoft.com/en-us/library/bb432380.aspx)
+        // If only the FILE_APPEND_DATA and SYNCHRONIZE flags are set, the caller
+        // can write only to the end of the file, and any offset information on
+        // writes to the file is ignored. However, the file is automatically
+        // extended as necessary for this type of write operation.
+        // TODO what happens if the user deletes the file while we are writing?
+        HANDLE h = CreateFileX(path,
+            FILE_APPEND_DATA | SYNCHRONIZE,
+            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+            NULL,
+            OPEN_ALWAYS,
+            FILE_ATTRIBUTE_NORMAL,
+            NULL);
+        if(h == INVALID_HANDLE_VALUE)
+            throw std::system_error(GetLastError(), std::system_category());
+        return h;
+    }
+}
 reckless::file_writer::file_writer(char const* path) :
-    fd_writer(open_file(path))
+    fd_writer(createfile_generic(CreateFileA, path))
 {
 }
+
+reckless::file_writer::file_writer(wchar_t const* path) :
+    fd_writer(createfile_generic(CreateFileW, path))
+{
+}
+
+reckless::file_writer::~file_writer()
+{
+    CloseHandle(handle_);
+}
+
+#endif

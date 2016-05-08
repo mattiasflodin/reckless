@@ -23,6 +23,21 @@
 #include <cstdint>
 #include <cstring>
 
+#if defined(_MSC_VER)
+#    if defined(_M_IX86) || defined(_M_X64)
+extern "C" {
+    void __cpuid(int[4], int);
+    unsigned __int64 __rdtsc();
+    unsigned __int64 __rdtscp(unsigned int *);
+}
+#        pragma intrinsic(__cpuid)
+#        pragma intrinsic(__rdtsc)
+#        pragma intrinsic(__rdtscp)
+#    else
+static_assert(false, "Only x86/x64 support is implemented for this compiler");
+#    endif
+#endif
+
 namespace performance_log {
 namespace detail {
     void lock_memory(void const* addr, std::size_t len);
@@ -104,25 +119,41 @@ performance_log::logger<LogSize, ClockSource, Sample>::~logger()
 
 inline auto performance_log::rdtscp_cpuid_clock::start() const -> timestamp
 {
+#if defined(__GNUC__)
     std::uint64_t t_high;
     std::uint64_t t_low;
     std::uint64_t b, c;
     asm volatile(
-            "cpuid\n\t"
-            "rdtsc\n\t"
-            : "=a"(t_low), "=b"(b), "=c"(c), "=d"(t_high));
-
+        "cpuid\n\t"
+        "rdtsc\n\t"
+        : "=a"(t_low), "=b"(b), "=c"(c), "=d"(t_high));
     return (t_high << 32) | static_cast<std::uint32_t>(t_low);
+#elif defined(_MSC_VER)
+    int cpuinfo[4];
+    __cpuid(cpuinfo, 0);
+    return __rdtsc();
+#else
+    static_assert(false, "rdtscp_cpuid_clock::start() is not implemented for this compiler");
+#endif
 }
 
 inline auto performance_log::rdtscp_cpuid_clock::stop() const -> timestamp
 {
+#if defined(__GNUC__)
     std::uint64_t t_high;
     std::uint64_t t_low;
     std::uint64_t aux;
     asm volatile("rdtscp\n\t" : "=a"(t_low), "=c"(aux), "=d"(t_high));
     std::uint64_t a, b, c, d;
     asm volatile("cpuid\n\t" : "=a"(a), "=b"(b), "=c"(c), "=d"(d));
-
     return (t_high << 32) | static_cast<std::uint32_t>(t_low);
+#elif defined(_MSC_VER)
+    unsigned int aux;
+    auto tsc = __rdtscp(&aux);
+    int cpuinfo[4];
+    __cpuid(cpuinfo, 0);
+    return tsc;
+#else
+    static_assert(false, "rdtscp_cpuid_clock::stop() is not implemented for this compiler");
+#endif
 }

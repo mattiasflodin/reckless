@@ -19,29 +19,48 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-#ifndef RECKLESS_DETAIL_BRANCH_HINTS_HPP
-#define RECKLESS_DETAIL_BRANCH_HINTS_HPP
+
+#include <reckless/basic_log.hpp>
+#include <reckless/crash_handler.hpp>
+
+#include <cassert>
+#include <vector>
+
+#include <Windows.h>
+#include <TlHelp32.h>
+
 namespace reckless {
-namespace detail {
 
-inline bool likely(bool expr) {
-#ifdef __GNUC__
-    return __builtin_expect(expr, true);
-#else
-    return expr;
-#endif
-}
+namespace {
+std::vector<basic_log*> g_logs;
+LPTOP_LEVEL_EXCEPTION_FILTER g_old_exception_filter = nullptr;
 
-inline bool unlikely(bool expr)
+
+}   // anonymous namespace
+
+LONG WINAPI exception_filter(_EXCEPTION_POINTERS *ExceptionInfo)
 {
-#ifdef __GNUC__
-    return __builtin_expect(expr, false);
-#else
-    return expr;
-#endif
+    for(basic_log* plog : g_logs)
+        plog->start_panic_flush();
+    for(basic_log* plog : g_logs)
+        plog->await_panic_flush();
+    return EXCEPTION_CONTINUE_SEARCH;
+}
+void install_crash_handler(std::initializer_list<basic_log*> logs)
+{
+    assert(logs.size() != 0);
+    assert(g_logs.empty());
+    g_logs.assign(begin(logs), end(logs));
+
+    g_old_exception_filter = SetUnhandledExceptionFilter(&exception_filter);
 }
 
-}
+void uninstall_crash_handler()
+{
+    assert(!g_logs.empty());
+    SetUnhandledExceptionFilter(g_old_exception_filter);
+    g_old_exception_filter = nullptr;
+    g_logs.clear();
 }
 
-#endif  // RECKLESS_DETAIL_BRANCH_HINTS_HPP
+}   // namespace reckless

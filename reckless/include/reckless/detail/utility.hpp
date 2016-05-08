@@ -24,13 +24,46 @@
 
 #include <cstddef>  // size_t
 #include <cstdint>  // uintptr_t
+#include <type_traits>  // enable_if, is_pointer, remove_pointer
 
 namespace reckless {
 namespace detail {
 
-extern unsigned const cache_line_size;
-std::size_t get_page_size() __attribute__ ((const));
-void prefetch(void const* ptr, std::size_t size);
+template <class Pointer, class Type>
+struct replace_pointer_type;
+
+template <class From, class To>
+struct replace_pointer_type<From*, To>
+{
+    using type = To*;
+};
+
+template <class From, class To>
+struct replace_pointer_type<From const*, To>
+{
+    using type = To const*;
+};
+
+template <class T>
+T char_cast(char* p)
+{
+    return static_cast<T>(static_cast<void*>(p));
+}
+
+template <class T>
+T char_cast(char const* p)
+{
+    return static_cast<T>(static_cast<void*>(p));
+}
+
+template <class T>
+typename replace_pointer_type<T, char>::type
+char_cast(T p)
+{
+    using void_ptr_t = typename replace_pointer_type<T, void>::type;
+    using char_ptr_t = typename replace_pointer_type<T, char>::type;
+    return static_cast<char_ptr_t>(static_cast<void_ptr_t>(p));
+}
 
 inline constexpr bool is_power_of_two(std::size_t v)
 {
@@ -48,7 +81,6 @@ struct make_index_sequence_helper
     typedef typename make_index_sequence_helper<Pos+1, N, Seq..., Pos>::type type;
 };
 
-
 template <std::size_t N, std::size_t... Seq>
 struct make_index_sequence_helper<N, N, Seq...>
 {
@@ -60,12 +92,6 @@ struct make_index_sequence
 {
     typedef typename make_index_sequence_helper<0, N>::type type;
 };
-
-void unreachable() __attribute__((noreturn));
-inline void unreachable()
-{
-    __builtin_trap();
-}
 
 }
 }

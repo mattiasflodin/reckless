@@ -87,9 +87,9 @@ def reset():
     subprocess.call('sync')
     
 def run_test(lib, test, threads = None):
-    binary_name = lib + '_' + test
+    binary_name = test + '-' + lib
     if threads is not None:
-        binary_name += '_' + str(threads)
+        binary_name += '-' + str(threads)
         
     def run(out_file):
         try:

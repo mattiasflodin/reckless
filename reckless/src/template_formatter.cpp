@@ -132,7 +132,7 @@ namespace {
         if(f != 'f')
             return nullptr;
         
-        ftoa_base10_f(pbuffer, v, cs);
+        ftoa_base10_f(pbuffer, static_cast<double>(v), cs);
         return pformat + 1;
     }
 
@@ -291,10 +291,12 @@ void template_formatter::append_percent(output_buffer* pbuffer)
 char const* template_formatter::next_specifier(output_buffer* pbuffer,
         char const* pformat)
 {
-#ifdef _GNU_SOURCE
     while(true) {
-        char const* pspecifier = strchrnul(pformat, '%');
-        
+        char const* pspecifier = pformat;
+        char c = *pspecifier;
+        while(c != '%' && c != '\0')
+            c = *(++pspecifier);
+
         auto len = pspecifier - pformat;
         auto p = pbuffer->reserve(len);
         std::memcpy(p, pformat, len);
@@ -311,9 +313,6 @@ char const* template_formatter::next_specifier(output_buffer* pbuffer,
         ++pformat;
         append_percent(pbuffer);
     }
-#else
-    static_assert(false, "need replacement for strchrnul");
-#endif
 }
 
 void template_formatter::format(output_buffer* pbuffer, char const* pformat)

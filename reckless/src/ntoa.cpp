@@ -28,7 +28,7 @@
 #include <type_traits>  // is_unsigned
 #include <cassert>
 #include <cstring>      // memset
-#include <cmath>        // lrint, llrint
+#include <cmath>        // lrint, llrint, frexp
 
 namespace reckless {
 namespace {
@@ -103,9 +103,9 @@ utoa_generic_base10_preallocated(char* str, unsigned pos, Unsigned value)
     }
     if(value < 10) {
         --pos;
-        str[pos] = '0' + unsigned_cast(value);
+        str[pos] = '0' + static_cast<char>(unsigned_cast(value));
     } else {
-        std::size_t offset = 2*value;
+        std::size_t offset = static_cast<std::size_t>(2*value);
         char d1 = decimal_digits[offset];
         char d2 = decimal_digits[offset+1];
         pos -= 2;
@@ -132,7 +132,7 @@ utoa_generic_base10_preallocated(char* str, unsigned pos, Unsigned value, unsign
     }
     if(digits == 1) {
         --pos;
-        str[pos] = '0' + unsigned_cast(value % 10);
+        str[pos] = '0' + static_cast<char>(unsigned_cast(value % 10));
         value /= 10;
     }
     return value;
@@ -472,7 +472,7 @@ void itoa_generic_base16(output_buffer* pbuffer, bool negative, Unsigned value, 
     unsigned digits = 0;
     unsigned prefix = 0;
     if(value != 0) {
-        digits = log16(value) + 1;
+        digits = static_cast<unsigned>(log16(value) + 1);
         if(cs.alternative_form)
             prefix = 2;
     }
@@ -536,6 +536,7 @@ itoa_generic_base16(output_buffer* pbuffer, Integer value, conversion_specificat
     itoa_generic_base16(pbuffer, false, value, cs);
 }
 
+#if defined(__GNUC__)
 template <typename Float>
 Float fxtract(Float v, Float* exp)
 {
@@ -543,6 +544,43 @@ Float fxtract(Float v, Float* exp)
     asm("fxtract" : "=t"(significand), "=u"(*exp) : "0"(v));
     return significand;
 }
+#elif defined(_MSC_VER)
+
+double fxtract(long double v, long double* exp)
+{
+    // So here's what you might think we can do.
+    //  long double significand;
+    //  long double exp;
+    //  __asm {
+    //      fld [v]
+    //      fxtract
+    //      fstp [exp]
+    //      fstp [significand]
+    //  }
+    //
+    // But MSVC does not support inline asm on x64, and don't have fxtract as
+    // an intrinsic, so we're kinda screwed. Additionally, they decided they
+    // don't need no 80-bit long double any longer, so we're even more screwed.
+    // I'm not sure how they expect anyone to be able to do this kind of stuff
+    // with the same quality and speed as e.g. gcc, but... their call. Instead
+    // we'll just extract the bits from the in-memory representation.
+
+    int iexp;
+    auto significand = std::frexp(v, &iexp);
+    *exp = iexp - 1;
+    return static_cast<double>(2*significand);
+
+    //std::uint16_t const* pv = reinterpret_cast<std::uint16_t const*>(&v);
+    //// Highest 16 bits is seeeeeee eeeemmmm. We want the e part which is the
+    //// exponent.
+    //unsigned exponent = pv[3];
+    //exponent = (exponent >> 4) & 0x7ff;
+    //*exp = static_cast<int>(exponent) - 1023;
+}
+
+#else
+static_assert(false, "fxtract is not implemented for this compiler")
+#endif
 
 template <typename Float>
 inline std::uint_fast64_t u64_rint(Float value)
@@ -645,7 +683,7 @@ std::uint64_t rounded_rshift(bool sign, std::uint64_t value, unsigned digits)
     return rounded_divide(sign, value, power_lut[digits]);
 }
 
-unsigned count_trailing_zeroes(decimal18 const& dv, std::uint64_t truncated_digits)
+unsigned count_trailing_zeroes(decimal18 const& dv, unsigned truncated_digits)
 {
     std::uint64_t mantissa = rounded_rshift(dv.sign, dv.mantissa, truncated_digits);
     unsigned low = 0;

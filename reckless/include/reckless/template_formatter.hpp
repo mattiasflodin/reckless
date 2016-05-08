@@ -44,7 +44,7 @@ public:
             T&& value, Args&&... args)
     {
         pformat = next_specifier(pbuffer, pformat);
-        if(not pformat)
+        if(!pformat)
             return;
 
         char const* pnext_format = detail::invoke_custom_format(pbuffer,

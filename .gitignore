@@ -1,0 +1,12 @@
+*.o
+*.obj
+*.exe
+*.lib
+
+.tup
+
+.vs
+*.VC.db
+*.VC.opendb
+*.vcxproj.user
+/build

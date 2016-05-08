@@ -1,0 +1,99 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="src">
+      <UniqueIdentifier>{5ca5ad7b-c8c1-4ab1-b9ee-940ec0918c44}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="include/reckless">
+      <UniqueIdentifier>{44ffc4b6-2345-42e3-88e2-04ccd847f89c}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="include/reckless\detail">
+      <UniqueIdentifier>{f8e60ad4-e28f-40d4-9172-19b37acada3c}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="src\unit_test.hpp">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="include\reckless\basic_log.hpp">
+      <Filter>include/reckless</Filter>
+    </ClInclude>
+    <ClInclude Include="include\reckless\crash_handler.hpp">
+      <Filter>include/reckless</Filter>
+    </ClInclude>
+    <ClInclude Include="include\reckless\file_writer.hpp">
+      <Filter>include/reckless</Filter>
+    </ClInclude>
+    <ClInclude Include="include\reckless\ntoa.hpp">
+      <Filter>include/reckless</Filter>
+    </ClInclude>
+    <ClInclude Include="include\reckless\output_buffer.hpp">
+      <Filter>include/reckless</Filter>
+    </ClInclude>
+    <ClInclude Include="include\reckless\policy_log.hpp">
+      <Filter>include/reckless</Filter>
+    </ClInclude>
+    <ClInclude Include="include\reckless\severity_log.hpp">
+      <Filter>include/reckless</Filter>
+    </ClInclude>
+    <ClInclude Include="include\reckless\template_formatter.hpp">
+      <Filter>include/reckless</Filter>
+    </ClInclude>
+    <ClInclude Include="include\reckless\writer.hpp">
+      <Filter>include/reckless</Filter>
+    </ClInclude>
+    <ClInclude Include="include\reckless\detail\mpsc_ring_buffer.hpp">
+      <Filter>include/reckless\detail</Filter>
+    </ClInclude>
+    <ClInclude Include="include\reckless\detail\platform.hpp">
+      <Filter>include/reckless\detail</Filter>
+    </ClInclude>
+    <ClInclude Include="include\reckless\detail\spsc_event.hpp">
+      <Filter>include/reckless\detail</Filter>
+    </ClInclude>
+    <ClInclude Include="include\reckless\detail\utility.hpp">
+      <Filter>include/reckless\detail</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="src\basic_log.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\crash_handler_unix.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\crash_handler_win32.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\file_writer.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\mpsc_ring_buffer.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\ntoa.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\output_buffer.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\platform.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\policy_log.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\spsc_event_win32.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\template_formatter.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\writer.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\fd_writer.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+  </ItemGroup>
+</Project>

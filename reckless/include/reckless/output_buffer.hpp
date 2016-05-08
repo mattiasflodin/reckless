@@ -22,7 +22,7 @@
 #ifndef RECKLESS_OUTPUT_BUFFER_HPP
 #define RECKLESS_OUTPUT_BUFFER_HPP
 
-#include "detail/branch_hints.hpp"
+#include "detail/platform.hpp"  // likely
 #include "detail/spsc_event.hpp"
 
 #include <cstddef>  // size_t
@@ -134,6 +134,11 @@ protected:
     void lost_frame()
     {
         ++lost_input_frames_;
+        revert_frame();
+    }
+
+    void revert_frame()
+    {
         // Undo everything that has been written during the current input frame.
         pcommit_end_ = pframe_end_;
     }
@@ -183,13 +188,13 @@ protected:
         permanent_error_policy_.store(ep, std::memory_order_relaxed);
     }
 
-    spsc_event shared_input_queue_full_event_; // FIXME rename to something that indicates this is used for all "notifications" to the worker thread
+    detail::spsc_event shared_input_queue_full_event_; // FIXME rename to something that indicates this is used for all "notifications" to the worker thread
 
     std::atomic<error_policy> temporary_error_policy_{error_policy::ignore};
     std::atomic<error_policy> permanent_error_policy_{error_policy::fail_immediately};
     std::error_code error_code_;    // error code for error state
-    std::atomic_bool error_flag_{false};   // error state
-    std::atomic_bool panic_flush_{false};
+    bool error_flag_ = false;   // error state
+    bool panic_flush_ = false;
 
 private:
     output_buffer(output_buffer const&) = delete;

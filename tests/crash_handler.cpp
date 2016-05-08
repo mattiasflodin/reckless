@@ -23,6 +23,8 @@
 #include <reckless/file_writer.hpp>
 #include <reckless/crash_handler.hpp>
 
+#include <thread>
+
 reckless::policy_log<> g_log;
 
 int main()
@@ -30,6 +32,7 @@ int main()
     reckless::scoped_crash_handler crash_handler({&g_log});
     reckless::file_writer writer("log.txt");
     g_log.open(&writer);
+    std::this_thread::sleep_for(std::chrono::seconds(2));
     g_log.write("Hello World!");
     char* p = nullptr;
     *p = 0;

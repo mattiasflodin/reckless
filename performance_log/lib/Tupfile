@@ -1,2 +1,0 @@
-include_rules
-: ../src/*.o |> !ar |> libperformance_log.a

@@ -26,14 +26,32 @@
 
 namespace reckless {
 
+#if defined(_WIN32)
+namespace detail {
+    unsigned long const RECKLESS_STD_OUTPUT_HANDLE = static_cast<unsigned long>(-11);
+    unsigned long const RECKLESS_STD_ERROR_HANDLE = static_cast<unsigned long>(-12);
+    extern "C" {
+        void* __stdcall GetStdHandle(unsigned long nStdHandle);
+    }
+}   // namespace detail
+#endif
+
 class stdout_writer : public detail::fd_writer {
 public:
+#if defined(__unix__)
     stdout_writer() : fd_writer(1) { }
+#elif defined(_WIN32)
+    stdout_writer() : fd_writer(detail::GetStdHandle(detail::RECKLESS_STD_OUTPUT_HANDLE)) { }
+#endif
 };
 
 class stderr_writer : public detail::fd_writer {
 public:
+#if defined(__unix__)
     stderr_writer() : fd_writer(2) { }
+#elif defined(_WIN32)
+    stderr_writer() : fd_writer(detail::GetStdHandle(detail::RECKLESS_STD_ERROR_HANDLE)) { }
+#endif
 };
 
 }   // namespace reckless

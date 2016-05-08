@@ -24,12 +24,18 @@
 #include <atomic>
 #include <system_error>
 
+#if defined(__linux__)
 #include <linux/futex.h>
 #include <unistd.h>
 #include <sys/syscall.h>
 #include <time.h>
 #include <sys/time.h>
 
+namespace reckless {
+namespace detail {
+// TODO what makes this single-producer single-consumer? We aren't using it
+// that way, since multiple threads are both waiting and signaling, so it
+// should really be mpmc_event.
 class spsc_event {
 public:
     spsc_event() : signal_(0)
@@ -95,6 +101,7 @@ private:
 
     int atomic_exchange_explicit(int* pvalue, int new_value, std::memory_order)
     {
+        // FIXME this can be replaced with __atomic builtins.
         int res = new_value;
         asm volatile("xchg %0, %1\n\t"
                 : "+r"(res), "+m"(*pvalue)
@@ -105,5 +112,55 @@ private:
 
     int signal_;
 };
+
+#elif defined(_WIN32)
+#if !defined(_MSC_VER)
+static_assert(false, "spsc_event is not implemented for Windows on this compiler")
+#endif
+
+#include <cassert>
+
+namespace reckless {
+namespace detail {
+
+extern "C" {
+    unsigned long __stdcall WaitForSingleObject(void* hHandle, unsigned long dwMilliseconds);
+    int __stdcall SetEvent(void* hEvent);
+}
+
+class spsc_event {
+public:
+    spsc_event();
+    ~spsc_event();
+    void signal()
+    {
+        SetEvent(handle_);
+    }
+
+    void wait()
+    {
+        bool success = wait(0xFFFFFFFF);    // INFINITE
+        (void)success;
+        assert(success);
+    }
+
+    bool wait(unsigned milliseconds)
+    {
+        auto result = WaitForSingleObject(handle_, milliseconds);
+        assert(result == 0 || result == 0x102L);    // WAIT_OBJECT_0 || WAIT_TIMEOUT
+        return result == 0;
+    }
+
+private:
+    void* handle_;
+};
+
+#else
+static_assert(false, "spsc_event is not implemented for this OS")
+
+#endif
+
+}   // namespace detail
+}   // namespace reckless
 
 #endif // RECKLESS_DETAIL_SPSC_EVENT_HPP
