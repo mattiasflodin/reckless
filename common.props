@@ -1,0 +1,65 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ImportGroup Label="PropertySheets" />
+  <PropertyGroup Label="UserMacros">
+    <BuildConfiguration>$(PlatformShortName)-$(Configuration.ToLower())</BuildConfiguration>
+    <LibRecklessBuildConfiguration Condition="$(Configuration.Contains(`Debug`))">$(PlatformShortName)-debug</LibRecklessBuildConfiguration>
+    <LibRecklessBuildConfiguration Condition="$(Configuration.Contains(`Release`))">$(PlatformShortName)-release</LibRecklessBuildConfiguration>
+    <BuildDir>$(SolutionDir)build\$(BuildConfiguration)\</BuildDir>
+    <BuildSubDir>$(ProjectDir.SubString($(SolutionDir.Length)))</BuildSubDir>
+    <RecklessLibDir>$(SolutionDir)build\$(LibRecklessBuildConfiguration)\lib</RecklessLibDir>
+  </PropertyGroup>
+  <PropertyGroup>
+    <OutDir Condition="'$(OutputType)' == 'exe'">$(BuildDir)$(BuildSubDir)\</OutDir>
+    <OutDir Condition="'$(OutputType)' == 'staticlibrary'">$(BuildDir)lib\</OutDir>
+    <IntDir>$(BuildDir)obj\$(BuildSubDir)$(ProjectFileName)\</IntDir>
+    <IncludePath>$(SolutionDir)reckless\include;$(SolutionDir)performance_log\include\;$(IncludePath)</IncludePath>
+    <LibraryPath>$(RecklessLibDir);$(LibraryPath)</LibraryPath>
+  </PropertyGroup>
+  <PropertyGroup Condition="$(Configuration.Contains(`Debug`))" Label="Configuration">
+    <UseDebugLibraries>true</UseDebugLibraries>
+  </PropertyGroup>
+  <PropertyGroup Condition="$(Configuration.Contains(`Release`))" Label="Configuration">
+    <UseDebugLibraries>false</UseDebugLibraries>
+  </PropertyGroup>
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS</PreprocessorDefinitions>
+    </ClCompile>
+    <ProjectReference>
+      <LinkLibraryDependencies>false</LinkLibraryDependencies>
+    </ProjectReference>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="$(Configuration.Contains(`Debug`))">
+    <ClCompile>
+      <WarningLevel>Level4</WarningLevel>
+      <Optimization>Disabled</Optimization>
+      <SDLCheck>true</SDLCheck>
+      <TreatWarningAsError>true</TreatWarningAsError>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="$(Configuration.Contains(`Release`))">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>MaxSpeed</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>true</SDLCheck>
+    </ClCompile>
+    <Link>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <BuildMacro Include="BuildConfiguration">
+      <Value>$(BuildConfiguration)</Value>
+    </BuildMacro>
+    <BuildMacro Include="BuildDir">
+      <Value>$(BuildDir)</Value>
+    </BuildMacro>
+    <BuildMacro Include="BuildSubDir">
+      <Value>$(BuildSubDir)</Value>
+    </BuildMacro>
+  </ItemGroup>
+</Project>

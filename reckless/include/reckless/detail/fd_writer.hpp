@@ -29,15 +29,22 @@ namespace detail {
 
 class fd_writer : public writer {
 public:
+#if defined(__unix__)
     fd_writer(int fd) : fd_(fd) {}
+#elif defined(_WIN32)
+    fd_writer(void* handle) : handle_(handle) {}
+#endif
+
     std::size_t write(void const* pbuffer, std::size_t count, std::error_code& ec) noexcept override;
 
-protected:
+#if defined(__unix__)
     int fd_;
+#elif defined(_WIN32)
+    void* handle_;
+#endif
 };
 
 }   // namespace detail
 }   // namespace reckless
 
 #endif  // RECKLESS_FD_WRITER_HPP
-

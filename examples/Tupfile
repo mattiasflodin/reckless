@@ -1,5 +1,0 @@
-include_rules
-CXXFLAGS += -isystem $(BOOST_INCLUDE) -I$(RECKLESS_INCLUDE)
-LDFLAGS += -L$(RECKLESS_LIB) -lreckless
-: foreach *.cpp |> !cxx |>
-: foreach *.o | $(RECKLESS_LIB)/libreckless.a |> !ld |> %B

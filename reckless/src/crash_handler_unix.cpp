@@ -24,6 +24,7 @@
 
 #include <cstring>  // memset
 #include <vector>
+#include <algorithm>    // sort, unique
 #include <system_error>
 #include <cassert>
 #include <errno.h>
@@ -50,17 +51,17 @@ std::vector<std::pair<int, struct sigaction>> g_old_sigactions;
 void signal_handler(int)
 {
     for(basic_log* plog : g_logs)
-    {
-        plog->panic_flush();
-    }
+        plog->start_panic_flush();
+    for(basic_log* plog : g_logs)
+        plog->await_panic_flush();
 }
 }   // anonymous namespace
 
-void install_crash_handler(std::initializer_list<basic_log*> log)
+void install_crash_handler(std::initializer_list<basic_log*> logs)
 {
-    assert(log.size() != 0);
+    assert(logs.size() != 0);
     assert(g_logs.empty());
-    g_logs.assign(begin(log), end(log));
+    g_logs.assign(begin(logs), end(logs));
 
     struct sigaction act;
     std::memset(&act, 0, sizeof(act));

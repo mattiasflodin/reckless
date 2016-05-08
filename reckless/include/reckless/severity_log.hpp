@@ -57,20 +57,7 @@ namespace detail {
 template <class IndentPolicy, char FieldSeparator, class... HeaderFields>
 class severity_log : public basic_log {
 public:
-    severity_log()
-    {
-    }
-
-    severity_log(writer* pwriter,
-            std::size_t output_buffer_max_capacity = 0,
-            std::size_t shared_input_queue_size = 0,
-            std::size_t thread_input_buffer_size = 0) :
-        basic_log(pwriter,
-                 output_buffer_max_capacity,
-                 shared_input_queue_size,
-                 thread_input_buffer_size)
-    {
-    }
+    using basic_log::basic_log;
 
     template <typename... Args>
     void debug(char const* fmt, Args&&... args)

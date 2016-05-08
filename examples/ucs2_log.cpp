@@ -25,7 +25,8 @@
 
 class ucs2_log : public reckless::basic_log {
 public:
-    ucs2_log(reckless::writer* pwriter) : basic_log(pwriter) {}
+    using basic_log::basic_log;
+
     void puts(std::wstring const& s)
     {
         basic_log::write<ucs2_formatter>(s);

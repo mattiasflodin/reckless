@@ -21,4 +21,4 @@
  */
 #include <reckless/policy_log.hpp>
 
-__thread unsigned reckless::scoped_indent::level_ = 0;
+RECKLESS_TLS unsigned reckless::scoped_indent::level_ = 0;

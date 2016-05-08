@@ -1,3 +1,8 @@
 * text eol=lf
 *.jpeg -text
 *.png -text
+
+*.sln eol=crlf
+*.vcxproj eol=crlf
+*.vcxproj.filters eol=crlf
+*.props eol=crlf

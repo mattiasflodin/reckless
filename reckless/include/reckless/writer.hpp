@@ -29,7 +29,7 @@
 
 namespace reckless {
 
-// TODO this is a bit vague, rename to e.g. log_target or someting?
+// TODO this is a bit vague, rename to e.g. log_target or something?
 class writer {
 public:
     enum errc

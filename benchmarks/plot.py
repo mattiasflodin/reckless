@@ -195,7 +195,7 @@ def plot(libs, tests, threads_list, window, top, iterations, plot_filename, widt
         if window is None:
             window = 1 #get_default_window(test)
         if window != 1:
-            data = gaussian_average(window, data);
+            data = gaussian_average(window, data)
         if iterations is not None and iterations<len(data):
             data = data[:iterations]
         ax.plot(data, '-', label=name, color=color, linewidth=1)
@@ -211,12 +211,12 @@ def plot(libs, tests, threads_list, window, top, iterations, plot_filename, widt
             if test in THREADED_TESTS:
                 for threads in threads_list:
                     name = base_name[:]
-                    filename = "results/%s_%s_%d.txt" % (lib, test, threads)
+                    filename = "results/%s-%s-%d.txt" % (test, lib, threads)
                     if len(threads_list)>1:
                         name.append("%d threads" % threads)
                     single_plot(filename, test, ', '.join(name), window, color)
             else:
-                filename = "results/%s_%s.txt" % (lib, test)
+                filename = "results/%s-%s.txt" % (test, lib)
                 single_plot(filename, test, ', '.join(base_name), window, color)
 
     if top is not None:

@@ -20,11 +20,13 @@
  * SOFTWARE.
  */
 #include "memory_writer.hpp"
+#include "eol.hpp"
 #include <reckless/policy_log.hpp>
 
 #include <vector>
 #include <cassert>
 #include <stdexcept>
+#include <thread>   // sleep_for
 
 #include <iostream>
 
@@ -52,17 +54,18 @@ char const* format(reckless::output_buffer* poutput, char const* fmt, Object)
 int main()
 {
     g_log.open(&g_writer);
-    g_log.write("Hello");
+    g_log.write("First");
     Object object;
     try {
         g_log.write("%s", object);
     } catch(std::runtime_error const&) {
+        g_log.write("Second");
     }
-    sleep(3);
-    g_log.write("World!");
+    std::this_thread::sleep_for(std::chrono::seconds(3));
+    g_log.write("Third");
     g_log.close();
     std::cout << g_writer.container;
-    assert(g_writer.container == "Hello\nWorld!\n");
-    
+    assert(g_writer.container == eol("First\nSecond\nThird\n"));
+
     return 0;
 }
