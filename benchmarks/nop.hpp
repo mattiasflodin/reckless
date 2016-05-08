@@ -1,5 +1,5 @@
 #define LOG_INIT()
-    
+
 #define LOG_CLEANUP()
 
 #define LOG( c, i, f )

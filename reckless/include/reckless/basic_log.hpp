@@ -33,16 +33,16 @@ public:
     basic_log();
     // FIXME shared_input_queue_size seems like the least interesting of these
     // and should be moved to the end.
-    basic_log(writer* pwriter, 
+    basic_log(writer* pwriter,
             std::size_t output_buffer_max_capacity = 0,
             std::size_t shared_input_queue_size = 0,
             std::size_t thread_input_buffer_size = 0);
     virtual ~basic_log();
-    
+
     basic_log(basic_log const&) = delete;
     basic_log& operator=(basic_log const&) = delete;
 
-    virtual void open(writer* pwriter, 
+    virtual void open(writer* pwriter,
             std::size_t output_buffer_max_capacity = 0,
             std::size_t shared_input_queue_size = 0,
             std::size_t thread_input_buffer_size = 0);
@@ -148,7 +148,7 @@ private:
 
     //typedef detail::thread_object<detail::thread_input_buffer, std::size_t, std::size_t> thread_input_buffer_t;
     //thread_input_buffer_t pthread_input_buffer_;
-    
+
     std::experimental::optional<shared_input_queue_t> shared_input_queue_;
     spsc_event shared_input_queue_full_event_;
     spsc_event shared_input_consumed_event_;

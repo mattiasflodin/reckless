@@ -12,7 +12,7 @@ extern FILE* g_log;
 
 #define LOG_INIT() \
     g_log = std::fopen("log.txt", "w")
-    
+
 #define LOG_CLEANUP() \
     std::fclose(g_log)
 

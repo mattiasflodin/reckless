@@ -4,7 +4,7 @@
 #include <reckless/writer.hpp>
 
 namespace reckless {
-    
+
 class file_writer : public writer {
 public:
     file_writer(char const* path);

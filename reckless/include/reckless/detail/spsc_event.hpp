@@ -54,11 +54,11 @@ public:
             signal = atomic_exchange_explicit(&signal_, 0, std::memory_order_acquire);
             if(signal)
                 return true;
-            
+
             struct timespec now;
             if(0 != clock_gettime(CLOCK_MONOTONIC, &now))
                 throw std::system_error(errno, std::system_category());
-            
+
             elapsed_ms = 1000*static_cast<int>(now.tv_sec - start.tv_sec);
             elapsed_ms += (now.tv_nsec - start.tv_nsec)/1000000;
         } while(elapsed_ms < milliseconds);

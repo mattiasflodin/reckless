@@ -11,7 +11,7 @@ extern std::ofstream g_log;
 
 #define LOG_INIT() \
     g_log.open("log.txt")
-    
+
 #define LOG_CLEANUP() \
     g_log.close()
 

@@ -5,7 +5,7 @@
 #include <limits>
 
 namespace reckless {
-    
+
 unsigned const UNSPECIFIED_PRECISION = std::numeric_limits<unsigned>::max();
 // TODO It probably doesn't hurt to document these members even though they're
 // in the printf docs. Also, would be nice to reduce footprint e.g. with a

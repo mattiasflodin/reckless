@@ -38,7 +38,7 @@ private:
             return reckless::writer::permanent_failure;
     }
 };
-    
+
 inline error_category const& get_error_category()
 {
     static error_category cat;

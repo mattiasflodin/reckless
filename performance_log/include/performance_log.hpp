@@ -62,7 +62,7 @@ public:
     }
 
 private:
-    sample _samples[LogSize]; 
+    sample _samples[LogSize];
     std::size_t _next_sample_position;
 };
 }

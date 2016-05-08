@@ -84,9 +84,9 @@ public:
     {
         pcommit_end_ += size;
     }
-    
+
     void write(void const* buf, std::size_t count);
-    
+
     void write(char const* s)
     {
         write(s, std::strlen(s));
@@ -98,7 +98,7 @@ public:
         *p = c;
         commit(1);
     }
-    
+
 protected:
     void reset() noexcept;
     // throw bad_alloc if unable to malloc() the buffer.

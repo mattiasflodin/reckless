@@ -16,7 +16,7 @@ extern std::shared_ptr<spdlog::logger> g_logger;
 #define LOG_INIT() \
     spdlog::set_async_mode(128); \
     g_logger = spdlog::create<spdlog::sinks::simple_file_sink_st>("log", "log.txt", true)
-    
+
 #define LOG_CLEANUP() \
     g_logger.reset()
 

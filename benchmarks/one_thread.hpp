@@ -26,7 +26,7 @@ int main()
     for(auto sample : performance_log) {
         std::cout << sample << std::endl;
     }
-    
+
     return 0;
-    
+
 }

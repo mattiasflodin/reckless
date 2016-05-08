@@ -10,7 +10,7 @@ extern reckless::severity_log<reckless::no_indent, ' ', reckless::severity_field
 #define LOG_INIT() \
     reckless::file_writer writer("log.txt"); \
     g_log.open(&writer);
-    
+
 #define LOG_CLEANUP() g_log.close()
 
 #define LOG( c, i, f ) g_log.info("Hello World! %s %d %f", c, i, f)

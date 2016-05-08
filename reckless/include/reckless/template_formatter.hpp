@@ -13,7 +13,7 @@ namespace detail {
     char const* invoke_custom_format(output_buffer* pbuffer,
         char const* pformat, T&& v);
 }
-    
+
 class template_formatter {
 public:
     static void format(output_buffer* pbuffer, char const* pformat);

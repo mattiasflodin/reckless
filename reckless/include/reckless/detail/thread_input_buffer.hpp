@@ -81,7 +81,7 @@ public:
 private:
     thread_input_buffer(std::size_t size);
     ~thread_input_buffer();
-    
+
     char* advance_frame_pointer(char* p, std::size_t distance);
     void wait_input_consumed();
     bool is_aligned(void* p) const
