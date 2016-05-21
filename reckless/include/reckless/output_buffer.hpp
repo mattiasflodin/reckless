@@ -183,7 +183,7 @@ protected:
         permanent_error_policy_.store(ep, std::memory_order_relaxed);
     }
 
-    spsc_event shared_input_queue_full_event_; // FIXME rename to something that indicates this is used for all "notifications" to the worker thread
+    detail::spsc_event shared_input_queue_full_event_; // FIXME rename to something that indicates this is used for all "notifications" to the worker thread
 
     std::atomic<error_policy> temporary_error_policy_{error_policy::ignore};
     std::atomic<error_policy> permanent_error_policy_{error_policy::fail_immediately};

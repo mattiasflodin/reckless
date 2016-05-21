@@ -100,6 +100,7 @@ void basic_log::open(writer* pwriter,
     }
     assert(!is_open());
     reset_shared_input_queue(shared_input_queue_size);
+    input_buffer_.reserve(shared_input_queue_size);
     thread_input_buffer_size_ = thread_input_buffer_size;
     output_buffer::reset(pwriter, output_buffer_max_capacity);
     output_thread_ = std::thread(std::mem_fn(&basic_log::output_worker), this);
@@ -117,7 +118,7 @@ void basic_log::close(std::error_code& ec) noexcept
     // documented error conditions would be the result of a bug.
     output_thread_.join();
     assert(shared_input_queue_->empty());
-    
+
     output_buffer::reset();
     thread_input_buffer_size_ = 0;
     shared_input_queue_ = std::experimental::nullopt;
@@ -140,7 +141,7 @@ void basic_log::close()
 void basic_log::flush(std::error_code& ec)
 {
     struct formatter {
-        static void format(output_buffer* poutput, spsc_event* pevent,
+        static void format(output_buffer* poutput, detail::spsc_event* pevent,
                 std::error_code* perror)
         {
             // Need downcast to get access to protected members.
@@ -155,7 +156,7 @@ void basic_log::flush(std::error_code& ec)
             pevent->signal();
         }
     };
-    spsc_event event;
+    detail::spsc_event event;
     write<formatter>(&event, &ec);
     shared_input_queue_full_event_.signal();
     event.wait();
@@ -174,6 +175,36 @@ void basic_log::panic_flush()
     panic_flush_ = true;
     shared_input_queue_full_event_.signal();
     panic_flush_done_event_.wait();
+}
+
+#if defined(RECKLESS_NO_INLINE_INPUT_BUFFER)
+RECKLESS_IMPLEMENT_PUSH_INPUT_FRAME()
+#endif
+
+char* basic_log::push_input_frame_slow_path(std::size_t size)
+{
+    char* pframe;
+    do {
+        input_buffer_full_event_.signal();
+        // TODO: This wait releases *one* thread. If another thread is also
+        // waiting to push data to the input buffer and it is selected for
+        // release, then this thread will "miss" the signal and stay here
+        // waiting. However, we are guaranteed to eventually be released
+        // (modulo starvation issues) because if another thread gets the ticket
+        // then it will push an entry to the queue. When the queue gets cleared
+        // then this thread will get another shot at receiving the event.
+        //
+        // Eventually this might be changed into an alternative event object
+        // that releases all threads, but it's not clear if that will actually
+        // improve performance, since it causes "thundering herd"-like issues
+        // instead. All threads will then try to push events on the shared queue
+        // simultaneously which could lead to cache-line ping pong and hurt
+        // performance (but maybe queue entries could be made so they end up in
+        // different cache lines?)
+        input_buffer_empty_event_.wait();
+        pframe = static_cast<char*>(input_buffer_.push(size));
+    } while(!pframe);
+    return pframe;
 }
 
 void basic_log::output_worker()
@@ -303,6 +334,169 @@ void basic_log::output_worker()
                 }
             }
         }
+    }
+}
+
+void basic_log::output_worker2()
+{
+    using namespace detail;
+
+#ifdef RECKLESS_DEBUG
+    output_worker_native_handle_ = pthread_self();
+#endif
+    pthread_setname_np(pthread_self(), "reckless output worker");
+
+    frame_status status = frame_status::uninitialized;
+    while(likely(status != frame_status::shutdown_marker)) {
+        auto pframe = static_cast<char*>(input_buffer_.front());
+        auto batch_size = wait_for_input();
+        auto pbatch_end = pframe + batch_size;
+
+        while(pframe != pbatch_end) {
+            status = acquire_frame(pframe);
+
+            std::size_t frame_size;
+            if(likely(status == frame_status::initialized))
+                frame_size = process_frame(pframe);
+            else
+                frame_size = skip_frame(pframe);
+
+            release_frame(pframe, frame_size);
+            pframe += frame_size;
+        }
+        input_buffer_.pop_release(batch_size);
+    }
+
+    if(panic_flush_) {
+        // We are in panic-flush mode and reached the shutdown marker. That
+        // means we are done.
+        on_panic_flush_done();  // never returns
+    }
+
+    if(output_buffer::has_complete_frame()) {
+        // Can't do much if there is a flush error here since we are
+        // shutting down. The error code will be checked by close() when
+        // the worker thread finishes.
+        // FIXME if the error policy is e.g. block then we may never leave here
+        // and if it's ignore then the error won't be seen. Can we change the
+        // policy during exit?
+        flush_output_buffer();
+    }
+}
+
+std::size_t basic_log::wait_for_input()
+{
+    auto size = input_buffer_.size();
+    if(likely(size)) {
+        // It's not exactly *likely* that there is input in the buffer, but we
+        // want this to be a "hot path" so that we perform our best when there
+        // is a lot of load.
+        return size;
+    }
+
+    // Loop until something comes in to the input buffer. Since logger threads
+    // do not normally signal any event (unless the buffer fills up), we have
+    // to poll the buffer. We use an exponential back off to not use too many
+    // CPU cycles and allow other threads to run, but we don't wait for more
+    // than one second.
+    unsigned wait_time_ms = 0;
+    while(true) {
+        // The output buffer is flushed at least once before checking for more
+        // input. This makes sure that data gets sent to the writer immediately
+        // whenever there's a pause in incoming log messages. If this flush
+        // fails due to a temporary error then there may still be data
+        // lingering, so we need to keep trying to flush with each iteration as
+        // long as data remains in the output buffer.
+        if(output_buffer::has_complete_frame()) {
+            input_buffer_empty_event_.signal();
+            flush_output_buffer();
+            size = input_buffer_.size();
+            if(size != 0)
+                return size;
+        }
+
+        input_buffer_empty_event_.signal();
+        input_buffer_full_event_.wait(wait_time_ms);
+        size = input_buffer_.size();
+        if(size != 0)
+            return size;
+
+        wait_time_ms += std::max(1u, wait_time_ms/4u);
+        wait_time_ms = std::min(wait_time_ms, 1000u);
+    }
+}
+
+detail::frame_status basic_log::acquire_frame(void* pframe)
+{
+    using namespace detail;
+    auto ppdispatch = static_cast<formatter_dispatch_function_t**>(pframe);
+    auto pstatus = static_cast<frame_status*>(static_cast<void*>(ppdispatch+1));
+
+    auto status = atomic_load_acquire(pstatus);
+    if(likely(status != frame_status::uninitialized))
+        return status;
+
+    unsigned wait_time_ms = 0;
+    while(true) {
+        input_buffer_full_event_.wait(wait_time_ms);
+        status = atomic_load_acquire(pstatus);
+        if(status != frame_status::uninitialized)
+            return status;
+
+        wait_time_ms += std::max(1u, wait_time_ms/4u);
+        wait_time_ms = std::min(wait_time_ms, 1000u);
+    }
+}
+
+std::size_t basic_log::process_frame(void* pframe)
+{
+    using namespace detail;
+    auto pdispatch = *static_cast<formatter_dispatch_function_t**>(pframe);
+
+    try {
+        return (*pdispatch)(invoke_formatter,
+                static_cast<output_buffer*>(this), pframe);
+    } catch(flush_error const&) {
+        // A flush error occurs here if there was not enough space in
+        // the output buffer and it had to be flushed to make room, but
+        // the flush failed. This means that we lose the frame.
+        std::type_info const* pti;
+        output_buffer::lost_frame();
+        return (*pdispatch)(get_typeid, &pti, nullptr);
+    } catch(...) {
+        std::type_info const* pti;
+        auto frame_size = (*pdispatch)(get_typeid, &pti, nullptr);
+        std::lock_guard<std::mutex> lk(callback_mutex_);
+        if(format_error_callback_) {
+            try {
+                format_error_callback_(this, std::current_exception(),
+                        *pti);
+            } catch(...) {
+            }
+        }
+        return frame_size;
+    }
+}
+
+std::size_t basic_log::skip_frame(void* pframe)
+{
+    using namespace detail;
+    auto pdispatch = *static_cast<formatter_dispatch_function_t**>(pframe);
+    std::type_info const* pti;
+    return (*pdispatch)(get_typeid, &pti, nullptr);
+}
+
+void basic_log::release_frame(void* pframe, std::size_t frame_size)
+{
+    using namespace detail;
+    for(std::size_t offset=0; offset!=frame_size;
+            offset += RECKLESS_CACHE_LINE_SIZE)
+    {
+        void* psegment = static_cast<char*>(pframe) + offset;
+        auto ppdispatch = static_cast<formatter_dispatch_function_t**>(
+                psegment);
+        auto pstatus = static_cast<frame_status*>(static_cast<void*>(ppdispatch+1));
+        atomic_store_relaxed(pstatus, frame_status::uninitialized);
     }
 }
 

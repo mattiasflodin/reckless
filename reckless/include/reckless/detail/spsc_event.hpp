@@ -30,6 +30,11 @@
 #include <time.h>
 #include <sys/time.h>
 
+namespace reckless {
+namespace detail {
+// TODO what makes this single-producer single-consumer? We aren't using it
+// that way, since multiple threads are both waiting and signaling, so it
+// should really be mpmc_event.
 class spsc_event {
 public:
     spsc_event() : signal_(0)
@@ -95,6 +100,7 @@ private:
 
     int atomic_exchange_explicit(int* pvalue, int new_value, std::memory_order)
     {
+        // FIXME this can be replaced with __atomic builtins.
         int res = new_value;
         asm volatile("xchg %0, %1\n\t"
                 : "+r"(res), "+m"(*pvalue)
@@ -105,5 +111,8 @@ private:
 
     int signal_;
 };
+
+}   // namespace detail
+}   // namespace reckless
 
 #endif // RECKLESS_DETAIL_SPSC_EVENT_HPP
