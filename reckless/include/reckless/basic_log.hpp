@@ -66,9 +66,19 @@ public:
     // FIXME shared_input_queue_size seems like the least interesting of these
     // and should be moved to the end.
     basic_log(writer* pwriter,
-            std::size_t output_buffer_max_capacity = 0,
-            std::size_t shared_input_queue_size = 0,
-            std::size_t thread_input_buffer_size = 0);
+            std::size_t output_buffer_max_capacity,
+            std::size_t shared_input_queue_size,
+            std::size_t thread_input_buffer_size);
+    basic_log(writer* pwriter)
+    {
+        open2(pwriter);
+    }
+    basic_log(writer* pwriter,
+        std::size_t input_buffer_capacity,
+        std::size_t output_buffer_capacity)
+    {
+        open2(pwriter, input_buffer_capacity, output_buffer_capacity);
+    }
     virtual ~basic_log();
 
     basic_log(basic_log const&) = delete;
@@ -78,6 +88,10 @@ public:
             std::size_t output_buffer_max_capacity = 0,
             std::size_t shared_input_queue_size = 0,
             std::size_t thread_input_buffer_size = 0);
+    void open2(writer* pwriter);
+    void open2(writer* pwriter,
+        std::size_t input_buffer_capacity,
+        std::size_t output_buffer_capacity);
 
     // Wait for the output worker to flush its remaining output queue, then shut
     // down the background thread and release all buffers. Writing to the log
@@ -85,9 +99,11 @@ public:
     // returns any error (temporary or permanent) at this point, then the ec
     // parameter is set to the error code. Otherwise, ec.clear() is called.
     virtual void close(std::error_code& ec) noexcept;
+    virtual void close2(std::error_code& ec) noexcept;
 
     // Call close(error_code) and throw writer_error if it fails.
     virtual void close();
+    virtual void close2();
 
     // Wake up the output worker thread to cause immediate output of all queued
     // writes. Then block until the most recent write has been formatted in the

@@ -78,7 +78,7 @@ void recovered_error_with_registered_callback()
 
 void lost_frames_with_registered_callback()
 {
-    reckless::policy_log<> log(&writer, 1024);
+    reckless::policy_log<> log(&writer, 0, 1024);
     log.temporary_error_policy(reckless::error_policy::notify_on_recovery);
     log.writer_error_callback(&writer_error_callback);
     std::cout << "Simulating disk full" << std::endl;
@@ -93,7 +93,7 @@ void lost_frames_with_registered_callback()
     sleep(2);
     log.writer_error_callback();
 }
-    
+
 void fail_immediately()
 {
     reckless::policy_log<> log(&writer);

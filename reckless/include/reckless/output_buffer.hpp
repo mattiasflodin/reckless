@@ -134,6 +134,11 @@ protected:
     void lost_frame()
     {
         ++lost_input_frames_;
+        revert_frame();
+    }
+
+    void revert_frame()
+    {
         // Undo everything that has been written during the current input frame.
         pcommit_end_ = pframe_end_;
     }

@@ -143,25 +143,12 @@ private:
 template <class IndentPolicy = no_indent, char FieldSeparator = ' ', class... HeaderFields>
 class policy_log : public basic_log {
 public:
-    policy_log()
-    {
-    }
-
-    policy_log(writer* pwriter,
-            std::size_t output_buffer_max_capacity = 0,
-            std::size_t shared_input_queue_size = 0,
-            std::size_t thread_input_buffer_size = 0) :
-        basic_log(pwriter,
-                 output_buffer_max_capacity,
-                 shared_input_queue_size,
-                 thread_input_buffer_size)
-    {
-    }
+    using basic_log::basic_log;
 
     template <typename... Args>
     void write(char const* fmt, Args&&... args)
     {
-        basic_log::write<policy_formatter<IndentPolicy, FieldSeparator, HeaderFields...>>(
+        basic_log::write2<policy_formatter<IndentPolicy, FieldSeparator, HeaderFields...>>(
                 HeaderFields()...,
                 IndentPolicy(),
                 fmt,

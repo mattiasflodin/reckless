@@ -32,7 +32,7 @@ using log_t = reckless::severity_log<
     reckless::severity_field,  // Show severity marker (D/I/W/E) first
     reckless::timestamp_field  // Then timestamp field
     >;
-    
+
 reckless::file_writer writer("log.txt");
 log_t g_log(&writer);
 

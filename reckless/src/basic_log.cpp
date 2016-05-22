@@ -32,6 +32,12 @@ using reckless::detail::unlikely;
 namespace reckless {
 
 namespace {
+// Since logger threads do not normally signal any event (unless the queue
+// fills up), we have to poll the input buffer. We use an exponential back off
+// to not use too many CPU cycles and allow other threads to run, but we don't
+// wait for more than one second.
+unsigned max_input_buffer_poll_period_ms = 1000u;
+unsigned input_buffer_poll_period_inverse_growth_factor = 4;
 
 void destroy_thread_input_buffer(void* p)
 {
@@ -68,10 +74,10 @@ basic_log::~basic_log()
     halt_on_panic_flush();
     if(is_open()) {
         std::error_code error;
-        close(error);
+        close2(error);
     }
-    auto result = pthread_key_delete(thread_input_buffer_key_);
-    assert(result == 0);
+//    auto result = pthread_key_delete(thread_input_buffer_key_);
+//    assert(result == 0);
 }
 
 void basic_log::open(writer* pwriter,
@@ -106,6 +112,27 @@ void basic_log::open(writer* pwriter,
     output_thread_ = std::thread(std::mem_fn(&basic_log::output_worker), this);
 }
 
+void basic_log::open2(writer* pwriter)
+{
+    // The typical disk block size these days is 4 KiB (see
+    // https://en.wikipedia.org/wiki/Advanced_Format). We'll make it twice
+    // that just in case it grows larger, and to hide some of the effects of
+    // misalignment.
+    unsigned const assumed_disk_sector_size = 8192;
+    open2(pwriter, detail::get_page_size(), assumed_disk_sector_size);
+}
+
+void basic_log::open2(writer* pwriter,
+    std::size_t input_buffer_capacity,
+    std::size_t output_buffer_capacity)
+{
+    assert(!is_open());
+
+    input_buffer_.reserve(input_buffer_capacity);
+    output_buffer::reset(pwriter, output_buffer_capacity);
+    output_thread_ = std::thread(std::mem_fn(&basic_log::output_worker2), this);
+}
+
 void basic_log::close(std::error_code& ec) noexcept
 {
     using namespace detail;
@@ -130,10 +157,46 @@ void basic_log::close(std::error_code& ec) noexcept
         ec.clear();
 }
 
+void basic_log::close2(std::error_code& ec) noexcept
+{
+    using namespace detail;
+    assert(is_open());
+
+    char* pframe = push_input_frame(RECKLESS_CACHE_LINE_SIZE);
+    std::size_t const status_offset = sizeof(formatter_dispatch_function_t*);
+    frame_status* pstatus = reinterpret_cast<frame_status*>(
+            pframe + status_offset);
+    atomic_store_relaxed(pstatus, frame_status::shutdown_marker);
+    input_buffer_full_event_.signal();
+
+    // We're going to assume that join() will not throw here, since all the
+    // documented error conditions would be the result of a bug.
+    output_thread_.join();
+    assert(input_buffer_.size() == 0);
+
+    output_buffer::reset();
+    input_buffer_.reserve(0);
+
+    if(error_flag_.load(std::memory_order_acquire))
+        ec = error_code_;
+    else
+        ec.clear();
+
+    assert(!is_open());
+}
+
 void basic_log::close()
 {
     std::error_code error;
     close(error);
+    if(error)
+        throw writer_error(error);
+}
+
+void basic_log::close2()
+{
+    std::error_code error;
+    close2(error);
     if(error)
         throw writer_error(error);
 }
@@ -358,8 +421,10 @@ void basic_log::output_worker2()
             std::size_t frame_size;
             if(likely(status == frame_status::initialized))
                 frame_size = process_frame(pframe);
-            else
+            else if(status != frame_status::shutdown_marker)
                 frame_size = skip_frame(pframe);
+            else
+                frame_size = RECKLESS_CACHE_LINE_SIZE;
 
             release_frame(pframe, frame_size);
             pframe += frame_size;
@@ -394,11 +459,7 @@ std::size_t basic_log::wait_for_input()
         return size;
     }
 
-    // Loop until something comes in to the input buffer. Since logger threads
-    // do not normally signal any event (unless the buffer fills up), we have
-    // to poll the buffer. We use an exponential back off to not use too many
-    // CPU cycles and allow other threads to run, but we don't wait for more
-    // than one second.
+    // Poll the input buffer until something comes in.
     unsigned wait_time_ms = 0;
     while(true) {
         // The output buffer is flushed at least once before checking for more
@@ -421,8 +482,9 @@ std::size_t basic_log::wait_for_input()
         if(size != 0)
             return size;
 
-        wait_time_ms += std::max(1u, wait_time_ms/4u);
-        wait_time_ms = std::min(wait_time_ms, 1000u);
+        wait_time_ms += std::max(1u,
+            wait_time_ms/input_buffer_poll_period_inverse_growth_factor);
+        wait_time_ms = std::min(wait_time_ms, max_input_buffer_poll_period_ms);
     }
 }
 
@@ -436,6 +498,11 @@ detail::frame_status basic_log::acquire_frame(void* pframe)
     if(likely(status != frame_status::uninitialized))
         return status;
 
+    // Poll the frame status until it is no longer uninitialized. We don't need
+    // to be as sophisticated as in wait_for_input and try to flush the output
+    // buffer etc, since we know another thread is just in the process of
+    // putting data in the frame. If we have to wait more than a millisecond
+    // here then something has probably gone very wrong.
     unsigned wait_time_ms = 0;
     while(true) {
         input_buffer_full_event_.wait(wait_time_ms);
@@ -443,8 +510,9 @@ detail::frame_status basic_log::acquire_frame(void* pframe)
         if(status != frame_status::uninitialized)
             return status;
 
-        wait_time_ms += std::max(1u, wait_time_ms/4u);
-        wait_time_ms = std::min(wait_time_ms, 1000u);
+        wait_time_ms += std::max(1u,
+            wait_time_ms/input_buffer_poll_period_inverse_growth_factor);
+        wait_time_ms = std::min(wait_time_ms, max_input_buffer_poll_period_ms);
     }
 }
 
@@ -454,16 +522,19 @@ std::size_t basic_log::process_frame(void* pframe)
     auto pdispatch = *static_cast<formatter_dispatch_function_t**>(pframe);
 
     try {
-        return (*pdispatch)(invoke_formatter,
+        auto frame_size = (*pdispatch)(invoke_formatter,
                 static_cast<output_buffer*>(this), pframe);
+        output_buffer::frame_end();
+        return frame_size;
     } catch(flush_error const&) {
         // A flush error occurs here if there was not enough space in
         // the output buffer and it had to be flushed to make room, but
         // the flush failed. This means that we lose the frame.
-        std::type_info const* pti;
         output_buffer::lost_frame();
+        std::type_info const* pti;
         return (*pdispatch)(get_typeid, &pti, nullptr);
     } catch(...) {
+        output_buffer::revert_frame();
         std::type_info const* pti;
         auto frame_size = (*pdispatch)(get_typeid, &pti, nullptr);
         std::lock_guard<std::mutex> lk(callback_mutex_);

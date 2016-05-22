@@ -28,6 +28,14 @@ namespace detail {
 
 void mpsc_ring_buffer::init(std::size_t capacity)
 {
+    if(capacity == 0) {
+        reset_mapping_handle();
+        rewind();
+        pbuffer_start_ = nullptr;
+        capacity_ = 0;
+        return;
+    }
+
     capacity = round_capacity(capacity);
 
 #if defined(__linux__)
@@ -81,18 +89,19 @@ void mpsc_ring_buffer::init(std::size_t capacity)
     mapping_handle_ = reinterpret_cast<std::uintptr_t&>(mapping);
 #endif
 
-    next_write_position_ = 0;
-    next_read_position_cached_ = 0;
-    next_read_position_ = 0;
+    rewind();
     pbuffer_start_ = static_cast<char*>(pbase);
     capacity_ = capacity;
 }
 
 void mpsc_ring_buffer::destroy()
 {
+    if(!pbuffer_start_)
+        return;
 #if defined(__linux__)
     shmdt(pbuffer_start_ + capacity_);
     shmdt(pbuffer_start_);
+
 #elif defined(_WIN32)
     asdj asd not done;
 #endif

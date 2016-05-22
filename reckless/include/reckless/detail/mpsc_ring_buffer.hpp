@@ -17,16 +17,12 @@ namespace detail {
 
 class mpsc_ring_buffer {
 public:
-    mpsc_ring_buffer() :
-#if defined(_WIN32)
-        mapping_handle_(0),
-#endif
-        next_write_position_(0),
-        next_read_position_cached_(0),
-        next_read_position_(0),
-        pbuffer_start_(nullptr),
-        capacity_(0)
+    mpsc_ring_buffer()
     {
+        reset_mapping_handle();
+        rewind();
+        pbuffer_start_ = nullptr;
+        capacity_ = 0;
     }
 
     mpsc_ring_buffer(std::size_t capacity)
@@ -93,6 +89,18 @@ public:
 private:
     void init(std::size_t capacity);
     void destroy();
+    void rewind()
+    {
+        next_write_position_ = 0;
+        next_read_position_cached_ = 0;
+        next_read_position_ = 0;
+    }
+    void reset_mapping_handle()
+    {
+#if defined(_WIN32)
+        mapping_handle_ = 0;
+#endif
+    }
 
 #if defined(_WIN32)
     std::uintptr_t mapping_handle_;
