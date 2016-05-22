@@ -64,6 +64,8 @@ public:
         
     void panic_flush();
 
+    std::thread& worker_thread();
+
 protected:
     template <class Formatter, typename... Args>
     void write(Args&&... args);
@@ -124,6 +126,13 @@ crash) has occurred, and it is expected that the process will be terminated
 after the call. The log object is left in a "panic" state that prevents any
 cleanup in the destructor. Any thread that tries to write to the log after this
 will be suspended.</td></tr>
+
+<tr><td><code>worker_thread</code></td>
+<td>Provide access to the internal worker-thread object. The intent is to allow
+platform-specific manipulation of the thread, such as setting priority or
+affinity. Use good judgement when accessing this object, as any destructive
+action such as moving or detaching it can cause reckless to
+malfunction.</td></tr>
 
 <tr><td><code>write</code></td>
 <td>Store <code>args</code> on the asynchronous queue and invoke the static

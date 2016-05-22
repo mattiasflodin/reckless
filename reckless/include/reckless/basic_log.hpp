@@ -100,6 +100,14 @@ public:
 
     void panic_flush();
 
+    // Provide access to the internal worker-thread object. The intent is to
+    // allow platform-specific manipulation of the thread, such as setting
+    // priority or affinity.
+    std::thread& worker_thread()
+    {
+        return output_thread_;
+    }
+
 protected:
     template <class Formatter, typename... Args>
     void write(Args&&... args)
