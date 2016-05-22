@@ -22,15 +22,12 @@
 #ifndef RECKLESS_BASIC_LOG_HPP
 #define RECKLESS_BASIC_LOG_HPP
 
-#include <reckless/detail/thread_input_buffer.hpp>
 #include <reckless/detail/spsc_event.hpp>
 #include <reckless/detail/branch_hints.hpp> // likely
 #include <reckless/detail/utility.hpp> // RECKLESS_CACHE_LINE_SIZE
 #include <reckless/detail/optional.hpp>
 #include <reckless/detail/mpsc_ring_buffer.hpp>
 #include <reckless/output_buffer.hpp>
-
-#include <boost_1_56_0/lockfree/queue.hpp>
 
 #include <thread>
 #include <functional>
@@ -44,17 +41,31 @@
 
 namespace reckless {
 namespace detail {
+    enum class frame_status : char {
+        uninitialized = 0,
+        initialized = 1,
+        invalid = 2,
+        shutdown_marker = 3,
+        panic_shutdown_marker = 4
+    };
+
+    enum dispatch_operation {
+        invoke_formatter,
+        get_typeid
+    };
+
+    typedef std::size_t formatter_dispatch_function_t(dispatch_operation, void*, void*);
+
+    struct frame_header {
+        formatter_dispatch_function_t* pdispatch_function;
+        frame_status status;
+    };
+
     template <class Formatter, typename... Args>
     std::size_t input_frame_dispatch(dispatch_operation operation, void* arg1, void* arg2);
     template <class Formatter, typename... Args>
     std::size_t input_frame_dispatch2(dispatch_operation operation, void* arg1, void* arg2);
 
-    enum class frame_status : char {
-        uninitialized = 0,
-        initialized = 1,
-        invalid = 2,
-        shutdown_marker = 3
-    };
 }
 
 using format_error_callback_t = std::function<void (output_buffer*, std::exception_ptr const&, std::type_info const&)>;
@@ -63,12 +74,6 @@ using format_error_callback_t = std::function<void (output_buffer*, std::excepti
 class basic_log : private output_buffer {
 public:
     basic_log();
-    // FIXME shared_input_queue_size seems like the least interesting of these
-    // and should be moved to the end.
-    basic_log(writer* pwriter,
-            std::size_t output_buffer_max_capacity,
-            std::size_t shared_input_queue_size,
-            std::size_t thread_input_buffer_size);
     basic_log(writer* pwriter)
     {
         open2(pwriter);
@@ -84,10 +89,6 @@ public:
     basic_log(basic_log const&) = delete;
     basic_log& operator=(basic_log const&) = delete;
 
-    virtual void open(writer* pwriter,
-            std::size_t output_buffer_max_capacity = 0,
-            std::size_t shared_input_queue_size = 0,
-            std::size_t thread_input_buffer_size = 0);
     void open2(writer* pwriter);
     void open2(writer* pwriter,
         std::size_t input_buffer_capacity,
@@ -98,11 +99,9 @@ public:
     // after close() was called leads to undefined behavior. If the writer
     // returns any error (temporary or permanent) at this point, then the ec
     // parameter is set to the error code. Otherwise, ec.clear() is called.
-    virtual void close(std::error_code& ec) noexcept;
     virtual void close2(std::error_code& ec) noexcept;
 
     // Call close(error_code) and throw writer_error if it fails.
-    virtual void close();
     virtual void close2();
 
     // Wake up the output worker thread to cause immediate output of all queued
@@ -115,7 +114,8 @@ public:
     // Call flush(error_code) and throw writer_error if it fails.
     virtual void flush();
 
-    void format_error_callback(format_error_callback_t callback = format_error_callback_t())
+    void format_error_callback(
+            format_error_callback_t callback = format_error_callback_t())
     {
         std::lock_guard<std::mutex> lk(callback_mutex_);
         format_error_callback_ = move(callback);
@@ -137,58 +137,12 @@ public:
 
 protected:
     template <class Formatter, typename... Args>
-    void write(Args&&... args)
-    {
-        using namespace detail;
-        typedef std::tuple<typename std::decay<Args>::type...> args_t;
-        std::size_t const args_align = alignof(args_t);
-        std::size_t const args_offset = (sizeof(formatter_dispatch_function_t*) + args_align-1)/args_align*args_align;
-        std::size_t const frame_size = args_offset + sizeof(args_t);
-
-#ifdef RECKLESS_DEBUG
-        // If this assert triggers then you have tried to write to the log from
-        // within the worker thread (from writer_error_callback?). That's bad
-        // because it can lead to a deadlock. Instead, you need to format your
-        // string yourself and write directly to the output_buffer.
-        assert(!pthread_equal(pthread_self(), output_worker_native_handle_));
-#endif
-
-        auto pbuffer = get_input_buffer();
-        auto marker = pbuffer->allocation_marker();
-        char* pframe = pbuffer->allocate_input_frame(frame_size);
-        *reinterpret_cast<formatter_dispatch_function_t**>(pframe) =
-            &detail::input_frame_dispatch<Formatter, typename std::decay<Args>::type...>;
-
-        try {
-            new (pframe + args_offset) args_t(std::forward<Args>(args)...);
-            // TODO ideally send_log_entries would be called in a separate
-            // commit() or flush() function, but then we have to call
-            // get_input_buffer() twice which bloats the code at the call site. But
-            // if we make get_input_buffer() protected (i.e. move
-            // thread_input_buffer from the detail namespace) then we can delegate
-            // the call to get_input_buffer to the derived class, which could then
-            // call write multiple times followed by commit() if it wants to
-            // without having to fetch the TLS variable every time.
-            send_log_entries({pbuffer, pbuffer->input_end()});
-        } catch(...) {
-            pbuffer->revert_allocation(marker);
-            throw;
-        }
-    }
-
-    template <class Formatter, typename... Args>
     void write2(Args&&... args)
     {
         using namespace detail;
         typedef std::tuple<typename std::decay<Args>::type...> args_t;
         std::size_t const args_align = alignof(args_t);
-        // Frame components in order:
-        // 0: formatter dispatch function
-        // 1: status marker - valid / not valid / discarded
-        // 2: arguments
-        std::size_t const status_offset =
-            sizeof(formatter_dispatch_function_t*);
-        std::size_t const args_offset = (status_offset + sizeof(frame_status) +
+        std::size_t const args_offset = (sizeof(frame_header) +
             args_align-1)/args_align*args_align;
         std::size_t const frame_size_unaligned = args_offset + sizeof(args_t);
         std::size_t const frame_size = (frame_size_unaligned +
@@ -203,31 +157,33 @@ protected:
         assert(!pthread_equal(pthread_self(), output_worker_native_handle_));
 #endif
 
-        char* pframe = push_input_frame(frame_size);
-        *reinterpret_cast<formatter_dispatch_function_t**>(pframe) =
-            &detail::input_frame_dispatch2<
+        frame_header* pframe = push_input_frame(frame_size);
+        pframe->pdispatch_function = &detail::input_frame_dispatch2<
                 Formatter,
                 typename std::decay<Args>::type...
             >;
 
-        frame_status* pstatus = reinterpret_cast<frame_status*>(
-                pframe + status_offset);
-
+        void* pargs = static_cast<char*>(static_cast<void*>(pframe))
+            + args_offset;
         // Let the compiler know that the placement-new call below
         // doesn't need to perform a null-pointer check.
-        if(pframe + args_offset == nullptr)
+        if(pargs == nullptr)
             __builtin_unreachable();
 
         try {
-            new (pframe + args_offset) args_t(std::forward<Args>(args)...);
+            new (pargs) args_t(std::forward<Args>(args)...);
         } catch(...) {
-            atomic_store_release(pstatus, frame_status::invalid);
+            atomic_store_release(&pframe->status, frame_status::invalid);
             throw;
         }
-        atomic_store_release(pstatus, frame_status::initialized);
+        atomic_store_release(&pframe->status, frame_status::initialized);
     }
 
 private:
+    detail::frame_header* push_input_frame(std::size_t size);
+    detail::frame_header* push_input_frame_blind(std::size_t frame_size);
+    detail::frame_header* push_input_frame_slow_path(std::size_t size);
+
     void output_worker2();
     std::size_t wait_for_input();
     detail::frame_status acquire_frame(void* pframe);
@@ -235,53 +191,25 @@ private:
     std::size_t skip_frame(void* pframe);
     void release_frame(void* pframe, std::size_t frame_size);
 
-    char* push_input_frame(std::size_t size);
-    char* push_input_frame_slow_path(std::size_t size);
-
-    void output_worker();
-    void send_log_entries(detail::commit_extent const& ce);
-    void send_log_entries_blind(detail::commit_extent const& ce);
     void flush_output_buffer();
     void halt_on_panic_flush();
 
-    void reset_shared_input_queue(std::size_t node_count);
-    detail::thread_input_buffer* get_input_buffer()
-    {
-        detail::thread_input_buffer* p = static_cast<detail::thread_input_buffer*>(pthread_getspecific(thread_input_buffer_key_));
-        if(detail::likely(p != nullptr)) {
-            return p;
-        } else {
-            return init_input_buffer();
-        }
-    }
-    detail::thread_input_buffer* init_input_buffer();
     void on_panic_flush_done() __attribute__((noreturn));
     bool is_open()
     {
         return output_thread_.joinable();
     }
 
-    typedef boost_1_56_0::lockfree::queue<detail::commit_extent, boost_1_56_0::lockfree::fixed_sized<true>> shared_input_queue_t;
-
-    //typedef detail::thread_object<detail::thread_input_buffer, std::size_t, std::size_t> thread_input_buffer_t;
-    //thread_input_buffer_t pthread_input_buffer_;
-
     detail::mpsc_ring_buffer input_buffer_;
     detail::spsc_event input_buffer_full_event_;
     detail::spsc_event input_buffer_empty_event_;
 
-    std::experimental::optional<shared_input_queue_t> shared_input_queue_;
-    detail::spsc_event shared_input_queue_full_event_;
-    detail::spsc_event shared_input_consumed_event_;
-    pthread_key_t thread_input_buffer_key_;
-    std::size_t thread_input_buffer_size_ = 0;
     output_buffer output_buffer_;
 
     std::mutex callback_mutex_;
     format_error_callback_t format_error_callback_; // access synchronized by callback_mutex_
     std::thread output_thread_;
     detail::spsc_event panic_flush_done_event_;
-    bool panic_flush_ = false;
 
 #ifdef RECKLESS_DEBUG
     pthread_t output_worker_native_handle_;
@@ -298,18 +226,26 @@ public:
 };
 
 #define RECKLESS_IMPLEMENT_PUSH_INPUT_FRAME(inline_specifier) \
-inline_specifier char* basic_log::push_input_frame(std::size_t size) \
+inline_specifier detail::frame_header* basic_log::push_input_frame( \
+        std::size_t size) \
 { \
     using namespace detail; \
     if(likely(!error_flag_.load(std::memory_order_acquire))) { \
-        char* pframe = static_cast<char*>(input_buffer_.push(size)); \
-        if(likely(pframe)) \
-            return pframe; \
-        else \
-            return push_input_frame_slow_path(size); \
+        return push_input_frame_blind(size); \
     } else { \
         throw writer_error(error_code_); \
     } \
+} \
+\
+inline_specifier detail::frame_header* basic_log::push_input_frame_blind( \
+        std::size_t size) \
+{ \
+    using namespace detail; \
+    auto pframe = static_cast<frame_header*>(input_buffer_.push(size)); \
+    if(likely(pframe)) \
+        return pframe; \
+    else \
+        return push_input_frame_slow_path(size); \
 }
 #if !defined(RECKLESS_NO_INLINE_INPUT_BUFFER)
 RECKLESS_IMPLEMENT_PUSH_INPUT_FRAME(inline)
@@ -321,45 +257,6 @@ template <class Formatter, typename... Args, std::size_t... Indexes>
 void formatter_dispatch_helper(output_buffer* poutput, std::tuple<Args...>&& args, index_sequence<Indexes...>)
 {
     Formatter::format(poutput, std::forward<Args>(std::get<Indexes>(args))...);
-}
-
-template <class Formatter, typename... Args>
-std::size_t input_frame_dispatch(dispatch_operation operation, void* arg1, void* arg2)
-{
-    using namespace detail;
-    typedef std::tuple<Args...> args_t;
-    std::size_t const args_align = alignof(args_t);
-    std::size_t const args_offset = (sizeof(formatter_dispatch_function_t*) + args_align-1)/args_align*args_align;
-    std::size_t const frame_size = args_offset + sizeof(args_t);
-    typename make_index_sequence<sizeof...(Args)>::type indexes;
-
-    if(likely(operation == invoke_formatter)) {
-        auto poutput = static_cast<output_buffer*>(arg1);
-        auto pinput = static_cast<char*>(arg2);
-        struct args_owner {
-            args_owner(args_t& args) :
-                args(args)
-            {
-            }
-            ~args_owner()
-            {
-                // We need to do this from a destructor in case calling the
-                // formatter throws an exception. We can't just do it in a catch
-                // clause because we want uncaught_exception to return true during
-                // the call.
-                args.~args_t();
-            }
-            args_t& args;
-        };
-
-        args_owner args(*reinterpret_cast<args_t*>(pinput + args_offset));
-        formatter_dispatch_helper<Formatter>(poutput, move(args.args), indexes);
-        return frame_size;
-    } else if(operation == get_typeid) {
-        *static_cast<std::type_info const**>(arg1) = &typeid(args_t);
-        return frame_size;
-    }
-    unreachable();
 }
 
 template <class Formatter, typename... Args>

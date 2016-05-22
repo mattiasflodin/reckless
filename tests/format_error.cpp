@@ -68,22 +68,22 @@ void format_error(reckless::output_buffer* poutput, std::exception_ptr const& pe
 
 int main()
 {
-    g_log.open(&g_writer);
+    g_log.open2(&g_writer);
     g_log.write("Hello");
     Object object;
     g_log.write("%s", object);
     g_log.write("World!");
-    g_log.close();
+    g_log.close2();
     std::cout << g_writer.container;
     assert(g_writer.container == "Hello\nWorld!\n");
-    
+
     g_writer.container.clear();
-    g_log.open(&g_writer);
+    g_log.open2(&g_writer);
     g_log.format_error_callback(format_error);
     g_log.write("Hello");
     g_log.write("%s", object);
     g_log.write("World!");
-    g_log.close();
+    g_log.close2();
     std::cout << std::endl << g_writer.container;
     assert(g_writer.container ==
         "Hello\n"

@@ -24,6 +24,7 @@
 
 #include <cstring>  // memset
 #include <vector>
+#include <algorithm>    // sort, unique
 #include <system_error>
 #include <cassert>
 #include <errno.h>

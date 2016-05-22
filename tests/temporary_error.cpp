@@ -136,7 +136,7 @@ void noexcept_on_close()
     try {
         std::error_code error;
         std::cout << "call close()" << std::endl;
-        log.close(error);
+        log.close2(error);
         std::cout << "close() -> " << error << std::endl;
     } catch(...) {
         std::cout << "error: close(error_code) throws exception" << std::endl;

@@ -47,9 +47,9 @@ int main()
     sigfillset(&act.sa_mask);
     act.sa_flags = SA_RESETHAND;
     sigaction(SIGSEGV, &act, nullptr);
-    
+
     reckless::file_writer writer("log.txt");
-    g_log.open(&writer);
+    g_log.open2(&writer);
 
     std::thread thread([]()
     {
@@ -58,7 +58,7 @@ int main()
             t2_count = i;
         }
     });
-        
+
     for(int i=0;i!=100000;++i) {
         g_log.write("t1: %d\n", i);
         t1_count = i;

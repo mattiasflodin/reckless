@@ -51,18 +51,19 @@ char const* format(reckless::output_buffer* poutput, char const* fmt, Object)
 
 int main()
 {
-    g_log.open(&g_writer);
-    g_log.write("Hello");
+    g_log.open2(&g_writer);
+    g_log.write("First");
     Object object;
     try {
         g_log.write("%s", object);
     } catch(std::runtime_error const&) {
+        g_log.write("Second");
     }
     sleep(3);
-    g_log.write("World!");
-    g_log.close();
+    g_log.write("Third");
+    g_log.close2();
     std::cout << g_writer.container;
-    assert(g_writer.container == "Hello\nWorld!\n");
-    
+    assert(g_writer.container == "First\nSecond\nThird\n");
+
     return 0;
 }

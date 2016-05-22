@@ -29,11 +29,11 @@ public:
 
     void puts(std::wstring const& s)
     {
-        basic_log::write<ucs2_formatter>(s);
+        basic_log::write2<ucs2_formatter>(s);
     }
     void puts(std::wstring&& s)
     {
-        basic_log::write<ucs2_formatter>(std::move(s));
+        basic_log::write2<ucs2_formatter>(std::move(s));
     }
 private:
     struct ucs2_formatter {
