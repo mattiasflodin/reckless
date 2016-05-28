@@ -22,7 +22,7 @@
 #ifndef RECKLESS_OUTPUT_BUFFER_HPP
 #define RECKLESS_OUTPUT_BUFFER_HPP
 
-#include "detail/branch_hints.hpp"
+#include "detail/platform.hpp"  // likely
 #include "detail/spsc_event.hpp"
 
 #include <cstddef>  // size_t
