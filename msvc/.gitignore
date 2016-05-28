@@ -1,0 +1,5 @@
+# MSVC-generated files
+.vs
+*.VC.db
+*.VC.opendb
+Debug
