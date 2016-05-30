@@ -1,4 +1,3 @@
-.gitignore
 BOOST_INCLUDE=$(TUP_CWD)/boost
 RECKLESS_INCLUDE=$(TUP_CWD)/reckless/include
 RECKLESS_LIB=$(TUP_CWD)/reckless/lib
