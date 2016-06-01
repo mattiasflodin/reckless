@@ -1,0 +1,14 @@
+CXXFLAGS=
+ifndef DEBUG
+  CXXFLAGS+=-O3
+else
+  CXXFLAGS += /DRECKLESS_DEBUG
+endif
+CXX = cl
+LD = link
+OBJEXT = obj
+LIBEXT = lib
+LIBPREFIX =
+!cxx = |> ^ CL %f^ $(CXX) $(CXXFLAGS) /Fo%o %f |> %B.$(OBJEXT)
+!ar = |> ^ LIB %o^ lib /OUT:%o %f |>
+!ld = |> ^ LINK %o^ $(LD) $(LDFLAGS) /OUT:%o %f |>
