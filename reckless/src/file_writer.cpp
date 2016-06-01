@@ -22,11 +22,21 @@
 #include "reckless/file_writer.hpp"
 
 #include <system_error>
+#include <cassert>
+#include <limits>   // numeric_limits
 
+#if defined(_POSIX_VERSION)
 #include <sys/stat.h>   // open()
 #include <fcntl.h>
 #include <errno.h>
 #include <unistd.h>
+
+#elif defined(_WIN32)
+
+#define NOMINMAX
+#include <Windows.h>
+
+#endif
 
 namespace {
     class error_category : public std::error_category {
@@ -71,6 +81,7 @@ namespace {
     private:
         int file_writer_to_writer_category(int code) const
         {
+#if defined(_POSIX_VERSION)
             switch(code) {
             case ENOSPC:
             case ENOBUFS:
@@ -80,6 +91,27 @@ namespace {
             default:
                 return reckless::writer::permanent_failure;
             }
+#elif defined(_WIN32)
+            switch(code) {
+            case ERROR_BUSY:
+            case ERROR_DISK_FULL:
+            case ERROR_HANDLE_DISK_FULL:
+            case ERROR_LOCK_VIOLATION:
+            case ERROR_NOT_ENOUGH_MEMORY:
+            case ERROR_NOT_ENOUGH_QUOTA:
+            case ERROR_NOT_READY:
+            case ERROR_OPERATION_ABORTED:
+            case ERROR_OUTOFMEMORY:
+            case ERROR_READ_FAULT:
+            case ERROR_RETRY:
+            case ERROR_SHARING_VIOLATION:
+            case ERROR_WRITE_FAULT:
+            case ERROR_WRITE_PROTECT:
+                return reckless::writer::temporary_failure;
+            default:
+                return reckless::writer::permanent_failure;
+            }
+#endif
         }
     };
 
@@ -90,6 +122,7 @@ namespace {
     }
 }
 
+#if defined(_POSIX_VERSION)
 reckless::file_writer::file_writer(char const* path) :
     fd_(-1)
 {
@@ -97,6 +130,7 @@ reckless::file_writer::file_writer(char const* path) :
         S_IRUSR | S_IWUSR | S_IXUSR |
         S_IRGRP | S_IWGRP | S_IXGRP |
         S_IROTH | S_IWOTH | S_IXOTH;
+    // FIXME this should be O_APPEND
     fd_ = open(path, O_WRONLY | O_CREAT, full_access);
     if(fd_ == -1)
         throw std::system_error(errno, std::system_category());
@@ -127,3 +161,61 @@ std::size_t reckless::file_writer::write(void const* pbuffer, std::size_t count,
     }
     return p - static_cast<char const*>(pbuffer);
 }
+
+#elif defined(_WIN32)
+namespace {
+    template <class F, typename T>
+    HANDLE createfile_generic(F CreateFileX, T const* path)
+    {
+        // From NtCreateFile documentation:
+        // (https://msdn.microsoft.com/en-us/library/bb432380.aspx)
+        // If only the FILE_APPEND_DATA and SYNCHRONIZE flags are set, the caller
+        // can write only to the end of the file, and any offset information on
+        // writes to the file is ignored. However, the file is automatically
+        // extended as necessary for this type of write operation.
+        // TODO what happens if the user deletes the file while we are writing?
+        HANDLE h = CreateFileX(path,
+            FILE_APPEND_DATA | SYNCHRONIZE,
+            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+            NULL,
+            OPEN_ALWAYS,
+            FILE_ATTRIBUTE_NORMAL,
+            NULL);
+        if(h == INVALID_HANDLE_VALUE)
+            throw std::system_error(GetLastError(), std::system_category());
+        return h;
+    }
+}
+reckless::file_writer::file_writer(char const* path) :
+    handle_(INVALID_HANDLE_VALUE)
+{
+    handle_ = createfile_generic(CreateFileA, path);
+}
+
+reckless::file_writer::file_writer(wchar_t const* path) :
+    handle_(INVALID_HANDLE_VALUE)
+{
+    handle_ = createfile_generic(CreateFileW, path);
+}
+
+reckless::file_writer::~file_writer()
+{
+    CloseHandle(handle_);
+}
+
+std::size_t reckless::file_writer::write(void const* pbuffer, std::size_t count, std::error_code& ec) noexcept
+{
+    DWORD written;
+    assert(count < std::numeric_limits<DWORD>::max());
+    if(WriteFile(handle_, pbuffer, static_cast<DWORD>(count), &written, NULL)) {
+        assert(written == count);
+        ec.clear();
+        return count;
+    } else {
+        int err = GetLastError();
+        ec.assign(err, get_error_category());
+        return written;
+    }
+}
+
+#endif

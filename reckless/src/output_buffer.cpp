@@ -25,7 +25,7 @@
 
 #include <cstdlib>      // malloc, free
 #include <cassert>
-#include <sys/mman.h>   // madvise()
+#include <algorithm>    // max, min
 
 namespace reckless {
 
@@ -40,7 +40,6 @@ char const* flush_error::what() const noexcept
 }
 
 using detail::likely;
-using detail::unlikely;
 
 output_buffer::output_buffer()
 {
@@ -75,8 +74,6 @@ void output_buffer::reset(writer* pwriter, std::size_t max_capacity)
     pframe_end_ = pbuffer_;
     pcommit_end_ = pbuffer_;
     pbuffer_end_ = pbuffer_ + max_capacity;
-    auto page = detail::get_page_size();
-    madvise(pbuffer_ + page, max_capacity - page, MADV_DONTNEED);
 }
 
 output_buffer::~output_buffer()
@@ -97,7 +94,9 @@ void output_buffer::write(void const* buf, std::size_t count)
     char const* pinput = static_cast<char const*>(buf);
     auto remaining_input = count;
     auto available_buffer = static_cast<std::size_t>(pbuffer_end_ - pcommit_end_);
-    while(unlikely(remaining_input > available_buffer)) {
+    while(true) {
+        if(likely(remaining_input <= available_buffer))
+            break;
         std::memcpy(pcommit_end_, pinput, available_buffer);
         pinput += available_buffer;
         remaining_input -= available_buffer;
@@ -112,13 +111,11 @@ void output_buffer::write(void const* buf, std::size_t count)
 
 void output_buffer::flush()
 {
+    using namespace reckless::detail;
+
     // TODO keep track of a high watermark, i.e. max value of pcommit_end_.
     // Clear every second or some such. Use madvise to release unused memory.
     
-    // TODO we must honor the return value of write here. Also, since
-    // it's user-provided code we should handle exceptions. The same
-    // goes for any calls to formatter functions.
- 
     // If there is a temporary error for long enough that the buffer gets full
     // and we have to throw away data, but we resume writing later, then we do
     // not want to end up with half-written frames in the middle of the log
@@ -171,7 +168,7 @@ void output_buffer::flush()
 
         if(likely(!error)) {
             error_code_.clear();
-            error_flag_.store(false, std::memory_order_release);
+            atomic_store_release(&error_flag_, false);
             if(likely(!lost_input_frames_)) {
                 return;
             } else {
@@ -255,9 +252,9 @@ void output_buffer::flush()
                 block_time_ms = std::min(block_time_ms, 1000u);
                 break;
             case error_policy::fail_immediately:
-                if(!error_flag_.load(std::memory_order_relaxed)) {
+                if(!error_flag_) {
                     error_code_ = error;
-                    error_flag_.store(true, std::memory_order_release);
+                    atomic_store_release(&error_flag_, true);
                 }
                 throw flush_error(error);
             }
@@ -269,8 +266,10 @@ char* output_buffer::reserve_slow_path(std::size_t size)
 {
     std::size_t frame_size = (pcommit_end_ - pframe_end_) + size;
     std::size_t buffer_size = pbuffer_end_ - pbuffer_;
-    if(unlikely(frame_size > buffer_size))
+    if(likely(frame_size <= buffer_size)) {
+    } else {
         throw excessive_output_by_frame();
+    }
     flush();
     return pcommit_end_;
 }

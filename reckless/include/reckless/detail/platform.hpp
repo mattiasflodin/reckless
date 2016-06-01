@@ -26,8 +26,22 @@
 #define RECKLESS_CACHE_LINE_SIZE 64
 #endif
 
+#include <cstdint>  // uint64_t, int64_t
+
+#if defined(__GNUC__)
+#define RECKLESS_TLS __thread
+#elif defined(_MSC_VER)
+#define RECKLESS_TLS __declspec(thread)
+#else
+// Note that __thread/declspec(thread) is not exactly the same as C++11
+// thread_local since the latter has a runtime penalty. See
+// https://stackoverflow.com/questions/13106049/c11-gcc-4-8-thread-local-performance-penalty
+// https://gcc.gnu.org/gcc-4.8/changes.html#cxx
+static_assert(false, "RECKLESS_TLS is not implemented for this compiler")
+#endif
+
 #if defined(_MSC_VER)
-#    if defined(_M_IX86)
+#    if defined(_M_IX86) || defined(_M_X64)
          extern "C" {
              __int64 _InterlockedCompareExchange64(__int64 volatile* Destination, __int64 Exchange, __int64 Comparand);
              void _mm_prefetch(char const* p, int i);
@@ -98,22 +112,33 @@ void atomic_store_release(T* ptarget, T const& value)
 #if defined(__GNUC__)
     __atomic_store_n(ptarget, value, __ATOMIC_RELEASE);
 #elif defined(_MSC_VER)
-    *pvalue = value;
+    *ptarget = value;
 #else
     static_assert(false, "atomic_store_release is not implemented for this compiler");
 #endif
 }
 
-template<typename T>
-inline bool atomic_compare_exchange_weak_relaxed(T* ptarget, T expected, T desired)
-{
 #if defined(__GNUC__)
+template<typename T>
+bool atomic_compare_exchange_weak_relaxed(T* ptarget, T expected, T desired)
+{
     return __atomic_compare_exchange_n(ptarget, &expected, desired, true,
-            __ATOMIC_RELAXED, __ATOMIC_RELAXED);
-#elif defined(_MSC_VER)
-        return expected == _InterlockedCompareExchange64(ptarget, desired, expected);
-#endif
+        __ATOMIC_RELAXED, __ATOMIC_RELAXED);
+    return expected == _InterlockedCompareExchange64(ptarget, desired, expected);
 }
+#elif defined(_MSC_VER)
+inline bool atomic_compare_exchange_weak_relaxed(std::uint64_t* ptarget,
+    std::uint64_t expected, std::uint64_t desired)
+{
+        return reinterpret_cast<std::int64_t const&>(expected) ==
+            _InterlockedCompareExchange64(
+            reinterpret_cast<std::int64_t*>(ptarget),
+            reinterpret_cast<std::int64_t const&>(desired),
+            reinterpret_cast<std::int64_t const&>(expected));
+}
+#else
+    static_assert(false, "atomic_compare_exchange_weak_relaxed is not implemented for this platform")
+#endif
 
 inline bool likely(bool expr) {
 #ifdef __GNUC__
@@ -123,14 +148,16 @@ inline bool likely(bool expr) {
 #endif
 }
 
-inline void unreachable()
+inline void assume(bool condition)
 {
 #if defined(__GNUC__)
-    __builtin_unreachable();
+    XXX check that this is still working
+    if(condition)
+        __builtin_unreachable();
 #elif defined(_MSC_VER)
-    __assume(0);
+    __assume(condition);
 #else
-    static_assert(false, "unreachable() is not implemented for this compiler");
+    static_assert(false, "assume() is not implemented for this compiler");
 #endif
 }
 
@@ -153,6 +180,9 @@ inline void pause()
 
 unsigned get_page_size();
 extern unsigned const page_size;
+
+void set_thread_name(char const* name);
+
 
 }   // detail
 }   // reckless

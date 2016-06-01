@@ -23,9 +23,8 @@
 #define RECKLESS_BASIC_LOG_HPP
 
 #include <reckless/detail/spsc_event.hpp>
-#include <reckless/detail/branch_hints.hpp> // likely
-#include <reckless/detail/utility.hpp> // RECKLESS_CACHE_LINE_SIZE
-#include <reckless/detail/optional.hpp>
+#include <reckless/detail/platform.hpp> // likely, RECKLESS_CACHE_LINE_SIZE
+#include <reckless/detail/utility.hpp>  // index_sequence
 #include <reckless/detail/mpsc_ring_buffer.hpp>
 #include <reckless/output_buffer.hpp>
 
@@ -37,10 +36,16 @@
 #include <typeinfo>     // type_info
 #include <mutex>
 
-#include <pthread.h>    // pthread_key_t
+#if defined(_POSIX_VERSION)
+#include <pthread.h>    // pthread_self
+#endif
 
 namespace reckless {
 namespace detail {
+#if defined(_WIN32)
+    extern "C" unsigned long __stdcall GetCurrentThreadId();
+#endif
+
     enum class frame_status : char {
         uninitialized = 0,
         initialized = 1,
@@ -70,7 +75,6 @@ namespace detail {
 
 using format_error_callback_t = std::function<void (output_buffer*, std::exception_ptr const&, std::type_info const&)>;
 
-// TODO generic_log better name?
 class basic_log : private output_buffer {
 public:
     basic_log();
@@ -154,8 +158,14 @@ protected:
         // within the worker thread (from writer_error_callback?). That's bad
         // because it can lead to a deadlock. Instead, you need to format your
         // string yourself and write directly to the output_buffer.
+
+#if defined(_POSIX_VERSION)
         assert(!pthread_equal(pthread_self(), output_worker_native_handle_));
+#elif defined(_WIN32)
+        assert(GetCurrentThreadId() == output_worker_native_id_);
 #endif
+
+#endif  // RECKLESS_DEBUG
 
         frame_header* pframe = push_input_frame(frame_size);
         pframe->pdispatch_function = &detail::input_frame_dispatch2<
@@ -167,8 +177,7 @@ protected:
             + args_offset;
         // Let the compiler know that the placement-new call below
         // doesn't need to perform a null-pointer check.
-        if(pargs == nullptr)
-            __builtin_unreachable();
+        assume(pargs != nullptr);
 
         try {
             new (pargs) args_t(std::forward<Args>(args)...);
@@ -194,7 +203,8 @@ private:
     void flush_output_buffer();
     void halt_on_panic_flush();
 
-    void on_panic_flush_done() __attribute__((noreturn));
+    [[noreturn]]
+    void on_panic_flush_done();
     bool is_open()
     {
         return output_thread_.joinable();
@@ -204,16 +214,18 @@ private:
     detail::spsc_event input_buffer_full_event_;
     detail::spsc_event input_buffer_empty_event_;
 
-    output_buffer output_buffer_;
-
     std::mutex callback_mutex_;
     format_error_callback_t format_error_callback_; // access synchronized by callback_mutex_
     std::thread output_thread_;
     detail::spsc_event panic_flush_done_event_;
 
-#ifdef RECKLESS_DEBUG
+#if defined(_POSIX_VERSION)
     pthread_t output_worker_native_handle_;
-#endif
+#elif defined(_WIN32)
+    unsigned long output_worker_native_id_;
+#else
+    static_assert(false, "threading not implemented for this platform")
+#endif  // RECKLESS_DEBUG
 };
 
 class writer_error : public std::system_error {
@@ -225,31 +237,27 @@ public:
     char const* what() const noexcept override;
 };
 
-#define RECKLESS_IMPLEMENT_PUSH_INPUT_FRAME(inline_specifier) \
-inline_specifier detail::frame_header* basic_log::push_input_frame( \
-        std::size_t size) \
-{ \
-    using namespace detail; \
-    if(likely(!error_flag_.load(std::memory_order_acquire))) { \
-        return push_input_frame_blind(size); \
+inline detail::frame_header* basic_log::push_input_frame(
+        std::size_t size)
+{
+    using namespace detail;
+    if(likely(!atomic_load_acquire(&error_flag_))) {
+        return push_input_frame_blind(size);
     } else { \
-        throw writer_error(error_code_); \
-    } \
-} \
-\
-inline_specifier detail::frame_header* basic_log::push_input_frame_blind( \
-        std::size_t size) \
-{ \
-    using namespace detail; \
-    auto pframe = static_cast<frame_header*>(input_buffer_.push(size)); \
-    if(likely(pframe)) \
-        return pframe; \
-    else \
-        return push_input_frame_slow_path(size); \
+        throw writer_error(error_code_);
+    }
 }
-#if !defined(RECKLESS_NO_INLINE_INPUT_BUFFER)
-RECKLESS_IMPLEMENT_PUSH_INPUT_FRAME(inline)
-#endif
+
+inline detail::frame_header* basic_log::push_input_frame_blind(
+        std::size_t size)
+{
+    using namespace detail;
+    auto pframe = static_cast<frame_header*>(input_buffer_.push(size));
+    if(likely(pframe != nullptr))
+        return pframe;
+    else
+        return push_input_frame_slow_path(size);
+}
 
 namespace detail {
 
@@ -297,11 +305,11 @@ std::size_t input_frame_dispatch2(dispatch_operation operation, void* arg1, void
         args_owner args(*reinterpret_cast<args_t*>(pinput + args_offset));
         formatter_dispatch_helper<Formatter>(poutput, move(args.args), indexes);
         return frame_size;
-    } else if(operation == get_typeid) {
+    } else {
+        // operation == get_typeid
         *static_cast<std::type_info const**>(arg1) = &typeid(args_t);
         return frame_size;
     }
-    unreachable();
 }
 
 }   // namespace detail

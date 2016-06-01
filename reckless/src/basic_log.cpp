@@ -20,14 +20,14 @@
  * SOFTWARE.
  */
 #include <reckless/basic_log.hpp>
+#include <reckless/detail/platform.hpp>
 
 #include <vector>
-#include <ciso646>
-
-#include <unistd.h>     // sleep
+#include <algorithm>    // max, min
+#include <thread>       // sleep_for
+#include <chrono>       // hours
 
 using reckless::detail::likely;
-using reckless::detail::unlikely;
 
 namespace reckless {
 
@@ -101,7 +101,7 @@ void basic_log::close2(std::error_code& ec) noexcept
     output_buffer::reset();
     input_buffer_.reserve(0);
 
-    if(error_flag_.load(std::memory_order_acquire))
+    if(atomic_load_acquire(&error_flag_))
         ec = error_code_;
     else
         ec.clear();
@@ -123,11 +123,12 @@ void basic_log::flush(std::error_code& ec)
         static void format(output_buffer* poutput, detail::spsc_event* pevent,
                 std::error_code* perror)
         {
-            // Need downcast to get access to protected members.
+            // Need downcast to get access to protected members in
+            // output_buffer.
             auto const plog = static_cast<basic_log*>(poutput);
             try {
                 if(plog->has_complete_frame())
-                    poutput->flush();
+                    plog->output_buffer::flush();
                 perror->clear();
             } catch(flush_error const& e) {
                 *perror = e.code();
@@ -158,10 +159,6 @@ void basic_log::panic_flush()
     panic_flush_done_event_.wait();
 }
 
-#if defined(RECKLESS_NO_INLINE_INPUT_BUFFER)
-RECKLESS_IMPLEMENT_PUSH_INPUT_FRAME()
-#endif
-
 detail::frame_header* basic_log::push_input_frame_slow_path(std::size_t size)
 {
     using namespace detail;
@@ -170,7 +167,7 @@ detail::frame_header* basic_log::push_input_frame_slow_path(std::size_t size)
         input_buffer_full_event_.signal();
         // TODO: This wait releases *one* thread. If another thread is also
         // waiting to push data to the input buffer and it is selected for
-        // release, then this thread will "miss" the signal and stay here
+        // release, then this thread will miss the signal and stay here
         // waiting. However, we are guaranteed to eventually be released
         // (modulo starvation issues) because if another thread gets the ticket
         // then it will push an entry to the queue. When the queue gets cleared
@@ -193,15 +190,20 @@ void basic_log::output_worker2()
 {
     using namespace detail;
 
-#ifdef RECKLESS_DEBUG
+    // We don't know if the client application defines RECKLESS_DEBUG or not,
+    // so we have to assume it does and make sure to set the worker-thread ID.
+#if defined(_POSIX_VERSION)
     output_worker_native_handle_ = pthread_self();
+#elif defined(_WIN32)
+    output_worker_native_id_ = GetCurrentThreadId();
 #endif
-    pthread_setname_np(pthread_self(), "reckless output worker");
+
+    set_thread_name("reckless output worker");
 
     frame_status status = frame_status::uninitialized;
     while(likely(status < frame_status::shutdown_marker)) {
-        auto pframe = static_cast<char*>(input_buffer_.front());
         auto batch_size = wait_for_input();
+        auto pframe = static_cast<char*>(input_buffer_.front());
         auto pbatch_end = pframe + batch_size;
 
         while(pframe != pbatch_end) {
@@ -241,7 +243,7 @@ void basic_log::output_worker2()
 std::size_t basic_log::wait_for_input()
 {
     auto size = input_buffer_.size();
-    if(likely(size)) {
+    if(likely(size != 0)) {
         // It's not exactly *likely* that there is input in the buffer, but we
         // want this to be a "hot path" so that we perform our best when there
         // is a lot of load.
@@ -388,7 +390,7 @@ void basic_log::on_panic_flush_done()
     panic_flush_done_event_.signal();
     // Sleep and wait for death.
     while(true)
-        sleep(3600);
+        std::this_thread::sleep_for(std::chrono::hours(1));
 }
 
 }   // namespace reckless

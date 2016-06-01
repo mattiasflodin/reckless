@@ -31,7 +31,6 @@ class mpsc_ring_buffer {
 public:
     mpsc_ring_buffer()
     {
-        reset_mapping_handle();
         rewind();
         pbuffer_start_ = nullptr;
         capacity_ = 0;
@@ -85,7 +84,7 @@ public:
     std::size_t size() noexcept
     {
         auto wp = atomic_load_relaxed(&next_write_position_);
-        return wp - next_read_position_;
+        return static_cast<std::size_t>(wp - next_read_position_);
     }
 
     void pop_release(std::size_t size) noexcept
@@ -107,16 +106,7 @@ private:
         next_read_position_cached_ = 0;
         next_read_position_ = 0;
     }
-    void reset_mapping_handle()
-    {
-#if defined(_WIN32)
-        mapping_handle_ = 0;
-#endif
-    }
 
-#if defined(_WIN32)
-    std::uintptr_t mapping_handle_;
-#endif
     std::uint64_t next_write_position_;
     std::uint64_t next_read_position_cached_;
     std::uint64_t next_read_position_;

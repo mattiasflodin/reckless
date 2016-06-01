@@ -148,15 +148,7 @@ protected:
         return pframe_end_ != pbuffer_;
     }
 
-    // Need to make flush() public because of g++ bug 66957
-    // <https://gcc.gnu.org/bugzilla/show_bug.cgi?id=66957>
-#ifdef __GNUC__
-public:
-#endif
     void flush();
-#ifdef __GNUC__
-protected:
-#endif
 
     // Must not write to the log since it may cause a deadlock. May not throw
     // exceptions.
@@ -193,8 +185,8 @@ protected:
     std::atomic<error_policy> temporary_error_policy_{error_policy::ignore};
     std::atomic<error_policy> permanent_error_policy_{error_policy::fail_immediately};
     std::error_code error_code_;    // error code for error state
-    std::atomic_bool error_flag_{false};   // error state
-    std::atomic_bool panic_flush_{false};
+    bool error_flag_ = false;   // error state
+    bool panic_flush_ = false;
 
 private:
     output_buffer(output_buffer const&) = delete;

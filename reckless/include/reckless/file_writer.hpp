@@ -29,10 +29,18 @@ namespace reckless {
 class file_writer : public writer {
 public:
     file_writer(char const* path);
+#if defined(_WIN32)
+    file_writer(wchar_t const* path);
+#endif
+
     ~file_writer();
     std::size_t write(void const* pbuffer, std::size_t count, std::error_code& ec) noexcept override;
 private:
+#if defined(_POSIX_VERSION)
     int fd_;
+#elif defined(_WIN32)
+    void* handle_;
+#endif
 };
 
 }   // namespace reckless

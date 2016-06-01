@@ -24,6 +24,7 @@
 #include <atomic>
 #include <system_error>
 
+#if defined(__linux__)
 #include <linux/futex.h>
 #include <unistd.h>
 #include <sys/syscall.h>
@@ -111,6 +112,52 @@ private:
 
     int signal_;
 };
+
+#elif defined(_WIN32)
+#if !defined(_MSC_VER)
+static_assert(false, "spsc_event is not implemented for Windows on this compiler")
+#endif
+
+#include <cassert>
+
+namespace reckless {
+namespace detail {
+
+extern "C" {
+    unsigned long __stdcall WaitForSingleObject(void* hHandle, unsigned long dwMilliseconds);
+    int __stdcall SetEvent(void* hEvent);
+}
+
+class spsc_event {
+public:
+    spsc_event();
+    ~spsc_event();
+    void signal()
+    {
+        SetEvent(handle_);
+    }
+
+    void wait()
+    {
+        bool success = wait(0xFFFFFFFF);    // INFINITE
+        assert(success);
+    }
+
+    bool wait(unsigned milliseconds)
+    {
+        auto result = WaitForSingleObject(handle_, milliseconds);
+        assert(result == 0 || result == 0x102L);    // WAIT_OBJECT_0 || WAIT_TIMEOUT
+        return result == 0;
+    }
+
+private:
+    void* handle_;
+};
+
+#else
+static_assert(false, "spsc_event is not implemented for this OS")
+
+#endif
 
 }   // namespace detail
 }   // namespace reckless

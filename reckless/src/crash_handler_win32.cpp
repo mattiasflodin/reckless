@@ -19,22 +19,45 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-#include <reckless/policy_log.hpp>
-#include <reckless/file_writer.hpp>
+
+#include <reckless/basic_log.hpp>
 #include <reckless/crash_handler.hpp>
 
-#include <thread>
+#include <cassert>
+#include <vector>
 
-reckless::policy_log<> g_log;
+#include <Windows.h>
 
-int main()
+namespace reckless {
+
+namespace {
+std::vector<basic_log*> g_logs;
+LPTOP_LEVEL_EXCEPTION_FILTER g_old_exception_filter = nullptr;
+
+LONG WINAPI exception_filter(_EXCEPTION_POINTERS *ExceptionInfo)
 {
-    reckless::scoped_crash_handler crash_handler({&g_log});
-    reckless::file_writer writer("log.txt");
-    g_log.open2(&writer);
-    std::this_thread::sleep_for(std::chrono::seconds(2));
-    g_log.write("Hello World!");
-    char* p = nullptr;
-    *p = 0;
-    return 0;
+    for(basic_log* plog : g_logs)
+        plog->panic_flush();
+    return EXCEPTION_CONTINUE_SEARCH;
 }
+
+}   // anonymous namespace
+
+void install_crash_handler(std::initializer_list<basic_log*> logs)
+{
+    assert(logs.size() != 0);
+    assert(g_logs.empty());
+    g_logs.assign(begin(logs), end(logs));
+
+    g_old_exception_filter = SetUnhandledExceptionFilter(&exception_filter);
+}
+
+void uninstall_crash_handler()
+{
+    assert(!g_logs.empty());
+    SetUnhandledExceptionFilter(g_old_exception_filter);
+    g_old_exception_filter = nullptr;
+    g_logs.clear();
+}
+
+}   // namespace reckless

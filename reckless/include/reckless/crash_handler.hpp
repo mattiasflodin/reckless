@@ -23,14 +23,23 @@
 
 namespace reckless {
 class basic_log;
-void install_crash_handler(std::initializer_list<basic_log*> log);
+void install_crash_handler(std::initializer_list<basic_log*> logs);
 void uninstall_crash_handler();
+
+inline void install_crash_handler(basic_log* plog)
+{
+    install_crash_handler({plog});
+}
 
 class scoped_crash_handler {
 public:
-    scoped_crash_handler(std::initializer_list<basic_log*> log)
+    scoped_crash_handler(basic_log* plog)
     {
-        install_crash_handler(log);
+        install_crash_handler(plog);
+    }
+    scoped_crash_handler(std::initializer_list<basic_log*> logs)
+    {
+        install_crash_handler(logs);
     }
     ~scoped_crash_handler()
     {
