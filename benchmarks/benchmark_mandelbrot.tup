@@ -1,5 +1,3 @@
 : foreach mandelbrot.cpp find_mandelbrot.cpp benchmark_mandelbrot.cpp |> !cxx |>
 : mandelbrot.o find_mandelbrot.o |> !ld |> find_mandelbrot
 : mandelbrot.o benchmark_mandelbrot.o |> !ld |> benchmark_mandelbrot
-
-
