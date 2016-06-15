@@ -31,6 +31,7 @@
 
 namespace reckless {
 
+#if defined(_WIN32)
 namespace detail {
 extern "C" {
     void __stdcall GetSystemTimeAsFileTime(void* lpSystemTimeAsFileTime);
@@ -38,10 +39,11 @@ extern "C" {
     int __stdcall FileTimeToSystemTime(void const* lpFileTime, void* lpSystemTime);
 }
 }
+#endif
 
 class timestamp_field {
 public:
-#if defined(_POSIX_VERSION)
+#if defined(__unix__)
     timestamp_field()
     {
         // TODO "POSIX.1-2008 marks gettimeofday() as obsolete,
@@ -58,12 +60,12 @@ public:
         template_formatter::format(pbuffer,
             "%.4d-%.2d-%.2d %.2d:%.2d:%.2d.%.3d",
             tm.tm_year + 1900,
-            tm.tm_month + 1,
-            tm.mday,
+            tm.tm_mon + 1,
+            tm.tm_mday,
             tm.tm_hour,
             tm.tm_min,
             tm.tm_sec,
-            static_cast<unsigned>(tv_.tv_usec)/1000u));
+            static_cast<unsigned>(tv_.tv_usec)/1000u);
         return true;
     }
 

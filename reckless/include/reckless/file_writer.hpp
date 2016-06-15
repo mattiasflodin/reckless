@@ -36,7 +36,7 @@ public:
     ~file_writer();
     std::size_t write(void const* pbuffer, std::size_t count, std::error_code& ec) noexcept override;
 private:
-#if defined(_POSIX_VERSION)
+#if defined(__unix__)
     int fd_;
 #elif defined(_WIN32)
     void* handle_;

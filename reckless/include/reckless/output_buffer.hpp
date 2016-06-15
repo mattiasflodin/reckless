@@ -148,7 +148,15 @@ protected:
         return pframe_end_ != pbuffer_;
     }
 
+    // Need to make flush() public because of g++ bug 66957
+    // <https://gcc.gnu.org/bugzilla/show_bug.cgi?id=66957>
+#ifdef __GNUC__
+public:
+#endif
     void flush();
+#ifdef __GNUC__
+protected:
+#endif
 
     // Must not write to the log since it may cause a deadlock. May not throw
     // exceptions.

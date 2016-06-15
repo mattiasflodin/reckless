@@ -192,7 +192,7 @@ void basic_log::output_worker2()
 
     // We don't know if the client application defines RECKLESS_DEBUG or not,
     // so we have to assume it does and make sure to set the worker-thread ID.
-#if defined(_POSIX_VERSION)
+#if defined(__unix__)
     output_worker_native_handle_ = pthread_self();
 #elif defined(_WIN32)
     output_worker_native_id_ = GetCurrentThreadId();

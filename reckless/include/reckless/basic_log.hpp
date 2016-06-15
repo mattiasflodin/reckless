@@ -36,7 +36,7 @@
 #include <typeinfo>     // type_info
 #include <mutex>
 
-#if defined(_POSIX_VERSION)
+#if defined(__unix__)
 #include <pthread.h>    // pthread_self
 #endif
 

@@ -27,6 +27,7 @@
 #endif
 
 #include <cstdint>  // uint64_t, int64_t
+#include <type_traits>  // enable_if, underlying_type
 
 #if defined(__GNUC__)
 #define RECKLESS_TLS __thread
@@ -62,8 +63,8 @@ template <typename T>
 T atomic_load_relaxed(T const* pvalue)
 {
 #if defined(__GNUC__)
-    static_assert(false, "check what this does on gcc")
-    return __atomic_load_n(value, __ATOMIC_RELAXED);
+    // TODO check what this does on gcc;
+    return __atomic_load_n(pvalue, __ATOMIC_RELAXED);
 #elif defined(_MSC_VER)
     // Chapter 7,  Part 3A - System Programming Guide of Intel's processor manuals:
     // 8.1.1 Guaranteed Atomic Operations
@@ -81,10 +82,11 @@ T atomic_load_relaxed(T const* pvalue)
 }
 
 template <typename T>
-void atomic_store_relaxed(T* ptarget, T value)
+void atomic_store_relaxed(T* ptarget, T value,
+    typename std::enable_if<std::is_integral<T>::value>::type* = nullptr)
 {
 #if defined(__GNUC__)
-    static_assert(false, "check what this does on gcc");
+    // TODO check what this does on gcc;
     __atomic_store_n(ptarget, value, __ATOMIC_RELAXED);
 #elif defined(_MSC_VER)
     *ptarget = value;
@@ -94,8 +96,18 @@ void atomic_store_relaxed(T* ptarget, T value)
 }
 
 
+template <typename T>
+void atomic_store_relaxed(T* ptarget, T value,
+    typename std::enable_if<std::is_enum<T>::value>::type* = nullptr)
+{
+    using UT = typename std::underlying_type<T>::type;
+    atomic_store_relaxed(static_cast<UT*>(static_cast<void*>(ptarget)),
+            static_cast<UT>(value));
+}
+
 template<typename T>
-T atomic_load_acquire(T const* pvalue)
+T atomic_load_acquire(T const* pvalue,
+    typename std::enable_if<std::is_integral<T>::value>::type* = nullptr)
 {
 #if defined(__GNUC__)
     return __atomic_load_n(pvalue, __ATOMIC_ACQUIRE);
@@ -106,8 +118,18 @@ T atomic_load_acquire(T const* pvalue)
 #endif
 }
 
+template <typename T>
+T atomic_load_acquire(T const* pvalue,
+    typename std::enable_if<std::is_enum<T>::value>::type* = nullptr)
+{
+    using UT = typename std::underlying_type<T>::type;
+    return static_cast<T>(atomic_load_acquire(static_cast<UT const*>(
+        static_cast<void const*>(pvalue))));
+}
+
 template<typename T>
-void atomic_store_release(T* ptarget, T const& value)
+void atomic_store_release(T* ptarget, T value,
+    typename std::enable_if<std::is_integral<T>::value>::type* = nullptr)
 {
 #if defined(__GNUC__)
     __atomic_store_n(ptarget, value, __ATOMIC_RELEASE);
@@ -118,13 +140,21 @@ void atomic_store_release(T* ptarget, T const& value)
 #endif
 }
 
+template <typename T>
+void atomic_store_release(T* ptarget, T value,
+    typename std::enable_if<std::is_enum<T>::value>::type* = nullptr)
+{
+    using UT = typename std::underlying_type<T>::type;
+    return atomic_store_release(static_cast<UT*>(static_cast<void*>(ptarget)),
+        static_cast<UT>(value));
+}
+
 #if defined(__GNUC__)
 template<typename T>
 bool atomic_compare_exchange_weak_relaxed(T* ptarget, T expected, T desired)
 {
     return __atomic_compare_exchange_n(ptarget, &expected, desired, true,
         __ATOMIC_RELAXED, __ATOMIC_RELAXED);
-    return expected == _InterlockedCompareExchange64(ptarget, desired, expected);
 }
 #elif defined(_MSC_VER)
 inline bool atomic_compare_exchange_weak_relaxed(std::uint64_t* ptarget,
@@ -151,7 +181,7 @@ inline bool likely(bool expr) {
 inline void assume(bool condition)
 {
 #if defined(__GNUC__)
-    XXX check that this is still working
+    // TODO check that this is still working
     if(condition)
         __builtin_unreachable();
 #elif defined(_MSC_VER)
@@ -165,7 +195,7 @@ template<int Locality = 3>
 inline void prefetch(void const* ptr)
 {
 #if defined(__GNUC__)
-    __builtin_prefetch(p, 0, Locality);
+    __builtin_prefetch(ptr, 0, Locality);
 #elif defined(_MSC_VER)
     _mm_prefetch(static_cast<char const*>(ptr), Locality);
 #else
@@ -175,7 +205,15 @@ inline void prefetch(void const* ptr)
 
 inline void pause()
 {
+#if defined(__clang__)
+    asm volatile("pause");
+#elif defined(__GNUC__)
+    __builtin_ia32_pause();
+#elif defined(_MSC_VER)
     _mm_pause();
+#else
+    static_assert(false, "pause() is not implemented for this compiler");
+#endif
 }
 
 unsigned get_page_size();

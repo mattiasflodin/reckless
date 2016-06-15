@@ -25,7 +25,7 @@
 #include <cassert>
 #include <limits>   // numeric_limits
 
-#if defined(_POSIX_VERSION)
+#if defined(__unix__)
 #include <sys/stat.h>   // open()
 #include <fcntl.h>
 #include <errno.h>
@@ -81,7 +81,7 @@ namespace {
     private:
         int file_writer_to_writer_category(int code) const
         {
-#if defined(_POSIX_VERSION)
+#if defined(__unix__)
             switch(code) {
             case ENOSPC:
             case ENOBUFS:
@@ -122,7 +122,7 @@ namespace {
     }
 }
 
-#if defined(_POSIX_VERSION)
+#if defined(__unix__)
 reckless::file_writer::file_writer(char const* path) :
     fd_(-1)
 {

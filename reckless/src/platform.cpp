@@ -21,15 +21,19 @@
 */
 #include <reckless/detail/platform.hpp>
 
+#if defined(__unix__)
+#include <pthread.h>    // pthread_setname_np, pthread_self
+#endif
 #if defined(__linux__)
 #include <unistd.h> // sysconf
-#elif defined(_WIN32)
+#endif
+#if defined(_WIN32)
 #include <Windows.h>    // GetSystemInfo
 #endif
 
 namespace reckless {
 namespace detail {
-    
+
 unsigned get_page_size()
 {
 #if defined(__linux__)
@@ -46,7 +50,7 @@ unsigned get_page_size()
 
 void set_thread_name(char const* name)
 {
-#if defined(_POSIX_VERSION)
+#if defined(__unix__)
     pthread_setname_np(pthread_self(), "reckless output worker");
 
 #elif defined(_WIN32)
@@ -75,7 +79,7 @@ void set_thread_name(char const* name)
     }
     __except (EXCEPTION_EXECUTE_HANDLER){
     }
-#endif
+#endif  // _WIN32
 }
 
 
