@@ -19,8 +19,8 @@
     </ProjectConfiguration>
   </ItemGroup>
   <PropertyGroup Label="Globals">
-    <ProjectGuid>{654EABD2-1CD0-41D5-85B3-2C727770D0FA}</ProjectGuid>
-    <RootNamespace>crash_handler</RootNamespace>
+    <ProjectGuid>{323CC550-DE87-4ABB-ABBF-9567B424012D}</ProjectGuid>
+    <RootNamespace>ucs2_log</RootNamespace>
     <WindowsTargetPlatformVersion>8.1</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
@@ -32,7 +32,7 @@
     <Import Project="$(SolutionDir)common.props" />
   </ImportGroup>
   <ItemGroup>
-    <ClCompile Include="crash_handler.cpp" />
+    <ClCompile Include="ucs2_log.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

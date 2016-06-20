@@ -19,8 +19,8 @@
     </ProjectConfiguration>
   </ItemGroup>
   <PropertyGroup Label="Globals">
-    <ProjectGuid>{654EABD2-1CD0-41D5-85B3-2C727770D0FA}</ProjectGuid>
-    <RootNamespace>crash_handler</RootNamespace>
+    <ProjectGuid>{EBB7665E-F056-4C88-BDDD-E9137C873E2E}</ProjectGuid>
+    <RootNamespace>panic_flush</RootNamespace>
     <WindowsTargetPlatformVersion>8.1</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
@@ -32,7 +32,7 @@
     <Import Project="$(SolutionDir)common.props" />
   </ImportGroup>
   <ItemGroup>
-    <ClCompile Include="crash_handler.cpp" />
+    <ClCompile Include="panic_flush.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

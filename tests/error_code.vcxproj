@@ -19,8 +19,8 @@
     </ProjectConfiguration>
   </ItemGroup>
   <PropertyGroup Label="Globals">
-    <ProjectGuid>{654EABD2-1CD0-41D5-85B3-2C727770D0FA}</ProjectGuid>
-    <RootNamespace>crash_handler</RootNamespace>
+    <ProjectGuid>{B270E86E-A503-4159-9620-CF95B0E2C7F4}</ProjectGuid>
+    <RootNamespace>error_code</RootNamespace>
     <WindowsTargetPlatformVersion>8.1</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
@@ -32,7 +32,7 @@
     <Import Project="$(SolutionDir)common.props" />
   </ImportGroup>
   <ItemGroup>
-    <ClCompile Include="crash_handler.cpp" />
+    <ClCompile Include="error_code.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
