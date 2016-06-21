@@ -28,6 +28,9 @@
     <WholeProgramOptimization>true</WholeProgramOptimization>
   </PropertyGroup>
   <ItemDefinitionGroup>
+    <ClCompile>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS</PreprocessorDefinitions>
+    </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <AdditionalDependencies>reckless.lib;%(AdditionalDependencies)</AdditionalDependencies>
