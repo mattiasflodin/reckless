@@ -25,6 +25,7 @@
 #include <vector>
 #include <cassert>
 #include <stdexcept>
+#include <thread>   // sleep_for
 
 #include <iostream>
 
@@ -59,7 +60,7 @@ int main()
     } catch(std::runtime_error const&) {
         g_log.write("Second");
     }
-    sleep(3);
+    std::this_thread::sleep_for(std::chrono::seconds(3));
     g_log.write("Third");
     g_log.close2();
     std::cout << g_writer.container;

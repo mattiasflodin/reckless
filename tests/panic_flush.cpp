@@ -25,12 +25,17 @@
 #include <cstdio>
 #include <thread>
 
+#if defined(__unix__)
 #include <signal.h>
+#elif defined(_WIN32)
+#include <Windows.h>
+#endif
 
 reckless::policy_log<> g_log;
-
 volatile int t1_count=0;
 volatile int t2_count=0;
+
+#if defined(__unix__)
 void sigsegv_handler(int)
 {
     int t1c = t1_count;
@@ -38,15 +43,29 @@ void sigsegv_handler(int)
     g_log.panic_flush();
     std::printf("Last log entry for t1 should be >=%d. Last log entry for t2 should be >=%d\n", t1c, t2c);
 }
+#elif defined(_WIN32)
+LONG WINAPI exception_filter(_EXCEPTION_POINTERS*)
+{
+    int t1c = t1_count;
+    int t2c = t2_count;
+    g_log.panic_flush();
+    std::printf("Last log entry for t1 should be >=%d. Last log entry for t2 should be >=%d\n", t1c, t2c);
+    return EXCEPTION_CONTINUE_SEARCH;
+}
+#endif
 
 int main()
 {
+#if defined(__unix__)
     struct sigaction act;
     std::memset(&act, 0, sizeof(act));
     act.sa_handler = &sigsegv_handler;
     sigfillset(&act.sa_mask);
     act.sa_flags = SA_RESETHAND;
     sigaction(SIGSEGV, &act, nullptr);
+#elif defined(_WIN32)
+    SetUnhandledExceptionFilter(&exception_filter);
+#endif
 
     reckless::file_writer writer("log.txt");
     g_log.open2(&writer);
