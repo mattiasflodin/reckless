@@ -111,6 +111,7 @@
     <ClInclude Include="include\reckless\detail\mpsc_ring_buffer.hpp" />
     <ClInclude Include="include\reckless\detail\platform.hpp" />
     <ClInclude Include="include\reckless\detail\spsc_event.hpp" />
+    <ClInclude Include="include\reckless\detail\trace_log.hpp" />
     <ClInclude Include="include\reckless\detail\utility.hpp" />
     <ClInclude Include="include\reckless\file_writer.hpp" />
     <ClInclude Include="include\reckless\ntoa.hpp" />
@@ -138,6 +139,7 @@
     <ClCompile Include="src\policy_log.cpp" />
     <ClCompile Include="src\spsc_event_win32.cpp" />
     <ClCompile Include="src\template_formatter.cpp" />
+    <ClCompile Include="src\trace_log.cpp" />
     <ClCompile Include="src\writer.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
