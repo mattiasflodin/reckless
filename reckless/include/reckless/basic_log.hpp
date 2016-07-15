@@ -47,16 +47,35 @@ namespace detail {
 #endif
 
     enum class frame_status : char {
+        // The frame is currently free for use.
         uninitialized,
+        // Frame was allocated but then the error_flag_ check failed, leaving
+        // the frame uninitialized and it should be skipped by using
+        // frame_header::frame_size.
         failed_error_check,
+        // Frame was allocated but then the constructor failed, leaving the
+        // dispatch pointer valid but without initialized data. It should be
+        // skipped by using frame_header::pdispatch_funtion and
+        // dispatch_operation::get_typeid.
         failed_initialization,
+        // Frame is initialized and valid.
         initialized,
+        // Frame is a shutdown marker, telling the worker thread to finish up
+        // and exit.
         shutdown_marker,
+        // Frame is a panic-shutdown watermark, telling the worker thread that
+        // it should process no more frames and just wait until the program
+        // crashes.
         panic_shutdown_marker
     };
 
     enum dispatch_operation {
+        // The dispatch function should call the formatter to write to the
+        // output buffer.
         invoke_formatter,
+        // The dispatch function should return frame size type information for
+        // the formatter instead of calling it. This is used during error
+        // handling.
         get_typeid
     };
 
