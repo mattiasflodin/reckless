@@ -20,6 +20,7 @@
  * SOFTWARE.
  */
 #include "memory_writer.hpp"
+#include "eol.hpp"
 #include <reckless/policy_log.hpp>
 
 #include <vector>
@@ -64,7 +65,7 @@ int main()
     g_log.write("Third");
     g_log.close2();
     std::cout << g_writer.container;
-    assert(g_writer.container == "First\nSecond\nThird\n");
+    assert(g_writer.container == eol("First\nSecond\nThird\n"));
 
     return 0;
 }

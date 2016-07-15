@@ -19,14 +19,28 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-#include <cstdlib>
-#include <cstdint>  // uint64_t, uintptr_t
-
 #include "platform.hpp"  // likely, atomic_*, pause
+
+#include <cstdlib>  // size_t
+#include <cstdint>  // uint64_t, uintptr_t
+#include <cstring>  // memset
 
 namespace reckless {
 namespace detail {
 
+// This is a lock-free, multiple-producer, single-consumer "magic ring buffer":
+// a ring buffer / circular buffer that takes advantage of the virtual memory
+// system to map the same physical memory twice to consecutive memory addresses.
+// This avoids the added complexity of having to deal with buffer wraparound in
+// the middle of an allocated block. Furthermore, it uses 64-bit offsets that
+// never wrap to represent the read and write positions of the buffer. That is,
+// the read position is always less than or equal to the write position, hence
+// requiring only a simple subtraction to determine how much buffer space is
+// currently occupied. More importantly, doing this avoids the ABA problem. The
+// final address to use for actual memory access is computed by a modulo
+// operation once a block has been allocated. We assume that the 64-bit position
+// variables will never overflow. A process that writes 100 GiB every second
+// would take five years for this to happen.
 class mpsc_ring_buffer {
 public:
     mpsc_ring_buffer()
@@ -62,12 +76,10 @@ public:
             if(likely(nwp - rp <= capacity)) {
             } else {
                 auto rp_live = atomic_load_relaxed(&next_read_position_);
-                if(atomic_compare_exchange_weak_relaxed(&next_read_position_cached_, rp, rp_live)) {
-                    if(nwp - rp_live > capacity)
-                        return nullptr;
-                    rp = rp_live;
+                atomic_compare_exchange_weak_relaxed(&next_read_position_cached_, rp, rp_live);
+                if(likely(nwp - rp_live <= capacity)) {
                 } else {
-                    continue;
+                    return nullptr;
                 }
             }
 
@@ -76,9 +88,24 @@ public:
         }
     }
 
+    // Allocate all remaining space, filling the buffer to its capacity.
+    void deplete() noexcept
+    {
+        auto capacity = capacity_;
+        for(;;pause()) {
+            auto wp = atomic_load_relaxed(&next_write_position_);
+            auto rp = atomic_load_relaxed(&next_read_position_);
+            auto used = wp - rp;
+            auto remaining = capacity - used;
+            auto nwp = wp + remaining;
+            if(atomic_compare_exchange_weak_relaxed(&next_write_position_, wp, nwp))
+                return;
+        }
+    }
+
     void* front() noexcept
     {
-        return pbuffer_start_ + (next_read_position_ & (capacity_-1));
+        return pbuffer_start_ + (next_read_position_ & (capacity_ - 1));
     }
 
     std::size_t size() noexcept

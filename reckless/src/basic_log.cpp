@@ -150,20 +150,57 @@ void basic_log::flush()
         throw writer_error(error);
 }
 
-void basic_log::panic_flush()
+void basic_log::start_panic_flush()
 {
     using namespace detail;
     frame_header* pframe = push_input_frame_blind(RECKLESS_CACHE_LINE_SIZE);
-    atomic_store_relaxed(&pframe->status, frame_status::panic_shutdown_marker);
+    // To reduce interference from other running threads that write to the log
+    // during a panic flush, we set panic_flush_ = true. This stops the
+    // background thread from releasing consumed memory to the buffer. Then we
+    // call input_buffer_.deplete(), which will eat up all available memory
+    // from the buffer, effectively preventing all other threads from pushing
+    // more data to the buffer. Instead, they'll sit nicely and block until
+    // the flush is done.
+
+    // I'm uncertain about the theoretical correctness of this, but at least
+    // I'm pretty sure it will work on x86/x64, since Intel has a strongly-
+    // ordered cache coherency model. The thing we don't want to happen is that
+    // the store to panic_flush_ (below) becomes visible to the background
+    // thread before the input frame is allocated (above). Since panic_flush_
+    // signals to the background thread that it should no longer free up space
+    // in the buffer, that could mean that if the buffer is full then the
+    // allocation above will block indefinitely.
+    //
+    // It seems to me that what I need is a memory ordering that is the opposite
+    // of memory_order_release: store operations *below* the barrier may not be
+    // moved above it.
+    //
+    // Anyway, until we run into problems in practice, I think it will be
+    // sufficient to tell the *compiler* that it may not move anything
+    // above this barrier.
+    std::atomic_signal_fence(std::memory_order_seq_cst);
+    atomic_store_relaxed(&panic_flush_, true);
+    input_buffer_.deplete();
+
+    atomic_store_release(&pframe->status, frame_status::panic_shutdown_marker);
     input_buffer_full_event_.signal();
+}
+
+void basic_log::await_panic_flush()
+{
     panic_flush_done_event_.wait();
 }
 
-detail::frame_header* basic_log::push_input_frame_slow_path(std::size_t size)
+bool basic_log::await_panic_flush(unsigned int milliseconds)
+{
+    return panic_flush_done_event_.wait(milliseconds);
+}
+
+detail::frame_header* basic_log::push_input_frame_slow_path(
+    detail::frame_header* pframe, bool error, std::size_t size)
 {
     using namespace detail;
-    frame_header* pframe;
-    do {
+    while(pframe == nullptr && !error) {
         input_buffer_full_event_.signal();
         // TODO: This wait releases *one* thread. If another thread is also
         // waiting to push data to the input buffer and it is selected for
@@ -182,16 +219,28 @@ detail::frame_header* basic_log::push_input_frame_slow_path(std::size_t size)
         // different cache lines?)
         input_buffer_empty_event_.wait();
         pframe = static_cast<frame_header*>(input_buffer_.push(size));
-    } while(!pframe);
-    return pframe;
+        error = atomic_load_acquire(&error_flag_);
+    }
+    if(!error) {
+        return pframe;
+    } else {
+        if(pframe) {
+            pframe->frame_size = size;
+            atomic_store_release(&pframe->status, frame_status::failed_error_check);
+        }
+        throw writer_error(error_code_);
+    }
 }
 
 void basic_log::output_worker2()
 {
     using namespace detail;
 
+    // This code is compiled into a static library, whereas write() is inlined
+    // and compiled in the client application's environment.
     // We don't know if the client application defines RECKLESS_DEBUG or not,
-    // so we have to assume it does and make sure to set the worker-thread ID.
+    // so we have to assume it does and make sure to set the worker-thread ID,
+    // lest write() will misbehave.
 #if defined(__unix__)
     output_worker_native_handle_ = pthread_self();
 #elif defined(_WIN32)
@@ -203,34 +252,60 @@ void basic_log::output_worker2()
     frame_status status = frame_status::uninitialized;
     while(likely(status < frame_status::shutdown_marker)) {
         auto batch_size = wait_for_input();
-        auto pframe = static_cast<char*>(input_buffer_.front());
-        auto pbatch_end = pframe + batch_size;
+        auto pbatch_start = static_cast<char*>(input_buffer_.front());
+        auto pbatch_end = pbatch_start + batch_size;
+        auto pframe = pbatch_start;
 
-        while(pframe != pbatch_end) {
-            status = acquire_frame(pframe);
+        bool panic_flush = false;
+        do
+        {
+            while(pframe != pbatch_end &&
+                 likely(status < frame_status::shutdown_marker))
+            {
+                status = acquire_frame(pframe);
 
-            std::size_t frame_size;
-            if(likely(status == frame_status::initialized))
-                frame_size = process_frame(pframe);
-            else if(status < frame_status::shutdown_marker)
-                frame_size = skip_frame(pframe);
-            else
-                frame_size = RECKLESS_CACHE_LINE_SIZE;
+                std::size_t frame_size;
+                if(likely(status == frame_status::initialized))
+                    frame_size = process_frame(pframe);
+                else if(status == frame_status::failed_initialization)
+                    frame_size = skip_frame(pframe);
+                else if(status == frame_status::shutdown_marker)
+                    frame_size = RECKLESS_CACHE_LINE_SIZE;
+                else if(status == frame_status::panic_shutdown_marker) {
+                    // We are in panic-flush mode and reached the shutdown marker. That
+                    // means we are done.
+                    on_panic_flush_done();  // never returns
+                }
 
-            release_frame(pframe, frame_size);
-            pframe += frame_size;
-        }
-        input_buffer_.pop_release(batch_size);
-    }
+                clear_frame(pframe, frame_size);
+                pframe += frame_size;
+            }
+            assert(pframe == pbatch_end);
 
-    if(status == frame_status::panic_shutdown_marker) {
-        // We are in panic-flush mode and reached the shutdown marker. That
-        // means we are done.
-        on_panic_flush_done();  // never returns
+            // Return memory to the input buffer to be used by other threads,
+            // but only if we are not in a panic-flush state.
+            // See start_panic_flush() for more information.
+            panic_flush = atomic_load_relaxed(&panic_flush_);
+            if(likely(!panic_flush)) {
+                input_buffer_.pop_release(batch_size);
+            } else {
+                // As a consequence of not returning memory to the input buffer,
+                // on the next batch iteration input_buffer_.front() is going
+                // to return exactly the same frame address that we already
+                // processed, meaning we will hang waiting for it to become
+                // initialized. So instead of continuing normally we just update
+                // the batch end to reflect the current size of the buffer
+                // (which is going to end up equal to the full capacity of the
+                // buffer), let pframe remain at its current position, and loop
+                // around until we reach the panic_shutdown_marker frame.
+                batch_size = input_buffer_.size();
+                pbatch_end = pbatch_start + batch_size;
+            }
+        } while(unlikely(panic_flush));
     }
 
     if(output_buffer::has_complete_frame()) {
-        // Can't do much if there is a flush error here since we are
+        // Can't do much here if there is a flush error here since we are
         // shutting down. The error code will be checked by close() when
         // the worker thread finishes.
         // FIXME if the error policy is e.g. block then we may never leave here
@@ -282,10 +357,8 @@ std::size_t basic_log::wait_for_input()
 detail::frame_status basic_log::acquire_frame(void* pframe)
 {
     using namespace detail;
-    auto ppdispatch = static_cast<formatter_dispatch_function_t**>(pframe);
-    auto pstatus = static_cast<frame_status*>(static_cast<void*>(ppdispatch+1));
-
-    auto status = atomic_load_acquire(pstatus);
+    auto pheader = static_cast<frame_header*>(pframe);
+    auto status = atomic_load_acquire(&pheader->status);
     if(likely(status != frame_status::uninitialized))
         return status;
 
@@ -297,7 +370,7 @@ detail::frame_status basic_log::acquire_frame(void* pframe)
     unsigned wait_time_ms = 0;
     while(true) {
         input_buffer_full_event_.wait(wait_time_ms);
-        status = atomic_load_acquire(pstatus);
+        status = atomic_load_acquire(&pheader->status);
         if(status != frame_status::uninitialized)
             return status;
 
@@ -310,7 +383,8 @@ detail::frame_status basic_log::acquire_frame(void* pframe)
 std::size_t basic_log::process_frame(void* pframe)
 {
     using namespace detail;
-    auto pdispatch = *static_cast<formatter_dispatch_function_t**>(pframe);
+    auto pheader = static_cast<frame_header*>(pframe);
+    auto pdispatch = pheader->pdispatch_function;
 
     try {
         auto frame_size = (*pdispatch)(invoke_formatter,
@@ -343,22 +417,20 @@ std::size_t basic_log::process_frame(void* pframe)
 std::size_t basic_log::skip_frame(void* pframe)
 {
     using namespace detail;
-    auto pdispatch = *static_cast<formatter_dispatch_function_t**>(pframe);
+    auto pdispatch = static_cast<frame_header*>(pframe)->pdispatch_function;
     std::type_info const* pti;
     return (*pdispatch)(get_typeid, &pti, nullptr);
 }
 
-void basic_log::release_frame(void* pframe, std::size_t frame_size)
+void basic_log::clear_frame(void* pframe, std::size_t frame_size)
 {
     using namespace detail;
+    auto pcframe = static_cast<char*>(pframe);
     for(std::size_t offset=0; offset!=frame_size;
             offset += RECKLESS_CACHE_LINE_SIZE)
     {
-        void* psegment = static_cast<char*>(pframe) + offset;
-        auto ppdispatch = static_cast<formatter_dispatch_function_t**>(
-                psegment);
-        auto pstatus = static_cast<frame_status*>(static_cast<void*>(ppdispatch+1));
-        atomic_store_relaxed(pstatus, frame_status::uninitialized);
+        auto pheader = char_cast<frame_header*>(pcframe + offset);
+        atomic_store_relaxed(&pheader->status, frame_status::uninitialized);
     }
 }
 

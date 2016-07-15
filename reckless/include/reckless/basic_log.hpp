@@ -47,11 +47,12 @@ namespace detail {
 #endif
 
     enum class frame_status : char {
-        uninitialized = 0,
-        initialized = 1,
-        invalid = 2,
-        shutdown_marker = 3,
-        panic_shutdown_marker = 4
+        uninitialized,
+        failed_error_check,
+        failed_initialization,
+        initialized,
+        shutdown_marker,
+        panic_shutdown_marker
     };
 
     enum dispatch_operation {
@@ -62,12 +63,13 @@ namespace detail {
     typedef std::size_t formatter_dispatch_function_t(dispatch_operation, void*, void*);
 
     struct frame_header {
-        formatter_dispatch_function_t* pdispatch_function;
+        union {
+            formatter_dispatch_function_t* pdispatch_function;  // valid when status is failed_initialization or initialized
+            std::size_t frame_size; // valid when status == failed_error_check
+        };
         frame_status status;
     };
 
-    template <class Formatter, typename... Args>
-    std::size_t input_frame_dispatch(dispatch_operation operation, void* arg1, void* arg2);
     template <class Formatter, typename... Args>
     std::size_t input_frame_dispatch2(dispatch_operation operation, void* arg1, void* arg2);
 
@@ -129,7 +131,9 @@ public:
     using output_buffer::temporary_error_policy;
     using output_buffer::permanent_error_policy;
 
-    void panic_flush();
+    void start_panic_flush();
+    void await_panic_flush();
+    bool await_panic_flush(unsigned int miliseconds);
 
     // Provide access to the internal worker-thread object. The intent is to
     // allow platform-specific manipulation of the thread, such as setting
@@ -182,7 +186,7 @@ protected:
         try {
             new (pargs) args_t(std::forward<Args>(args)...);
         } catch(...) {
-            atomic_store_release(&pframe->status, frame_status::invalid);
+            atomic_store_release(&pframe->status, frame_status::failed_initialization);
             throw;
         }
         atomic_store_release(&pframe->status, frame_status::initialized);
@@ -191,17 +195,17 @@ protected:
 private:
     detail::frame_header* push_input_frame(std::size_t size);
     detail::frame_header* push_input_frame_blind(std::size_t frame_size);
-    detail::frame_header* push_input_frame_slow_path(std::size_t size);
+    detail::frame_header* push_input_frame_slow_path(
+        detail::frame_header * pframe, bool error, std::size_t size);
 
     void output_worker2();
     std::size_t wait_for_input();
     detail::frame_status acquire_frame(void* pframe);
     std::size_t process_frame(void* pframe);
     std::size_t skip_frame(void* pframe);
-    void release_frame(void* pframe, std::size_t frame_size);
+    void clear_frame(void* pframe, std::size_t frame_size);
 
     void flush_output_buffer();
-    void halt_on_panic_flush();
 
     [[noreturn]]
     void on_panic_flush_done();
@@ -241,11 +245,20 @@ inline detail::frame_header* basic_log::push_input_frame(
         std::size_t size)
 {
     using namespace detail;
-    if(likely(!atomic_load_acquire(&error_flag_))) {
-        return push_input_frame_blind(size);
-    } else { \
-        throw writer_error(error_code_);
-    }
+    // This is possibly useless micro-optimization but after all, making this
+    // path fast is the whole point of the library so I'll indulge myself.
+    // Instead of having one branch for checking the result of
+    // input_buffer_.push and another for checking the error flag, we combine
+    // both checks into one. That means we have to mark the allocated input
+    // frame as failed_error_check if it succeeds but the error check does not.
+    auto pframe = static_cast<frame_header*>(input_buffer_.push(size));
+    auto error = atomic_load_acquire(&error_flag_);
+    std::uint64_t no_error = ~static_cast<std::uint64_t>(error);
+    no_error &= reinterpret_cast<std::uintptr_t>(pframe);
+    if(likely(no_error != 0))
+        return pframe;
+    else
+        return push_input_frame_slow_path(pframe, error, size);
 }
 
 inline detail::frame_header* basic_log::push_input_frame_blind(
@@ -256,7 +269,7 @@ inline detail::frame_header* basic_log::push_input_frame_blind(
     if(likely(pframe != nullptr))
         return pframe;
     else
-        return push_input_frame_slow_path(size);
+        return push_input_frame_slow_path(nullptr, false, size);
 }
 
 namespace detail {

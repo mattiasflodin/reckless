@@ -23,6 +23,11 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "examples", "examples", "{6059234A-DADE-4B5A-8207-C43C557F096B}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{8EE386EA-49AE-4DF1-BD50-6A28ED0FDD56}"
+	ProjectSection(SolutionItems) = preProject
+		tests\eol.hpp = tests\eol.hpp
+		tests\memory_writer.hpp = tests\memory_writer.hpp
+		tests\unreliable_writer.hpp = tests\unreliable_writer.hpp
+	EndProjectSection
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "crash_handler", "tests\crash_handler.vcxproj", "{654EABD2-1CD0-41D5-85B3-2C727770D0FA}"
 	ProjectSection(ProjectDependencies) = postProject

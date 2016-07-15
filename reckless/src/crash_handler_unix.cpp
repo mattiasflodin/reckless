@@ -51,7 +51,9 @@ std::vector<std::pair<int, struct sigaction>> g_old_sigactions;
 void signal_handler(int)
 {
     for(basic_log* plog : g_logs)
-        plog->panic_flush();
+        plog->start_panic_flush();
+    for(basic_log* plog : g_logs)
+        plog->await_panic_flush();
 }
 }   // anonymous namespace
 

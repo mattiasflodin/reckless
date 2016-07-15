@@ -47,10 +47,12 @@ static_assert(false, "RECKLESS_TLS is not implemented for this compiler")
              __int64 _InterlockedCompareExchange64(__int64 volatile* Destination, __int64 Exchange, __int64 Comparand);
              void _mm_prefetch(char const* p, int i);
              void _mm_pause(void);
+             unsigned __int64 __rdtsc();
          }
 #        pragma intrinsic(_InterlockedCompareExchange64)
 #        pragma intrinsic(_mm_prefetch)
 #        pragma intrinsic(_mm_pause)
+#        pragma intrinsic(__rdtsc)
 #    else
          static_assert(false, "Only x86/x64 support is implemented for this compiler");
 #    endif
@@ -127,7 +129,7 @@ T atomic_load_acquire(T const* pvalue,
         static_cast<void const*>(pvalue))));
 }
 
-template<typename T>
+template <typename T>
 void atomic_store_release(T* ptarget, T value,
     typename std::enable_if<std::is_integral<T>::value>::type* = nullptr)
 {
@@ -151,28 +153,61 @@ void atomic_store_release(T* ptarget, T value,
 
 #if defined(__GNUC__)
 template<typename T>
-bool atomic_compare_exchange_weak_relaxed(T* ptarget, T expected, T desired)
+bool atomic_compare_exchange_weak_relaxed(T* ptarget, T* pexpected, T desired)
 {
-    return __atomic_compare_exchange_n(ptarget, &expected, desired, true,
+    return __atomic_compare_exchange_n(ptarget, pexpected, desired, true,
         __ATOMIC_RELAXED, __ATOMIC_RELAXED);
 }
 #elif defined(_MSC_VER)
 inline bool atomic_compare_exchange_weak_relaxed(std::uint64_t* ptarget,
-    std::uint64_t expected, std::uint64_t desired)
+    std::uint64_t* pexpected, std::uint64_t desired)
 {
-        return reinterpret_cast<std::int64_t const&>(expected) ==
-            _InterlockedCompareExchange64(
-            reinterpret_cast<std::int64_t*>(ptarget),
-            reinterpret_cast<std::int64_t const&>(desired),
-            reinterpret_cast<std::int64_t const&>(expected));
+    auto expected = *pexpected;
+    std::uint64_t actual = _InterlockedCompareExchange64(
+        reinterpret_cast<std::int64_t*>(ptarget),
+        reinterpret_cast<std::int64_t const&>(desired),
+        reinterpret_cast<std::int64_t const&>(expected));
+    if(actual == expected)
+        return true;
+    else {
+        *pexpected = actual;
+        return false;
+    }
 }
 #else
     static_assert(false, "atomic_compare_exchange_weak_relaxed is not implemented for this platform")
 #endif
 
+template <unsigned Bytes>
+struct uint_bytes_t;
+
+template <>
+struct uint_bytes_t<8U> {
+    using exact = std::uint64_t;
+};
+
+template<typename T>
+bool atomic_compare_exchange_weak_relaxed(T* ptarget, T expected, T desired)
+{
+    using uint_t = typename uint_bytes_t<sizeof(T)>::exact;
+    return atomic_compare_exchange_weak_relaxed(
+        static_cast<uint_t*>(static_cast<void*>(ptarget)),
+        static_cast<uint_t*>(static_cast<void*>(&expected)),
+        *static_cast<uint_t*>(static_cast<void*>(&desired))
+    );
+}
+
 inline bool likely(bool expr) {
 #ifdef __GNUC__
     return __builtin_expect(expr, true);
+#else
+    return expr;
+#endif
+}
+
+inline bool unlikely(bool expr) {
+#ifdef __GNUC__
+    return __builtin_expect(expr, false);
 #else
     return expr;
 #endif
@@ -188,6 +223,17 @@ inline void assume(bool condition)
     __assume(condition);
 #else
     static_assert(false, "assume() is not implemented for this compiler");
+#endif
+}
+
+inline std::uint64_t rdtsc()
+{
+#if defined(__GNUC__)
+    static_assert(false, "rdtsc() is not implemented for this compiler");
+#elif defined(_MSC_VER)
+    return __rdtsc();
+#else
+    static_assert(false, "rdtsc() is not implemented for this compiler");
 #endif
 }
 
@@ -220,7 +266,6 @@ unsigned get_page_size();
 extern unsigned const page_size;
 
 void set_thread_name(char const* name);
-
 
 }   // detail
 }   // reckless

@@ -27,6 +27,7 @@
 #include <vector>
 
 #include <Windows.h>
+#include <TlHelp32.h>
 
 namespace reckless {
 
@@ -34,15 +35,17 @@ namespace {
 std::vector<basic_log*> g_logs;
 LPTOP_LEVEL_EXCEPTION_FILTER g_old_exception_filter = nullptr;
 
-LONG WINAPI exception_filter(_EXCEPTION_POINTERS *ExceptionInfo)
-{
-    for(basic_log* plog : g_logs)
-        plog->panic_flush();
-    return EXCEPTION_CONTINUE_SEARCH;
-}
 
 }   // anonymous namespace
 
+LONG WINAPI exception_filter(_EXCEPTION_POINTERS *ExceptionInfo)
+{
+    for(basic_log* plog : g_logs)
+        plog->start_panic_flush();
+    for(basic_log* plog : g_logs)
+        plog->await_panic_flush();
+    return EXCEPTION_CONTINUE_SEARCH;
+}
 void install_crash_handler(std::initializer_list<basic_log*> logs)
 {
     assert(logs.size() != 0);

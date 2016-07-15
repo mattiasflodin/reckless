@@ -21,7 +21,7 @@
  */
 #include <reckless/output_buffer.hpp>
 #include <reckless/writer.hpp>
-#include <reckless/detail/utility.hpp>
+#include <reckless/detail/platform.hpp> // atomic_store_release
 
 #include <cstdlib>      // malloc, free
 #include <cassert>
@@ -52,7 +52,6 @@ output_buffer::output_buffer(writer* pwriter, std::size_t max_capacity)
 
 void output_buffer::reset() noexcept
 {
-    assert(!panic_flush_);
     std::free(pbuffer_);
     pwriter_ = nullptr;
     pbuffer_ = nullptr;
@@ -78,8 +77,6 @@ void output_buffer::reset(writer* pwriter, std::size_t max_capacity)
 
 output_buffer::~output_buffer()
 {
-    if(panic_flush_)
-        return;
     std::free(pbuffer_);
 }
 
@@ -161,6 +158,8 @@ void output_buffer::flush()
         // rare to have any data remaining in the buffer. It only happens if the
         // buffer fills up entirely (forcing us to flush in the middle of a frame)
         // or if there is an error in the writer.
+        // TODO On the other hand when the buffer does fill up, that's when we are under
+        // the highest load. Shouldn't we perform as efficiently as possible then?
         std::size_t remaining_data = (pcommit_end_ - pbuffer_) - written;
         std::memmove(pbuffer_, pbuffer_+written, remaining_data);
         pframe_end_ -= written;
@@ -246,7 +245,7 @@ void output_buffer::flush()
                 // it's not likely that the log data will ever make it past the
                 // writer anyway, even if we do keep on blocking.
                 shared_input_queue_full_event_.wait(block_time_ms);
-                if(panic_flush_)
+                if(atomic_load_relaxed(&panic_flush_))
                     throw flush_error(error);
                 block_time_ms += std::max(1u, block_time_ms/4);
                 block_time_ms = std::min(block_time_ms, 1000u);

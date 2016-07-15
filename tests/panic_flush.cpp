@@ -25,6 +25,9 @@
 #include <cstdio>
 #include <thread>
 
+#include <reckless/detail/trace_log.hpp>
+#include <iostream> // cout
+
 #if defined(__unix__)
 #include <signal.h>
 #elif defined(_WIN32)
@@ -40,16 +43,18 @@ void sigsegv_handler(int)
 {
     int t1c = t1_count;
     int t2c = t2_count;
-    g_log.panic_flush();
+    g_log.start_panic_flush();
     std::printf("Last log entry for t1 should be >=%d. Last log entry for t2 should be >=%d\n", t1c, t2c);
+    g_log.await_panic_flush();
 }
 #elif defined(_WIN32)
 LONG WINAPI exception_filter(_EXCEPTION_POINTERS*)
 {
     int t1c = t1_count;
     int t2c = t2_count;
-    g_log.panic_flush();
+    g_log.start_panic_flush();
     std::printf("Last log entry for t1 should be >=%d. Last log entry for t2 should be >=%d\n", t1c, t2c);
+    g_log.await_panic_flush();
     return EXCEPTION_CONTINUE_SEARCH;
 }
 #endif
@@ -73,13 +78,13 @@ int main()
     std::thread thread([]()
     {
         for(int i=0;i!=1000000;++i) {
-            g_log.write("t2: %d\n", i);
+            g_log.write("t2: %d", i);
             t2_count = i;
         }
     });
 
     for(int i=0;i!=100000;++i) {
-        g_log.write("t1: %d\n", i);
+        g_log.write("t1: %d", i);
         t1_count = i;
     }
     char* p = nullptr;
