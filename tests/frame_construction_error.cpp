@@ -53,7 +53,7 @@ char const* format(reckless::output_buffer* poutput, char const* fmt, Object)
 
 int main()
 {
-    g_log.open2(&g_writer);
+    g_log.open(&g_writer);
     g_log.write("First");
     Object object;
     try {
@@ -63,7 +63,7 @@ int main()
     }
     std::this_thread::sleep_for(std::chrono::seconds(3));
     g_log.write("Third");
-    g_log.close2();
+    g_log.close();
     std::cout << g_writer.container;
     assert(g_writer.container == eol("First\nSecond\nThird\n"));
 

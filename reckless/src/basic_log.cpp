@@ -53,16 +53,16 @@ basic_log::~basic_log()
 {
     if(is_open()) {
         std::error_code error;
-        close2(error);
+        close(error);
     }
 }
 
-void basic_log::open2(writer* pwriter)
+void basic_log::open(writer* pwriter)
 {
-    open2(pwriter, 0, 0);
+    open(pwriter, 0, 0);
 }
 
-void basic_log::open2(writer* pwriter,
+void basic_log::open(writer* pwriter,
     std::size_t input_buffer_capacity,
     std::size_t output_buffer_capacity)
 {
@@ -81,10 +81,10 @@ void basic_log::open2(writer* pwriter,
 
     input_buffer_.reserve(input_buffer_capacity);
     output_buffer::reset(pwriter, output_buffer_capacity);
-    output_thread_ = std::thread(std::mem_fn(&basic_log::output_worker2), this);
+    output_thread_ = std::thread(std::mem_fn(&basic_log::output_worker), this);
 }
 
-void basic_log::close2(std::error_code& ec) noexcept
+void basic_log::close(std::error_code& ec) noexcept
 {
     using namespace detail;
     assert(is_open());
@@ -109,10 +109,10 @@ void basic_log::close2(std::error_code& ec) noexcept
     assert(!is_open());
 }
 
-void basic_log::close2()
+void basic_log::close()
 {
     std::error_code error;
-    close2(error);
+    close(error);
     if(error)
         throw writer_error(error);
 }
@@ -137,7 +137,7 @@ void basic_log::flush(std::error_code& ec)
         }
     };
     detail::spsc_event event;
-    write2<formatter>(&event, &ec);
+    write<formatter>(&event, &ec);
     input_buffer_full_event_.signal();
     event.wait();
 }
@@ -232,7 +232,7 @@ detail::frame_header* basic_log::push_input_frame_slow_path(
     }
 }
 
-void basic_log::output_worker2()
+void basic_log::output_worker()
 {
     using namespace detail;
 

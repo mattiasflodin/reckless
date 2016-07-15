@@ -84,7 +84,7 @@ private:
     template <typename... Args>
     void write(char severity, char const* fmt, Args&&... args)
     {
-        basic_log::write2<policy_formatter<IndentPolicy, FieldSeparator, HeaderFields...>>(
+        basic_log::write<policy_formatter<IndentPolicy, FieldSeparator, HeaderFields...>>(
                 detail::construct_header_field<HeaderFields>(severity)...,
                 IndentPolicy(),
                 fmt,

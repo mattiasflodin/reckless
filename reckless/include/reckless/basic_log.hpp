@@ -71,7 +71,7 @@ namespace detail {
     };
 
     template <class Formatter, typename... Args>
-    std::size_t input_frame_dispatch2(dispatch_operation operation, void* arg1, void* arg2);
+    std::size_t input_frame_dispatch(dispatch_operation operation, void* arg1, void* arg2);
 
 }
 
@@ -82,21 +82,21 @@ public:
     basic_log();
     basic_log(writer* pwriter)
     {
-        open2(pwriter);
+        open(pwriter);
     }
     basic_log(writer* pwriter,
         std::size_t input_buffer_capacity,
         std::size_t output_buffer_capacity)
     {
-        open2(pwriter, input_buffer_capacity, output_buffer_capacity);
+        open(pwriter, input_buffer_capacity, output_buffer_capacity);
     }
     virtual ~basic_log();
 
     basic_log(basic_log const&) = delete;
     basic_log& operator=(basic_log const&) = delete;
 
-    void open2(writer* pwriter);
-    void open2(writer* pwriter,
+    void open(writer* pwriter);
+    void open(writer* pwriter,
         std::size_t input_buffer_capacity,
         std::size_t output_buffer_capacity);
 
@@ -105,10 +105,10 @@ public:
     // after close() was called leads to undefined behavior. If the writer
     // returns any error (temporary or permanent) at this point, then the ec
     // parameter is set to the error code. Otherwise, ec.clear() is called.
-    virtual void close2(std::error_code& ec) noexcept;
+    virtual void close(std::error_code& ec) noexcept;
 
     // Call close(error_code) and throw writer_error if it fails.
-    virtual void close2();
+    virtual void close();
 
     // Wake up the output worker thread to cause immediate output of all queued
     // writes. Then block until the most recent write has been formatted in the
@@ -145,7 +145,7 @@ public:
 
 protected:
     template <class Formatter, typename... Args>
-    void write2(Args&&... args)
+    void write(Args&&... args)
     {
         using namespace detail;
         typedef std::tuple<typename std::decay<Args>::type...> args_t;
@@ -172,7 +172,7 @@ protected:
 #endif  // RECKLESS_DEBUG
 
         frame_header* pframe = push_input_frame(frame_size);
-        pframe->pdispatch_function = &detail::input_frame_dispatch2<
+        pframe->pdispatch_function = &detail::input_frame_dispatch<
                 Formatter,
                 typename std::decay<Args>::type...
             >;
@@ -198,7 +198,7 @@ private:
     detail::frame_header* push_input_frame_slow_path(
         detail::frame_header * pframe, bool error, std::size_t size);
 
-    void output_worker2();
+    void output_worker();
     std::size_t wait_for_input();
     detail::frame_status acquire_frame(void* pframe);
     std::size_t process_frame(void* pframe);
@@ -281,7 +281,7 @@ void formatter_dispatch_helper(output_buffer* poutput, std::tuple<Args...>&& arg
 }
 
 template <class Formatter, typename... Args>
-std::size_t input_frame_dispatch2(dispatch_operation operation, void* arg1, void* arg2)
+std::size_t input_frame_dispatch(dispatch_operation operation, void* arg1, void* arg2)
 {
     using namespace detail;
     typedef std::tuple<Args...> args_t;

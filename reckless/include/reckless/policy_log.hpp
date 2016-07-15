@@ -220,7 +220,7 @@ public:
     template <typename... Args>
     void write(char const* fmt, Args&&... args)
     {
-        basic_log::write2<policy_formatter<IndentPolicy, FieldSeparator, HeaderFields...>>(
+        basic_log::write<policy_formatter<IndentPolicy, FieldSeparator, HeaderFields...>>(
                 HeaderFields()...,
                 IndentPolicy(),
                 fmt,

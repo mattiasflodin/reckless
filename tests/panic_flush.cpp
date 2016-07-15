@@ -73,7 +73,7 @@ int main()
 #endif
 
     reckless::file_writer writer("log.txt");
-    g_log.open2(&writer);
+    g_log.open(&writer);
 
     std::thread thread([]()
     {
