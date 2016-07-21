@@ -1,6 +1,7 @@
 #include <cstdlib>
 #include <cstdint>
 #include <thread>
+#include <vector>
 #include <mutex>
 #include <ciso646>
 #include <complex>
@@ -42,14 +43,14 @@ void mandelbrot_thread(
             if(sample_index == total_samples)
                 return;
             end_sample_index = std::min<std::size_t>(total_samples, sample_index + THREAD_SLICE_SIZE);
-            *next_slice_index = end_sample_index;
+            *next_slice_index = static_cast<unsigned>(end_sample_index);
         }
         //printf("\r%.0f%%", 100.0*sample_index/total_samples);
         //fflush(stdout);
 
         while(sample_index != end_sample_index) {
             unsigned sample_x = sample_index % samples_width;
-            unsigned sample_y = sample_index / samples_width;
+            unsigned sample_y = static_cast<unsigned>(sample_index / samples_width);
             std::complex<double> c(x1 + sample_x*scale_x, y1 - sample_y*scale_y);
             std::complex<double> z;
 
@@ -135,9 +136,9 @@ void color_mandelbrot(char* image, unsigned const* sample_buffer,
     for(std::size_t i=0; i!=samples_width*samples_height; ++i)
     {
         auto iterations = sample_buffer[i];
-        auto hue = hues[iterations == max_iterations? 0 : iterations];
-        image[3*i] = palette[3*hue];
-        image[3*i+1] = palette[3*hue+1];
-        image[3*i+2] = palette[3*hue+2];
+        auto color_index = hues[iterations == max_iterations? 0 : iterations];
+        image[3*i] = palette[3*color_index];
+        image[3*i+1] = palette[3*color_index+1];
+        image[3*i+2] = palette[3*color_index+2];
     }
 }
