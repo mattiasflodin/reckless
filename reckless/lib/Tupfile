@@ -1,2 +1,2 @@
 include_rules
-: ../src/*.$(OBJEXT) |> !ar |> $(LIBPREFIX)reckless.$(LIBEXT)
+: ../src/*.o |> !ar |> libreckless.a
