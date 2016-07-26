@@ -3,20 +3,23 @@
   <ImportGroup Label="PropertySheets" />
   <PropertyGroup Label="UserMacros">
     <BuildConfiguration>$(PlatformShortName)-$(Configuration.ToLower())</BuildConfiguration>
+    <LibRecklessBuildConfiguration Condition="$(Configuration.Contains(`Debug`))">$(PlatformShortName)-debug</LibRecklessBuildConfiguration>
+    <LibRecklessBuildConfiguration Condition="$(Configuration.Contains(`Release`))">$(PlatformShortName)-release</LibRecklessBuildConfiguration>
     <BuildDir>$(SolutionDir)build\$(BuildConfiguration)\</BuildDir>
     <BuildSubDir>$(ProjectDir.SubString($(SolutionDir.Length)))</BuildSubDir>
+    <RecklessLibDir>$(SolutionDir)build\$(LibRecklessBuildConfiguration)\lib</RecklessLibDir>
   </PropertyGroup>
   <PropertyGroup>
     <OutDir Condition="'$(OutputType)' == 'exe'">$(BuildDir)$(BuildSubDir)\</OutDir>
     <OutDir Condition="'$(OutputType)' == 'staticlibrary'">$(BuildDir)lib\</OutDir>
     <IntDir>$(BuildDir)obj\$(BuildSubDir)$(ProjectFileName)\</IntDir>
     <IncludePath>$(SolutionDir)reckless\include;$(IncludePath)</IncludePath>
-    <LibraryPath>$(BuildDir)\lib;$(LibraryPath)</LibraryPath>
+    <LibraryPath>$(RecklessLibDir);$(LibraryPath)</LibraryPath>
   </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)'=='Debug'" Label="Configuration">
+  <PropertyGroup Condition="$(Configuration.Contains(`Debug`))" Label="Configuration">
     <UseDebugLibraries>true</UseDebugLibraries>
   </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)'=='Release'" Label="Configuration">
+  <PropertyGroup Condition="$(Configuration.Contains(`Release`))" Label="Configuration">
     <UseDebugLibraries>false</UseDebugLibraries>
   </PropertyGroup>
   <ItemDefinitionGroup>
@@ -31,7 +34,7 @@
       <LinkLibraryDependencies>false</LinkLibraryDependencies>
     </ProjectReference>
   </ItemDefinitionGroup>
-  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+  <ItemDefinitionGroup Condition="$(Configuration.Contains(`Debug`))">
     <ClCompile>
       <WarningLevel>Level4</WarningLevel>
       <Optimization>Disabled</Optimization>
@@ -39,28 +42,7 @@
       <TreatWarningAsError>true</TreatWarningAsError>
     </ClCompile>
   </ItemDefinitionGroup>
-  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <ClCompile>
-      <WarningLevel>Level4</WarningLevel>
-      <Optimization>Disabled</Optimization>
-      <SDLCheck>true</SDLCheck>
-      <TreatWarningAsError>true</TreatWarningAsError>
-    </ClCompile>
-  </ItemDefinitionGroup>
-  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
-    <ClCompile>
-      <WarningLevel>Level3</WarningLevel>
-      <Optimization>MaxSpeed</Optimization>
-      <FunctionLevelLinking>true</FunctionLevelLinking>
-      <IntrinsicFunctions>true</IntrinsicFunctions>
-      <SDLCheck>true</SDLCheck>
-    </ClCompile>
-    <Link>
-      <EnableCOMDATFolding>true</EnableCOMDATFolding>
-      <OptimizeReferences>true</OptimizeReferences>
-    </Link>
-  </ItemDefinitionGroup>
-  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+  <ItemDefinitionGroup Condition="$(Configuration.Contains(`Release`))">
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
       <Optimization>MaxSpeed</Optimization>
