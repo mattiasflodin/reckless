@@ -229,7 +229,7 @@ inline void assume(bool condition)
 inline std::uint64_t rdtsc()
 {
 #if defined(__GNUC__)
-    static_assert(false, "rdtsc() is not implemented for this compiler");
+    return __builtin_ia32_rdtsc();
 #elif defined(_MSC_VER)
     return __rdtsc();
 #else
