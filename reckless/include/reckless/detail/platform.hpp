@@ -216,8 +216,8 @@ inline bool unlikely(bool expr) {
 inline void assume(bool condition)
 {
 #if defined(__GNUC__)
-    // TODO check that this is still working
-    if(condition)
+    // FIXME check that this is still working
+    if(!condition)
         __builtin_unreachable();
 #elif defined(_MSC_VER)
     __assume(condition);
