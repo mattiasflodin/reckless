@@ -40,7 +40,7 @@ int main()
     color_mandelbrot(image, &sample_buffer[0], SAMPLES_WIDTH, SAMPLES_HEIGHT,
             MAX_ITERATIONS);
 
-    std::ofstream ofs("bench_mandelbrot.data");
+    std::ofstream ofs("bench_mandelbrot.data", std::ios::binary);
     ofs.write(image, sizeof(image));
 
 #ifdef RECKLESS_ENABLE_TRACE_LOG
