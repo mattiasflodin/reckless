@@ -1,9 +1,46 @@
+function shallowcopy(orig)
+    local orig_type = type(orig)
+    local copy
+    if orig_type == 'table' then
+        copy = {}
+        for orig_key, orig_value in pairs(orig) do
+            copy[orig_key] = orig_value
+        end
+    else -- number, string, boolean, etc
+        copy = orig
+    end
+    return copy
+end
+
+function deepcopy(orig)
+    local orig_type = type(orig)
+    local copy
+    if orig_type == 'table' then
+        copy = {}
+        for orig_key, orig_value in next, orig, nil do
+            copy[deepcopy(orig_key)] = deepcopy(orig_value)
+        end
+        setmetatable(copy, deepcopy(getmetatable(orig)))
+    else -- number, string, boolean, etc
+        copy = orig
+    end
+    return copy
+end
+
 function string.startswith(s, suffix)
   return suffix=='' or string.sub(s, 1, string.len(suffix))==suffix
 end
 
 function string.endswith(s, suffix)
   return suffix=='' or string.sub(s, -string.len(suffix))==suffix
+end
+
+function table.merge(t1, t2)
+  t = shallowcopy(t1)
+  for _, v in ipairs(t2) do
+    table.insert(t, v)
+  end
+  return t
 end
 
 function table.map(t, f)
@@ -26,7 +63,38 @@ function table.filter(t, f)
   return result
 end
 
-function join(...)
+function join(sep, ...)
+ local result = ''
+ for _, segment in ipairs({...}) do
+   if result ~= '' then
+     result = result .. sep .. segment
+   else
+     result = segment
+   end
+ end
+ return result
+end
+
+function table.flatten(t)
+  local nt = {}
+  for _, v in ipairs(t) do
+    if type(v) == 'table' then
+      local t2 = table.flatten(v)
+      for _, v in ipairs(t2) do
+        table.insert(nt, v)
+      end
+    else
+      table.insert(nt, v)
+    end
+  end
+  return nt
+end
+
+function joinargs(...)
+  return table.concat(table.flatten({...}), ' ')
+end
+
+function joinpath(...)
  local result = ''
  for i, segment in ipairs({...}) do
    if segment:startswith('/') then
@@ -41,10 +109,24 @@ function join(...)
  return result
 end
 
-DEFINE = {}
-INCLUDES = {}
-LIBS = {}
-LIBDIRS = {}
+OPTIONS = {
+  define = {},
+  includes = {},
+  libs = {},
+  libdirs = {},
+  cflags = {}
+}
+
+OPTION_STACK = {}
+
+function push_options()
+  table.insert(OPTION_STACK, OPTIONS)
+  OPTIONS = deepcopy(OPTIONS)
+end
+
+function pop_options()
+  OPTIONS = table.remove(OPTION_STACK)
+end
 
 CXX = tup.getconfig('CXX')
 LD = tup.getconfig('LD')
@@ -72,11 +154,12 @@ if PLATFORM == 'linux' then
   if DEBUG then OPTIMIZATION = '-O0' else OPTIMIZATION = '-O3'
   end
   
-  CFLAGS = '-c -ggdb3 -std=c++11 -Wall -Werror'
   LDFLAGS = '-g'
   ARFLAGS = 'crs'
   
+  COMPILER_COMPILE_ONLY_FLAG = '-c'
   COMPILER_OUTPUT_FLAG = '-o'
+  COMPILER_DEFINE_FLAG = '-D'
   COMPILER_INCLUDE_FLAG = '-I'
   LINKER_OUTPUT_FLAG = '-o'
   LINKER_LIBDIR_FLAG = '-L'
@@ -86,6 +169,8 @@ if PLATFORM == 'linux' then
   EXESUFFIX = ''
   LIBPREFIX = 'lib'
   LIBSUFFIX = '.a'
+  
+  OPTIONS.cflags = {'-ggdb3', '-std=c++11', '-Wall', '-Werror'}
   
 elseif PLATFORM == 'win32' then
   if CXX == '' then
@@ -98,21 +183,25 @@ elseif PLATFORM == 'win32' then
   end
 
   OBJSUFFIX = '.obj'
-  CFLAGS = '/c'
-  CFLAGS = CFLAGS .. ' /EHsc' -- C++ exception handling
-  CFLAGS = CFLAGS .. ' /Zc:forScope /Zc:wchar_t /Zc:auto /Zc:rvalueCast /Zc:strictStrings /Zc:implicitNoexcept /Zc:inline /Zc:throwingNew /Zc:referenceBinding' -- C++11 conformance
-  CFLAGS = CFLAGS .. ' /fp:precise' -- Predictable floating-point operations
-  CFLAGS = CFLAGS .. ' /W3 /WX' -- Warning level 3, warnings as errors
-  CFLAGS = CFLAGS .. ' /GS /sdl' -- Security checks
-  CFLAGS = CFLAGS .. ' /Zi' -- Generate debug PDB
-  CFLAGS = CFLAGS .. ' /Gm-'  -- Disable minimal rebuild
-  CFLAGS = CFLAGS .. ' /FS'  -- Force serialized access to PDB file
-  CFLAGS = CFLAGS .. ' /nologo'
-  CFLAGS = CFLAGS .. ' /Fd' .. join(tup.getcwd(), 'reckless.pdb')
+  options.cflags = {
+    '/EHsc', -- C++ exception handling
+    '/Zc:forScope /Zc:wchar_t /Zc:auto /Zc:rvalueCast /Zc:strictStrings /Zc:implicitNoexcept /Zc:inline /Zc:throwingNew /Zc:referenceBinding', -- C++11 conformance
+    '/fp:precise', -- Predictable floating-point operations
+    '/W3',         -- Warning level 3
+    '/WX',         -- warnings as errors
+    '/GS', '/sdl', -- Security checks
+    '/Zi',         -- Generate debug PDB
+    '/Gm-',        -- Disable minimal rebuild
+    '/FS',         -- Force serialized access to PDB file
+    '/nologo',
+    '/Fd' .. joinpath(tup.getcwd(), 'reckless.pdb')
+  }
   LDFLAGS = ''
   ARFLAGS = '/NOLOGO'
 
+  COMPILER_COMPILE_ONLY_FLAG = '/c'
   COMPILER_OUTPUT_FLAG = '/Fo:'
+  COMPILER_DEFINE_FLAG = '/D'
   COMPILER_INCLUDE_FLAG = '/I'
   LINKER_OUTPUT_FLAG = '/OUT:'
   LINKER_LIBDIR_FLAG = '/LIBPATH:'
@@ -121,6 +210,7 @@ elseif PLATFORM == 'win32' then
   EXESUFFIX = '.exe'
   LIBPREFIX = ''
   LIBSUFFIX = '.lib'
+  error("build scripts are unfinished on VC++ due to tup issue #288")
 else
   error("build scripts not implemented for this platform")
 end
@@ -168,44 +258,54 @@ function array_to_option_string(array, option)
   return table.concat(args, ' ')
 end
 
-function compile(name)
+function compile(name, objname, options)
+  if options == nil then
+    options = OPTIONS
+  end
+  
   -- Include directories
-  include_args = array_to_option_string(INCLUDES, COMPILER_INCLUDE_FLAG)
+  include_args = array_to_option_string(options.includes, COMPILER_INCLUDE_FLAG)
+  define_args = array_to_option_string(options.define, COMPILER_DEFINE_FLAG)
   
   -- Object file name
   local base = tup.base(name)
-  local objname = base .. OBJSUFFIX
+  if objname == nil then
+    objname = tup.base(name) .. OBJSUFFIX
+  end
 
-  local cmd = table.concat({CXX, CFLAGS, OPTIMIZATION, include_args,
-    COMPILER_OUTPUT_FLAG .. objname, name}, ' ')
-  local text = '^ CXX ' .. name .. '^ '
+  local cmd = joinargs(CXX, COMPILER_COMPILE_ONLY_FLAG, options.cflags,
+    OPTIMIZATION, include_args, define_args, COMPILER_OUTPUT_FLAG .. objname,
+    name)
+  local text = '^ CXX ' .. name .. ' -> ' .. objname ..  '^ '
   tup.definerule{inputs={name}, command=text .. cmd, outputs={objname}}
   return objname
 end
 
 function library(name, objects)
   name = LIBPREFIX .. name .. LIBSUFFIX
-  local cmd = {AR, ARFLAGS, name, table.concat(objects, ' ')}
-  cmd = table.concat(cmd, ' ')
+  local cmd = joinargs(AR, ARFLAGS, name, objects)
   
   text = '^ AR ' .. name .. '^ '
   tup.definerule{inputs=objects, command=text .. cmd, outputs={name}}
 end
 
-function link(name, objects)
-  libdirs = array_to_option_string(LIBDIRS, LINKER_LIBDIR_FLAG)
-  libs = array_to_option_string(LIBS, LINKER_LIB_FLAG)
+function link(name, objects, options)
+  if options == nil then
+    options = OPTIONS
+  end
+  
+  libdirs = array_to_option_string(options.libdirs, LINKER_LIBDIR_FLAG)
+  libs = array_to_option_string(options.libs, LINKER_LIB_FLAG)
   name = name .. EXESUFFIX
   if type(objects) == 'string' then objects = {objects} end
-  local cmd = {LD, LDFLAGS, LINKER_OUTPUT_FLAG .. name,
-    table.concat(objects, ' '), libdirs, libs}
-  cmd = table.concat(cmd, ' ')
+  local cmd = joinargs(LD, LDFLAGS, LINKER_OUTPUT_FLAG .. name,
+    objects, libdirs, libs)
   text = '^ LD ' .. name .. '^ '
   tup.definerule{inputs=objects, command=text .. cmd, outputs={name}}
 end
 
 if DEBUG then
-  table.insert(DEFINE, 'RECKLESS_DEBUG')
+  table.insert(OPTIONS.define, 'RECKLESS_DEBUG')
 end
 
-tup.append_table(LIBS, {'pthread'})
+tup.append_table(OPTIONS.libs, {'pthread'})

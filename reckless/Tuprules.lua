@@ -1,1 +1,1 @@
-table.insert(INCLUDES, tup.getcwd() .. '/include')
+table.insert(OPTIONS.includes, tup.getcwd() .. '/include')
