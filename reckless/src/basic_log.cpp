@@ -271,7 +271,8 @@ void basic_log::output_worker()
                     frame_size = skip_frame(pframe);
                 else if(status == frame_status::shutdown_marker)
                     frame_size = RECKLESS_CACHE_LINE_SIZE;
-                else if(status == frame_status::panic_shutdown_marker) {
+                else {
+                    assert(status == frame_status::panic_shutdown_marker);
                     // We are in panic-flush mode and reached the shutdown marker. That
                     // means we are done.
                     on_panic_flush_done();  // never returns
