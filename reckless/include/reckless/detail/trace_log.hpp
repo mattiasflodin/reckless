@@ -3,7 +3,6 @@
 #include <cstddef>      // size_t, max_align_t
 #include <string>
 #include <type_traits>  // is_empty
-#include <thread>       // this_thread
 #include <mutex>        // mutex, unique_lock
 #include <algorithm>    // move
 #include <sstream>      // ostringstream
@@ -38,8 +37,7 @@ public:
             p = pheader->pconsume_event(pcevent, &text);
 
             ostr.str("");
-            ostr << (pheader->timestamp - start_time_) << '\t'
-                << pheader->thread_id << '\t'
+            ostr << std::hex << (pheader->timestamp - start_time_) << '\t'
                 << move(text);
             callback(ostr.str());
         }
@@ -49,7 +47,7 @@ public:
     void log_event(Args&&... args)
     {
         char* pnext_event;
-        auto const record_size = sizeof(event_header) + (std::is_empty<Event>()?
+        auto const record_size = aligned_sizeof<event_header>() + (std::is_empty<Event>()?
             0 : aligned_sizeof<Event>());
         for(;;pause()) {
             pnext_event = atomic_load_relaxed(&pnext_event_);
@@ -63,9 +61,8 @@ public:
         auto pevent_header = static_cast<event_header*>(
             static_cast<void*>(pnext_event));
         auto pevent = pnext_event + aligned_sizeof<event_header>();
-        pevent_header->timestamp = rdtsc();
+        pevent_header->timestamp = serializing_rdtsc();
         pevent_header->pconsume_event = &consume_event<Event>;
-        pevent_header->thread_id = std::this_thread::get_id();
         new (pevent) Event(std::forward<Args>(args)...);
         assert(pevent + aligned_sizeof<Event>() <= pbuffer_end_);
     }
@@ -74,14 +71,18 @@ private:
     struct event_header {
         std::uint64_t timestamp;
         void const* (*pconsume_event)(void const*, std::string*);
-        std::thread::id thread_id;
     };
+
+    static std::size_t align_size(std::size_t size)
+    {
+        std::size_t const alignment = alignof(std::max_align_t);
+        return ((size + alignment - 1) / alignment)*alignment;
+    }
 
     template <class T>
     static std::size_t aligned_sizeof()
     {
-        std::size_t const alignment = alignof(std::max_align_t);
-        return ((sizeof(T) + alignment - 1) / alignment)*alignment;
+        return align_size(sizeof(T));
     }
 
     template <class Event>
@@ -106,6 +107,9 @@ private:
 
 #ifdef RECKLESS_ENABLE_TRACE_LOG
 extern trace_log g_trace_log;
+#define RECKLESS_TRACE(Event, ...) reckless::detail::g_trace_log.log_event<Event>(__VA_ARGS__)
+#else
+#define RECKLESS_TRACE(Event, ...)
 #endif
 
 }   // namespace detail

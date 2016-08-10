@@ -1,5 +1,9 @@
 #include "mandelbrot.hpp"
 
+#ifdef RECKLESS_ENABLE_TRACE_LOG
+#include <reckless/detail/trace_log.hpp>
+#endif
+
 #include <vector>
 #include <thread>
 #include <fstream>
@@ -31,12 +35,19 @@ int main()
     auto end = std::chrono::steady_clock::now();
     std::cout << std::chrono::duration_cast<std::chrono::milliseconds>(
             end - start).count() << std::endl;
-    
+
     char image[3*SAMPLES_WIDTH*SAMPLES_HEIGHT];
     color_mandelbrot(image, &sample_buffer[0], SAMPLES_WIDTH, SAMPLES_HEIGHT,
             MAX_ITERATIONS);
-    
+
     std::ofstream ofs("bench_mandelbrot.data", std::ios::binary);
     ofs.write(image, sizeof(image));
+
+#ifdef RECKLESS_ENABLE_TRACE_LOG
+    std::ofstream trace_log("trace_log.txt", std::ios::trunc);
+    reckless::detail::g_trace_log.read([&](std::string const& s) {
+        trace_log << s << std::endl;
+    });
+#endif
     return 0;
 }

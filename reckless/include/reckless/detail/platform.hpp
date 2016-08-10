@@ -158,6 +158,12 @@ bool atomic_compare_exchange_weak_relaxed(T* ptarget, T* pexpected, T desired)
     return __atomic_compare_exchange_n(ptarget, pexpected, desired, true,
         __ATOMIC_RELAXED, __ATOMIC_RELAXED);
 }
+template<typename T>
+bool atomic_compare_exchange_weak_relaxed(T* ptarget, T expected, T desired)
+{
+    return __atomic_compare_exchange_n(ptarget, &expected, desired, true,
+        __ATOMIC_RELAXED, __ATOMIC_RELAXED);
+}
 #elif defined(_MSC_VER)
 inline bool atomic_compare_exchange_weak_relaxed(std::uint64_t* ptarget,
     std::uint64_t* pexpected, std::uint64_t desired)
@@ -178,24 +184,24 @@ inline bool atomic_compare_exchange_weak_relaxed(std::uint64_t* ptarget,
     static_assert(false, "atomic_compare_exchange_weak_relaxed is not implemented for this platform")
 #endif
 
-template <unsigned Bytes>
-struct uint_bytes_t;
-
-template <>
-struct uint_bytes_t<8U> {
-    using exact = std::uint64_t;
-};
-
-template<typename T>
-bool atomic_compare_exchange_weak_relaxed(T* ptarget, T expected, T desired)
-{
-    using uint_t = typename uint_bytes_t<sizeof(T)>::exact;
-    return atomic_compare_exchange_weak_relaxed(
-        static_cast<uint_t*>(static_cast<void*>(ptarget)),
-        static_cast<uint_t*>(static_cast<void*>(&expected)),
-        *static_cast<uint_t*>(static_cast<void*>(&desired))
-    );
-}
+//template <unsigned Bytes>
+//struct uint_bytes_t;
+//
+//template <>
+//struct uint_bytes_t<8U> {
+//    using exact = std::uint64_t;
+//};
+//
+//template<typename T>
+//bool atomic_compare_exchange_weak_relaxed(T* ptarget, T expected, T desired)
+//{
+//    using uint_t = typename uint_bytes_t<sizeof(T)>::exact;
+//    return atomic_compare_exchange_weak_relaxed(
+//        static_cast<uint_t*>(static_cast<void*>(ptarget)),
+//        static_cast<uint_t*>(static_cast<void*>(&expected)),
+//        *static_cast<uint_t*>(static_cast<void*>(&desired))
+//    );
+//}
 
 inline bool likely(bool expr) {
 #ifdef __GNUC__
@@ -234,6 +240,23 @@ inline std::uint64_t rdtsc()
     return __rdtsc();
 #else
     static_assert(false, "rdtsc() is not implemented for this compiler");
+#endif
+}
+
+inline std::uint64_t serializing_rdtsc()
+{
+#if defined(__GNUC__)
+    std::uint64_t t_high;
+    std::uint64_t t_low;
+    std::uint64_t aux;
+    asm volatile("rdtscp\n\t" : "=a"(t_low), "=c"(aux), "=d"(t_high));
+    std::uint64_t a, b, c, d;
+    asm volatile("cpuid\n\t" : "=a"(a), "=b"(b), "=c"(c), "=d"(d));
+    return (t_high << 32) | static_cast<std::uint32_t>(t_low);
+#elif defined(_MSC_VER)
+    static_assert(false, "serializing_rdtsc() is not implemented for this compiler");
+#else
+    static_assert(false, "serializing_rdtsc() is not implemented for this compiler");
 #endif
 }
 

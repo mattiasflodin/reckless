@@ -22,12 +22,23 @@
 #include <reckless/output_buffer.hpp>
 #include <reckless/writer.hpp>
 #include <reckless/detail/platform.hpp> // atomic_store_release
+#include <reckless/detail/trace_log.hpp>
 
 #include <cstdlib>      // malloc, free
 #include <cassert>
 #include <algorithm>    // max, min
 
 namespace reckless {
+
+namespace {
+struct output_buffer_full_event
+{
+    std::string format() const
+    {
+        return "output_buffer_full";
+    }
+};
+}
 
 char const* excessive_output_by_frame::what() const noexcept
 {
@@ -87,7 +98,7 @@ void output_buffer::write(void const* buf, std::size_t count)
     // TODO this could be smarter by writing from the client-provided
     // buffer instead of copying the data.
     auto const buffer_size = pbuffer_end_ - pbuffer_;
-    
+
     char const* pinput = static_cast<char const*>(buf);
     auto remaining_input = count;
     auto available_buffer = static_cast<std::size_t>(pbuffer_end_ - pcommit_end_);
@@ -99,9 +110,10 @@ void output_buffer::write(void const* buf, std::size_t count)
         remaining_input -= available_buffer;
         available_buffer = buffer_size;
         pcommit_end_ = pbuffer_end_;
+        RECKLESS_TRACE(output_buffer_full_event);
         flush();
     }
-    
+
     std::memcpy(pcommit_end_, pinput, remaining_input);
     pcommit_end_ += remaining_input;
 }
@@ -112,7 +124,7 @@ void output_buffer::flush()
 
     // TODO keep track of a high watermark, i.e. max value of pcommit_end_.
     // Clear every second or some such. Use madvise to release unused memory.
-    
+
     // If there is a temporary error for long enough that the buffer gets full
     // and we have to throw away data, but we resume writing later, then we do
     // not want to end up with half-written frames in the middle of the log
