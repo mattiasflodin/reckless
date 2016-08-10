@@ -30,7 +30,7 @@ ONLY_OVERHEAD = 1
 #LOG_LINES = 1048576
 MAX_CORES = 4
 LIBS = ['nop', 'reckless', 'spdlog', 'stdio', 'fstream', 'pantheios']
-#LIBS = ['nop', 'reckless', 'stdio', 'fstream']
+LIBS = ['nop', 'reckless', 'stdio']
 if ONLY_OVERHEAD:
     del COLORS[0]
     del LIBS[0]
@@ -45,7 +45,7 @@ def read_timing(lib, cores, offset=0.0):
     data = sorted([float(x)/1000.0+offset for x in data])
     # Use interquartile range as measure of scale.
     low, high = np.percentile(data, [25, 75])
-    
+
     # Samples generally center around a minimum point that represents the ideal
     # running time. There are no outliers below the ideal time; execution does
     # not accidentally take some kind of short cut. At least, not for this
@@ -77,16 +77,15 @@ rects = []
 for index, lib in enumerate(LIBS):
     means = []
     error = [[], []]
-    
+
     for cores in range(1, MAX_CORES+1):
-        low, mean, high = read_timing(lib, cores, offsets[cores-1]) 
-        print(lib, cores, mean, low, high)
+        low, mean, high = read_timing(lib, cores, offsets[cores-1])
+    print(lib, cores, mean, low, high)
         means.append(mean)
         error[0].append(mean - low)
         error[1].append(high - mean)
     if not ONLY_OVERHEAD:
-        # Standard deviation is so small that it just clutters the plot in this
-        # view
+        # IQR is so small that it just clutters the plot in this view.
         error = None
     rects.append(ax.bar(ind+index*WIDTH + GROUP_OFFSET, means, WIDTH,
         color=COLORS[index], yerr=error, ecolor='black'))
@@ -101,7 +100,7 @@ ax.set_xlabel('Number of worker threads')
 ax.set_xticks(ind + GROUP_OFFSET + GROUP_WIDTH/2)
 ax.set_xticklabels([str(x) for x in range(1, MAX_CORES+1)])
 #ax.set_title('1024x1024 mandelbrot set render, one log line per pixel (i.e. 1.05 million log lines)')
-    
+
 if filename is None:
     plt.show()
 else:

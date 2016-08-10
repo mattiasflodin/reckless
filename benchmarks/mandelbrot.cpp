@@ -1,3 +1,7 @@
+#ifdef RECKLESS_ENABLE_TRACE_LOG
+#include <reckless/detail/trace_log.hpp>
+#endif
+
 #include <cstdlib>
 #include <cstdint>
 #include <thread>
@@ -12,8 +16,39 @@
 #define LOG_ONLY_DECLARE
 #include LOG_INCLUDE
 
+#ifdef RECKLESS_ENABLE_TRACE_LOG
+struct log_start_event
+{
+    log_start_event(unsigned char thread_index) :
+        thread_index_(thread_index)
+    {
+    }
+
+    std::string format() const
+    {
+        return std::string("log_start:") + std::to_string(static_cast<unsigned>(thread_index_));
+    }
+    unsigned char thread_index_;
+};
+
+struct log_finish_event
+{
+    log_finish_event(unsigned char thread_index) :
+        thread_index_(thread_index)
+    {
+    }
+
+    std::string format() const
+    {
+        return std::string("log_finish:") + std::to_string(static_cast<unsigned>(thread_index_));
+    }
+
+    unsigned char thread_index_;
+};
+
+#endif
 namespace {
-    
+
 unsigned const THREAD_SLICE_SIZE = 1024*16;
 
 void mandelbrot_thread(
@@ -60,7 +95,13 @@ void mandelbrot_thread(
                 ++iterations;
             }
 
+#ifdef RECKLESS_ENABLE_TRACE_LOG
+            RECKLESS_TRACE(log_start_event, static_cast<unsigned char>(thread_index));
+#endif
             LOG_MANDELBROT(thread_index, sample_x, sample_y, c.real(), c.imag(), iterations);
+#ifdef RECKLESS_ENABLE_TRACE_LOG
+            RECKLESS_TRACE(log_finish_event, static_cast<unsigned char>(thread_index));
+#endif
 
             sample_buffer[sample_index] = iterations;
             ++sample_index;
@@ -117,13 +158,13 @@ void color_mandelbrot(char* image, unsigned const* sample_buffer,
         palette[3*i+1] = static_cast<std::uint8_t>(255.0*g);
         palette[3*i+2] = static_cast<std::uint8_t>(255.0*b);
     }
-    
+
     std::vector<std::size_t> histogram(max_iterations);
     for(std::size_t i=0; i!=samples_width*samples_height; ++i) {
         auto iterations = sample_buffer[i];
         histogram[iterations == max_iterations? 0 : iterations]++;
     }
-    
+
     std::vector<std::uint8_t> hues(max_iterations);
     std::size_t hue = 0;
     for(std::size_t i=1; i!=max_iterations; ++i) {

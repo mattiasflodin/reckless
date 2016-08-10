@@ -21,7 +21,7 @@ MAX_THREADS = 8
 # ./run_benchmark.py -t mandelbrot  58192.78s user 2484.45s system 208% cpu 8:04:15.16 total
 #
 # Then 100 = 10 hours runtime
-SINGLE_SAMPLE_TEST_ITERATIONS = 100
+SINGLE_SAMPLE_TEST_ITERATIONS = 10
 
 def main():
     opts, args = gnu_getopt(argv[1:], 'l:t:h', ['libs', 'tests', 'help'])
