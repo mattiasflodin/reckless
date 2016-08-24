@@ -19,20 +19,33 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-#ifndef RECKLESS_FILE_WRITER_HPP
-#define RECKLESS_FILE_WRITER_HPP
+#include <reckless/detail/fd_writer.hpp>
+#include "posix_error_category.hpp"         // get_posix_error_category
 
-#include "detail/fd_writer.hpp"
+#include <errno.h>      // errno, EINTR
+#include <unistd.h>     // write
 
 namespace reckless {
+namespace detail {
 
-class file_writer : public detail::fd_writer {
-public:
-    file_writer(char const* path);
-    ~file_writer();
-};
+std::size_t fd_writer::write(void const* pbuffer, std::size_t count, std::error_code& ec) noexcept
+{
+    char const* p = static_cast<char const*>(pbuffer);
+    char const* pend = p + count;
+    ec.clear();
+    while(p != pend) {
+        ssize_t written = ::write(fd_, p, count);
+        if(written == -1) {
+            if(errno != EINTR) {
+                ec.assign(errno, get_posix_error_category());
+                break;
+            }
+        } else {
+            p += written;
+        }
+    }
+    return p - static_cast<char const*>(pbuffer);
+}
 
+}   // namespace detail
 }   // namespace reckless
-
-#endif  // RECKLESS_FILE_WRITER_HPP
-

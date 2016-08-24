@@ -19,20 +19,25 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-#ifndef RECKLESS_FILE_WRITER_HPP
-#define RECKLESS_FILE_WRITER_HPP
+#ifndef RECKLESS_FD_WRITER_HPP
+#define RECKLESS_FD_WRITER_HPP
 
-#include "detail/fd_writer.hpp"
+#include <reckless/writer.hpp>
 
 namespace reckless {
+namespace detail {
 
-class file_writer : public detail::fd_writer {
+class fd_writer : public writer {
 public:
-    file_writer(char const* path);
-    ~file_writer();
+    fd_writer(int fd) : fd_(fd) {}
+    std::size_t write(void const* pbuffer, std::size_t count, std::error_code& ec) noexcept override;
+
+protected:
+    int fd_;
 };
 
+}   // namespace detail
 }   // namespace reckless
 
-#endif  // RECKLESS_FILE_WRITER_HPP
+#endif  // RECKLESS_FD_WRITER_HPP
 

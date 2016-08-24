@@ -19,20 +19,14 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-#ifndef RECKLESS_FILE_WRITER_HPP
-#define RECKLESS_FILE_WRITER_HPP
+#include <reckless/severity_log.hpp>
+#include <reckless/stdout_writer.hpp>
 
-#include "detail/fd_writer.hpp"
+reckless::stderr_writer writer;
+reckless::policy_log<> g_log(&writer);
 
-namespace reckless {
-
-class file_writer : public detail::fd_writer {
-public:
-    file_writer(char const* path);
-    ~file_writer();
-};
-
-}   // namespace reckless
-
-#endif  // RECKLESS_FILE_WRITER_HPP
-
+int main()
+{
+    g_log.write("Hello World!");
+    return 0;
+}

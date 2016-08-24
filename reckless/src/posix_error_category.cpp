@@ -19,20 +19,18 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-#ifndef RECKLESS_FILE_WRITER_HPP
-#define RECKLESS_FILE_WRITER_HPP
+#include "posix_error_category.hpp"
 
-#include "detail/fd_writer.hpp"
+namespace reckless
+{
+namespace detail
+{
 
-namespace reckless {
+posix_error_category const& get_posix_error_category()
+{
+    static posix_error_category cat;
+    return cat;
+}
 
-class file_writer : public detail::fd_writer {
-public:
-    file_writer(char const* path);
-    ~file_writer();
-};
-
+}   // namespace detail
 }   // namespace reckless
-
-#endif  // RECKLESS_FILE_WRITER_HPP
-

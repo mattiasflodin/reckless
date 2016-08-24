@@ -19,20 +19,24 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-#ifndef RECKLESS_FILE_WRITER_HPP
-#define RECKLESS_FILE_WRITER_HPP
+#ifndef RECKLESS_STDOUT_WRITER_HPP
+#define RECKLESS_STDOUT_WRITER_HPP
 
 #include "detail/fd_writer.hpp"
 
 namespace reckless {
 
-class file_writer : public detail::fd_writer {
+class stdout_writer : public detail::fd_writer {
 public:
-    file_writer(char const* path);
-    ~file_writer();
+    stdout_writer() : fd_writer(1) { }
+};
+
+class stderr_writer : public detail::fd_writer {
+public:
+    stderr_writer() : fd_writer(2) { }
 };
 
 }   // namespace reckless
 
-#endif  // RECKLESS_FILE_WRITER_HPP
+#endif  // RECKLESS_STDOUT_WRITER_HPP
 
