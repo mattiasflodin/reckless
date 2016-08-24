@@ -129,7 +129,7 @@ To build a program against the library, given the variable RECKLESS
 pointing to the reckless root directory, use:
 
 ```bash
-g++ -std=c++11 myprogram.cpp -I$(RECKLESS)/reckless/include -L$(RECKLESS)/reckless/lib -lreckless
+g++ -std=c++11 myprogram.cpp -I$(RECKLESS)/boost -I$(RECKLESS)/reckless/include -L$(RECKLESS)/reckless/lib -lreckless
 ```
 
 More information
