@@ -47,8 +47,12 @@ int open_file(char const* path)
 
 reckless::file_writer::~file_writer()
 {
-    if(fd_ != -1)
-        close(fd_);
+    if(fd_ != -1) {
+        while(-1 == close(fd_)) {
+            if(errno != EINTR)
+                break;
+        }
+    }
 }
 
 reckless::file_writer::file_writer(char const* path) :
