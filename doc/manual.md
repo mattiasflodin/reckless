@@ -6,6 +6,7 @@ Table of Contents
 - [severity_log](#severity_log)
 - [Custom writers](#custom-writers)
 - [file_writer](#file_writer)
+- [stdout_writer and stderr_writer](#stdout_writer-and-stderr_writer)
 - [Custom string formatting](#custom-string-formatting)
 - [output_buffer](#output_buffer)
 - [Custom fields in policy_log](#custom-fields-in-policy_log)
@@ -436,6 +437,28 @@ On Linux, the writer classifies following error codes as temporary errors:
 <code>ENOSPC</code> (disk full), <code>ENOBUFS</code> (out of memory),
 <code>EDQUOT</code> (user quota reached), <code>EIO</code>
 (low-level I/O error). All other errors are classified as permanent.
+
+stdout_writer and stderr_writer
+===============================
+`stdout_writer` and `stderr_writer` write to the respective standard streams.
+
+```c++
+// #include <reckless/stdout_writer.hpp>
+
+class stdout_writer : public writer {
+public:
+    stdout_writer();
+    std::size_t write(void const* pbuffer, std::size_t count,
+        std::error_code& ec) noexcept override;
+};
+
+class stderr_writer : public writer {
+public:
+    stderr_writer();
+    std::size_t write(void const* pbuffer, std::size_t count,
+        std::error_code& ec) noexcept override;
+};
+```
 
 Custom string formatting
 ================================================
