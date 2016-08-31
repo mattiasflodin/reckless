@@ -37,10 +37,9 @@ int open_file(char const* path)
         S_IRUSR | S_IWUSR |
         S_IRGRP | S_IWGRP |
         S_IROTH | S_IWOTH;
-    int fd = open(path, O_WRONLY | O_CREAT, full_access);
+    int fd = open(path, O_WRONLY | O_CREAT | O_APPEND, full_access);
     if(fd == -1)
         throw std::system_error(errno, std::system_category());
-    lseek(fd, 0, SEEK_END);
     return fd;
 }
 }
