@@ -267,6 +267,8 @@ void basic_log::output_worker()
                 std::size_t frame_size;
                 if(likely(status == frame_status::initialized))
                     frame_size = process_frame(pframe);
+                else if(status == frame_status::failed_error_check)
+                    frame_size = char_cast<frame_header*>(pframe)->frame_size;
                 else if(status == frame_status::failed_initialization)
                     frame_size = skip_frame(pframe);
                 else if(status == frame_status::shutdown_marker)
