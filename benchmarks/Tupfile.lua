@@ -1,6 +1,7 @@
 libreckless = '../reckless/lib/' .. LIBPREFIX .. 'reckless' .. LIBSUFFIX
 libperformance_log = '../performance_log/lib/' .. LIBPREFIX .. 'performance_log' .. LIBSUFFIX
 
+table.insert(OPTIONS.includes, tup.getcwd() .. '/../reckless/include')
 table.insert(OPTIONS.includes, joinpath(tup.getcwd(), '../performance_log/include'))
 
 function build_suite(lib, extra_objs)
@@ -19,10 +20,11 @@ function build_suite(lib, extra_objs)
   single_threaded('periodic_calls')
   single_threaded('write_files')
 
+  push_options()
   if tup.getconfig('TRACE_LOG') != '' and lib == 'reckless' then
     table.insert(OPTIONS.define, 'RECKLESS_ENABLE_TRACE_LOG')
   end
-  mandelbrot_obj = compile('mandelbrot.cpp', 'mandelbrot' .. '-' .. lib .. OBJSUFFIX)
+  mandelbrot_obj = compile('mandelbrot.cpp', 'mandelbrot-' .. lib .. OBJSUFFIX)
   for threads=1,8 do
     push_options()
     table.insert(OPTIONS.define, 'THREADS=' .. threads)
@@ -47,16 +49,26 @@ function build_suite(lib, extra_objs)
     pop_options()
   end
   pop_options()
+
+  table.insert(OPTIONS.define, 'ENABLE_PERFORMANCE_LOG')
+  table.insert(OPTIONS.define, 'THREADS=1')
+  local exesuffix = '-' .. lib .. '-perflog'
+  local objsuffix = exesuffix .. OBJSUFFIX
+  local objs = {
+    compile('mandelbrot.cpp', 'mandelbrot' .. objsuffix),
+    compile('benchmark_mandelbrot.cpp', 'benchmark_mandelbrot' .. objsuffix),
+    libperformance_log
+  }
+  objs = table.merge(objs, extra_objs)
+  link('mandelbrot' .. exesuffix, objs)
+
+  pop_options()
 end
 
 build_suite('nop', {})
 build_suite('stdio', {})
 build_suite('fstream', {})
-
-push_options()
-table.insert(OPTIONS.includes, tup.getcwd() .. '/../reckless/include')
 build_suite('reckless', {libreckless}, {}, {}, {})
-pop_options()
 
 SPDLOG = tup.getconfig('SPDLOG')
 if SPDLOG ~= '' then

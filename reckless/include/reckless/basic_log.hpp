@@ -191,24 +191,29 @@ protected:
 #endif  // RECKLESS_DEBUG
 
         frame_header* pframe = push_input_frame(frame_size);
-        pframe->pdispatch_function = &detail::input_frame_dispatch<
-                Formatter,
-                typename std::decay<Args>::type...
-            >;
+        //pframe->pdispatch_function = &detail::input_frame_dispatch<
+        //        Formatter,
+        //        typename std::decay<Args>::type...
+        //    >;
+        pframe->frame_size = frame_size;
 
-        void* pargs = static_cast<char*>(static_cast<void*>(pframe))
-            + args_offset;
+        //void* pargs = static_cast<char*>(static_cast<void*>(pframe))
+        //    + args_offset;
         // Let the compiler know that the placement-new call below
         // doesn't need to perform a null-pointer check.
-        assume(pargs != nullptr);
+        //assume(pargs != nullptr);
 
-        try {
-            new (pargs) args_t(std::forward<Args>(args)...);
-        } catch(...) {
-            atomic_store_release(&pframe->status, frame_status::failed_initialization);
-            throw;
-        }
-        atomic_store_release(&pframe->status, frame_status::initialized);
+        // try {
+        //     new (pargs) args_t(std::forward<Args>(args)...);
+        // } catch(...) {
+        //     atomic_store_release(&pframe->status, frame_status::failed_initialization);
+        //     throw;
+        // }
+        // atomic_store_release(&pframe->status, frame_status::initialized);
+        //new (pargs) args_t(std::forward<Args>(args)...);
+        //atomic_store_release(&pframe->status, frame_status::initialized);
+        atomic_store_release(&pframe->status, frame_status::failed_error_check);
+        //atomic_store_release(&pframe->status, frame_status::failed_initialization);
     }
 
 private:

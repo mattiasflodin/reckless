@@ -1,3 +1,24 @@
+/* This file is part of reckless logging
+ * Copyright 2015, 2016 Mattias Flodin <git@codepentry.com>
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
 #include "mandelbrot.hpp"
 
 #ifdef RECKLESS_ENABLE_TRACE_LOG
@@ -12,8 +33,13 @@
 
 #include LOG_INCLUDE
 
+#ifdef ENABLE_PERFORMANCE_LOG
+unsigned const SAMPLES_WIDTH = 512;
+unsigned const SAMPLES_HEIGHT = 512;
+#else
 unsigned const SAMPLES_WIDTH = 1024;
 unsigned const SAMPLES_HEIGHT = 1024;
+#endif
 unsigned const MAX_ITERATIONS = 32768;
 
 double const BOX_LEFT = -0.69897762686014175;
@@ -24,7 +50,9 @@ double const BOX_HEIGHT = BOX_WIDTH*SAMPLES_HEIGHT/SAMPLES_WIDTH;
 int main()
 {
     std::vector<unsigned> sample_buffer(SAMPLES_WIDTH*SAMPLES_HEIGHT);
+#ifndef ENABLE_PERFORMANCE_LOG
     auto start = std::chrono::steady_clock::now();
+#endif
     {
         LOG_INIT();
         mandelbrot(&sample_buffer[0], SAMPLES_WIDTH, SAMPLES_HEIGHT,
@@ -32,9 +60,11 @@ int main()
             MAX_ITERATIONS, THREADS);
         LOG_CLEANUP();
     }
+#ifndef ENABLE_PERFORMANCE_LOG
     auto end = std::chrono::steady_clock::now();
     std::cout << std::chrono::duration_cast<std::chrono::milliseconds>(
             end - start).count() << std::endl;
+#endif
 
     char image[3*SAMPLES_WIDTH*SAMPLES_HEIGHT];
     color_mandelbrot(image, &sample_buffer[0], SAMPLES_WIDTH, SAMPLES_HEIGHT,

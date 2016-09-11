@@ -1,6 +1,13 @@
 #ifdef RECKLESS_ENABLE_TRACE_LOG
 #include <reckless/detail/trace_log.hpp>
 #endif
+#ifdef ENABLE_PERFORMANCE_LOG
+#include <reckless/detail/spsc_event.hpp>
+#include <performance_log.hpp>
+#include <chrono>
+#include <iostream>
+#include <sys/time.h>
+#endif
 
 #include <cstdlib>
 #include <cstdint>
@@ -62,8 +69,21 @@ void mandelbrot_thread(
     double y2,
     unsigned max_iterations,
     std::mutex* next_slice_mutex,
-    unsigned* next_slice_index)
+    unsigned* next_slice_index
+#ifdef ENABLE_PERFORMANCE_LOG
+    ,reckless::detail::spsc_event* start_event
+#endif
+    )
 {
+#ifdef ENABLE_PERFORMANCE_LOG
+    performance_log::logger<2*512*512, performance_log::rdtscp_cpuid_clock, std::uint32_t> performance_log;
+    start_event->wait();
+    struct timeval program_start_seconds;
+    gettimeofday(&program_start_seconds, nullptr);
+    performance_log::rdtscp_cpuid_clock rdtsc_clock;
+    auto program_start_ticks = rdtsc_clock.start();
+    //unsigned many_iterations = 0;
+#endif
     double const width = x2 - x1;
     double const height = y1 - y2;
     double const scale_x = width/samples_width;
@@ -75,8 +95,32 @@ void mandelbrot_thread(
         {
             std::lock_guard<std::mutex> lk(*next_slice_mutex);
             sample_index = *next_slice_index;
-            if(sample_index == total_samples)
+            if(sample_index == total_samples) {
+                #ifdef ENABLE_PERFORMANCE_LOG
+                    auto program_end_ticks = rdtsc_clock.stop();
+                    struct timeval program_end_seconds;
+                    gettimeofday(&program_end_seconds, nullptr);
+                    std::uint64_t us = program_end_seconds.tv_sec;
+                    us -= program_start_seconds.tv_sec;
+                    us *= 1000000;
+                    us += program_end_seconds.tv_usec;
+                    us -= program_start_seconds.tv_usec;
+
+                    std::uint64_t sum_ticks = 0;
+                    for(auto sample : performance_log) {
+                        sum_ticks += sample;
+                    }
+                    std::cout
+                        << us << '\t'
+                        << (program_end_ticks - program_start_ticks) << '\t'
+                        << performance_log.size() << '\t'
+                        << sum_ticks << std::endl;
+                    for(auto sample : performance_log) {
+                        std::cout << sample << std::endl;
+                    }
+                #endif
                 return;
+            }
             end_sample_index = std::min<std::size_t>(total_samples, sample_index + THREAD_SLICE_SIZE);
             *next_slice_index = static_cast<unsigned>(end_sample_index);
         }
@@ -84,8 +128,13 @@ void mandelbrot_thread(
         //fflush(stdout);
 
         while(sample_index != end_sample_index) {
-            unsigned sample_x = sample_index % samples_width;
-            unsigned sample_y = static_cast<unsigned>(sample_index / samples_width);
+#ifdef ENABLE_PERFORMANCE_LOG
+            auto start = performance_log.start();
+#endif
+            unsigned sample_x = 254;
+            unsigned sample_y = 399;
+            // unsigned sample_x = sample_index % samples_width;
+            // unsigned sample_y = static_cast<unsigned>(sample_index / samples_width);
             std::complex<double> c(x1 + sample_x*scale_x, y1 - sample_y*scale_y);
             std::complex<double> z;
 
@@ -95,6 +144,12 @@ void mandelbrot_thread(
                 ++iterations;
             }
 
+#ifdef ENABLE_PERFORMANCE_LOG
+            performance_log.stop(start);
+#endif
+            sample_buffer[sample_index] = iterations;
+            ++sample_index;
+
 #ifdef RECKLESS_ENABLE_TRACE_LOG
             RECKLESS_TRACE(log_start_event, static_cast<unsigned char>(thread_index));
 #endif
@@ -103,8 +158,6 @@ void mandelbrot_thread(
             RECKLESS_TRACE(log_finish_event, static_cast<unsigned char>(thread_index));
 #endif
 
-            sample_buffer[sample_index] = iterations;
-            ++sample_index;
         }
     }
 }
@@ -125,11 +178,23 @@ void mandelbrot(
     unsigned next_slice_index = 0;
     std::mutex next_slice_index_mutex;
     std::vector<std::thread> threads(thread_count);
+#ifdef ENABLE_PERFORMANCE_LOG
+    std::vector<reckless::detail::spsc_event> start_events(thread_count);
+#endif
     for(unsigned thread=0; thread!=thread_count; ++thread) {
         threads[thread] = std::thread(&mandelbrot_thread, thread, sample_buffer,
                 samples_width, samples_height, x1, y1, x2, y2, max_iterations,
-                &next_slice_index_mutex, &next_slice_index);
+                &next_slice_index_mutex, &next_slice_index
+#ifdef ENABLE_PERFORMANCE_LOG
+                ,&start_events[thread]
+#endif
+                );
     }
+#ifdef ENABLE_PERFORMANCE_LOG
+    std::this_thread::sleep_for(std::chrono::seconds(1));
+    for(std::size_t thread=0; thread!=thread_count; ++thread)
+        start_events[thread].signal();
+#endif
     for(std::size_t thread=0; thread!=thread_count; ++thread)
         threads[thread].join();
 }

@@ -19,6 +19,8 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
+#ifndef PERFORMANCE_LOG_HPP
+#define PERFORMANCE_LOG_HPP
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -29,7 +31,7 @@ namespace detail {
     void unlock_memory(void const* addr, std::size_t len);
 }
 
-// Evalutates timestamp counter using rdtscp/rdtsc/cpuid combo according to
+// Evaluates timestamp counter using rdtscp/rdtsc/cpuid combo according to
 // "How to Benchmark Code Execution Times on Intel IA-32 and IA-64
 // Instruction Set Architectures" by Gabriele Paoloni
 // (http://www.intel.com/content/www/us/en/intelligent-systems/embedded-systems-training/ia-32-ia-64-benchmark-code-execution-paper.html)
@@ -126,3 +128,5 @@ inline auto performance_log::rdtscp_cpuid_clock::stop() const -> timestamp
 
     return (t_high << 32) | static_cast<std::uint32_t>(t_low);
 }
+
+#endif // PERFORMANCE_LOG_HPP
