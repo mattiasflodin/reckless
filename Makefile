@@ -7,7 +7,7 @@
 
 CXXFLAGS = -std=c++11 -Wall -Wextra -O3 -g -isystem boost -Ireckless/include
 
-target = reckless/lib/libasynclog.a
+target = reckless/lib/libreckless.a
 srcpath = reckless/src
 objects := $(patsubst %.cpp,%.o,$(wildcard $(srcpath)/*.cpp))
 
