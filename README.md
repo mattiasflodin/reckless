@@ -40,7 +40,7 @@ separate thread. This removes or hides several costs:
   write latency.
 
 For a more detailed performance discussion and statistics, see the
-[performance article](doc/performance.md). 
+[performance article](doc/performance.md).
 
 What's the catch?
 =================
@@ -81,24 +81,24 @@ using log_t = reckless::severity_log<
     reckless::severity_field,  // Show severity marker (D/I/W/E) first
     reckless::timestamp_field  // Then timestamp field
     >;
-    
+
 reckless::file_writer writer("log.txt");
 log_t g_log(&writer);
 
 int main()
 {
     std::string s("Hello World!");
-    
+
     // You can use ordinary printf-style syntax, but unlike stdio this
     // is type-safe and extensible.
     g_log.debug("Pointer: %p", s.c_str());
     g_log.info("Info line: %s", s);
-    
+
     for(int i=0; i!=4; ++i) {
         reckless::scoped_indent indent;  // The indent object causes the lines
         g_log.warn("Warning: %d", i);    // within this scope to be indented.
     }
-    
+
     g_log.error("Error: %f", 3.14);
 
     return 0;
@@ -129,7 +129,7 @@ To build a program against the library, given the variable RECKLESS
 pointing to the reckless root directory, use:
 
 ```bash
-g++ -std=c++11 myprogram.cpp -I$(RECKLESS)/boost -I$(RECKLESS)/reckless/include -L$(RECKLESS)/reckless/lib -lreckless
+g++ -std=c++11 myprogram.cpp -I$(RECKLESS)/boost -I$(RECKLESS)/reckless/include -L$(RECKLESS)/reckless/lib -lreckless -lpthread
 ```
 
 More information
