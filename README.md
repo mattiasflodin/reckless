@@ -123,13 +123,38 @@ a patch or buys me hardware.
 
 Building
 ========
-To build the library, clone the git repository and run make.
+
+1.Using Make
+------------
+To build the library using Make, clone the git repository and run make.
 
 To build a program against the library, given the variable RECKLESS
 pointing to the reckless root directory, use:
 
 ```bash
 g++ -std=c++11 myprogram.cpp -I$(RECKLESS)/boost -I$(RECKLESS)/reckless/include -L$(RECKLESS)/reckless/lib -lreckless -lpthread
+```
+
+2.Using CMake
+-------------
+To build the library using CMake, clone the git repository and run the following commands:
+
+```
+mkdir build; cd build
+cmake ..
+make
+```
+
+To build a program against this library using CMake, add the following line to your program's CMakeLists.txt:
+
+```
+add_subdirectory(path/to/reckless)
+```
+
+Subsequently, to link this library to a program (e.g. **your_executable**), add the following to your program's CMakeLists.txt:
+
+```
+target_link_libraries(your_executable reckless pthread)
 ```
 
 More information
