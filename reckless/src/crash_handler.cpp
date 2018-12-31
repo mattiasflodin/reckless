@@ -41,7 +41,7 @@ std::initializer_list<int> const signals = {
     // SUSv2 + POSIX.1-2001 signals
     SIGBUS, SIGPOLL, SIGPROF, SIGSYS, SIGTRAP, SIGVTALRM, SIGXCPU, SIGXFSZ,
     // Various other signals
-    SIGIOT, SIGSTKFLT, SIGIO, SIGPWR, SIGUNUSED,
+    SIGIOT, SIGSTKFLT, SIGIO, SIGPWR,
     };
 
 std::vector<basic_log*> g_logs;
