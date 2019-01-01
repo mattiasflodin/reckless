@@ -40,7 +40,7 @@ GROUP_WIDTH = WIDTH*len(LIBS)
 GROUP_OFFSET = (1.0 - GROUP_WIDTH)/2
 
 def read_timing(lib, cores, offset=0.0):
-    with open(os.path.join('results', '%s_mandelbrot_%d.txt' % (lib, cores)), 'r') as f:
+    with open(os.path.join('results', 'mandelbrot-%s-%d.txt' % (lib, cores)), 'r') as f:
         data = f.readlines()
     data = sorted([float(x)/1000.0+offset for x in data])
     # Use interquartile range as measure of scale.
