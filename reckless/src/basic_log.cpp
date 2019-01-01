@@ -28,6 +28,8 @@
 #include <thread>       // sleep_for
 #include <chrono>       // hours
 
+#include <performance_log.hpp>
+
 using reckless::detail::likely;
 
 namespace reckless {
@@ -336,6 +338,7 @@ void basic_log::output_worker()
 #elif defined(_WIN32)
     output_worker_native_id_ = GetCurrentThreadId();
 #endif
+    //performance_log::rdtscp_cpuid_clock::bind_cpu(1);
 
     set_thread_name("reckless output worker");
 
