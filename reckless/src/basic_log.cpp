@@ -74,8 +74,15 @@ void basic_log::open(writer* pwriter,
     // misalignment.
     unsigned const assumed_disk_sector_size = 8192;
 
+    // We used to use the page size for input buffer capacity. However, after
+    // introducing the new ring buffer for Windows support, it is impossible to
+    // have a size less than 64 KiB on Windows due to granularity constraints.
+    // Additionally, since we are storing the entire input frame in this buffer
+    // and have stricter alignment requests, we need a larger buffer to fit
+    // a reasonable amount of frames.  So, for better performance and more
+    // similar behavior between Unix/Windows, we set this to 64 KiB.
     if(input_buffer_capacity == 0)
-        input_buffer_capacity = detail::get_page_size();
+        input_buffer_capacity = 64*1024;
     if(output_buffer_capacity == 0)
         output_buffer_capacity =  assumed_disk_sector_size;
 
