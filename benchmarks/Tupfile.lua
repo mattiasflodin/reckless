@@ -23,7 +23,7 @@ function build_suite(lib, extra_objs)
     table.insert(OPTIONS.define, 'RECKLESS_ENABLE_TRACE_LOG')
   end
   mandelbrot_obj = compile('mandelbrot.cpp', 'mandelbrot' .. '-' .. lib .. OBJSUFFIX)
-  for threads=1,4 do
+  for threads=1,8 do
     push_options()
     table.insert(OPTIONS.define, 'THREADS=' .. threads)
     local exesuffix = '-' .. lib .. '-' .. threads

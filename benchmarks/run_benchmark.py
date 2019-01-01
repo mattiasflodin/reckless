@@ -10,7 +10,7 @@ ALL_TESTS = ['periodic_calls', 'call_burst', 'write_files', 'mandelbrot']
 SINGLE_SAMPLE_TESTS = {'mandelbrot'}
 THREADED_TESTS = {'call_burst', 'mandelbrot'}
 TESTS_WITH_DRY_RUN = {'call_burst'}
-MAX_THREADS = 4
+MAX_THREADS = 8
 
 # /run_benchmark.py -t mandelbrot  1448.92s user 64.87s system 208% cpu 12:04.87 total
 # with SINGLE_SAMPLE_TEST_ITERATIONS=2 means we should have
@@ -124,5 +124,3 @@ def busy_wait(period):
         
 if __name__ == "__main__":
     sys.exit(main())
-
-    
