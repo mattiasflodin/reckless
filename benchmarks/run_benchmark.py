@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-import sys, os, subprocess, errno
+import sys, os, time, subprocess, errno
 from sys import stdout, stderr, argv
 from getopt import gnu_getopt
 
@@ -104,6 +104,8 @@ def run_test(lib, test, threads = None):
     if test in TESTS_WITH_DRY_RUN:
         with open(os.devnull, 'w') as out:
             run(out)
+    else:
+        busy_wait(0.5)
             
     txt_name = binary_name + '.txt'
     with open('results/' + txt_name, 'w') as out:
@@ -115,6 +117,11 @@ def run_test(lib, test, threads = None):
             run(out)
     return True
 
+def busy_wait(period):
+    end = time.time() + period
+    while time.time() < end:
+        pass
+        
 if __name__ == "__main__":
     sys.exit(main())
 
