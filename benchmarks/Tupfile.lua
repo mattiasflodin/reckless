@@ -20,7 +20,7 @@ function build_suite(lib, extra_objs)
   single_threaded('write_files')
 
   mandelbrot_obj = compile('mandelbrot.cpp', 'mandelbrot' .. '-' .. lib .. OBJSUFFIX)
-  for threads=1,4 do
+  for threads=1,8 do
     push_options()
     table.insert(OPTIONS.define, 'THREADS=' .. threads)
     local exesuffix = '-' .. lib .. '-' .. threads
