@@ -18,6 +18,7 @@ int main()
         for(int i=0; i!=10000; ++i) {
             auto start = performance_log.start();
             LOG(c, i, pi);
+            // log start+stop here, so we get proper time scale for benchmark calls?
             performance_log.stop(start);
         }
 

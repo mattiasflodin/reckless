@@ -68,6 +68,8 @@ public:
 
     void* push(std::size_t size) noexcept
     {
+        // PERFLOG: spin count, and/or time taken for push.
+        // Alternative implementation: skip caching of read position
         auto capacity = capacity_;
         for(;;pause()) {
             auto wp = atomic_load_relaxed(&next_write_position_);
@@ -116,6 +118,10 @@ public:
 
     void pop_release(std::size_t size) noexcept
     {
+        // I feel that a release operation should always be paired with
+        // an acquire somewhere, right? Should the load above be an acquire?
+        // On the other hand maybe this "release" is only for data written
+        // by the caller.
         atomic_store_release(&next_read_position_, next_read_position_+size);
     }
 

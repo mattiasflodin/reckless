@@ -188,6 +188,9 @@ void output_buffer::flush()
                 // of the while loop and issue another write.
                 auto lif = lost_input_frames_;
                 lost_input_frames_ = 0;
+                // Shouldn't we hold the lock for the entire duration of the call?
+                // Otherwise the callback might become invalid. Same goes for
+                // other callbacks.
                 writer_error_callback_t callback;
                 {
                     std::lock_guard<std::mutex> lk(writer_error_callback_mutex_);
@@ -201,7 +204,7 @@ void output_buffer::flush()
                         assert(false);
                     }
                     initial_error_.clear();
-                    frame_end();
+                    frame_end();    // what does frame_end do? Not exactly clear from documentation
                 }
                 remaining = pframe_end_ - pbuffer_; // Update byte-remaining count.
             }
@@ -244,6 +247,8 @@ void output_buffer::flush()
                 // of the crash. I've chosen the latter option, because I think
                 // it's not likely that the log data will ever make it past the
                 // writer anyway, even if we do keep on blocking.
+                // TODO need unit tests for this kind of thing, and other
+                // rare states documented across the code.
                 shared_input_queue_full_event_.wait(block_time_ms);
                 if(atomic_load_relaxed(&panic_flush_))
                     throw flush_error(error);

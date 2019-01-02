@@ -217,10 +217,18 @@ detail::frame_header* basic_log::push_input_frame_slow_path(
         // simultaneously which could lead to cache-line ping pong and hurt
         // performance (but maybe queue entries could be made so they end up in
         // different cache lines?)
+
+        // Should we really wait for the entire buffer to empty here (is that what this signals)?
+        // Doesn't that lead to long wait times? On the other hand, during normal
+        // operation we probably shouldn't expect to ever come here. We could though
+        // if the worker thread goes to sleep a lot and we manage to fill up the
+        // queue in the mean time. Maybe it's better to start off with a short
+        // wait / thread context switch that doesn't wait for the event.
         input_buffer_empty_event_.wait();
         pframe = static_cast<frame_header*>(input_buffer_.push(size));
         error = atomic_load_acquire(&error_flag_);
     }
+    // Can't assume that pframe is non-null here. What if the buffer fills up again after wait?
     if(!error) {
         return pframe;
     } else {
@@ -255,6 +263,7 @@ void basic_log::output_worker()
         auto pbatch_start = static_cast<char*>(input_buffer_.front());
         auto pbatch_end = pbatch_start + batch_size;
         auto pframe = pbatch_start;
+        // PERFLOG: batch_size
 
         bool panic_flush = false;
         do
@@ -267,11 +276,13 @@ void basic_log::output_worker()
                 std::size_t frame_size;
                 if(likely(status == frame_status::initialized))
                     frame_size = process_frame(pframe);
-                else if(status == frame_status::failed_initialization)
+                else switch(status) {
+                case frame_status::failed_initialization:
                     frame_size = skip_frame(pframe);
-                else if(status == frame_status::shutdown_marker)
+                    break;
+                case frame_status::shutdown_marker:
                     frame_size = RECKLESS_CACHE_LINE_SIZE;
-                else {
+                default:
                     assert(status == frame_status::panic_shutdown_marker);
                     // We are in panic-flush mode and reached the shutdown marker. That
                     // means we are done.
@@ -288,6 +299,7 @@ void basic_log::output_worker()
             // See start_panic_flush() for more information.
             panic_flush = atomic_load_relaxed(&panic_flush_);
             if(likely(!panic_flush)) {
+                // PERFLOG: amount of space left in input_buffer
                 input_buffer_.pop_release(batch_size);
             } else {
                 // As a consequence of not returning memory to the input buffer,
@@ -336,6 +348,7 @@ std::size_t basic_log::wait_for_input()
         // lingering, so we need to keep trying to flush with each iteration as
         // long as data remains in the output buffer.
         if(output_buffer::has_complete_frame()) {
+            // Why is this signalled *before* flushing the buffer?
             input_buffer_empty_event_.signal();
             flush_output_buffer();
             size = input_buffer_.size();
@@ -343,6 +356,8 @@ std::size_t basic_log::wait_for_input()
                 return size;
         }
 
+        // Why do we always signal _again_ here? Shouldn't this be at the beginning
+        // of the loop instead?
         input_buffer_empty_event_.signal();
         input_buffer_full_event_.wait(wait_time_ms);
         size = input_buffer_.size();

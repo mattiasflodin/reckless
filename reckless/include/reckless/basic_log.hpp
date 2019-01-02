@@ -57,6 +57,11 @@ namespace detail {
         // dispatch pointer valid but without initialized data. It should be
         // skipped by using frame_header::pdispatch_funtion and
         // dispatch_operation::get_typeid.
+        // If we didn't have to log typeid info, then we wouldn't need the
+        // switch in the dispatch function. Is it really worth it? What
+        // are the performance implications of that switch? Can we
+        // enable something like call site info in the frame with some
+        // preprocessor flag enabled?
         failed_initialization,
         // Frame is initialized and valid.
         initialized,
@@ -272,7 +277,7 @@ inline detail::frame_header* basic_log::push_input_frame(
     // frame as failed_error_check if it succeeds but the error check does not.
     auto pframe = static_cast<frame_header*>(input_buffer_.push(size));
     auto error = atomic_load_acquire(&error_flag_);
-    std::uint64_t no_error = ~static_cast<std::uint64_t>(error);
+    std::uintptr_t no_error = ~static_cast<std::uintptr_t>(error);
     no_error &= reinterpret_cast<std::uintptr_t>(pframe);
     if(likely(no_error != 0))
         return pframe;
@@ -280,6 +285,9 @@ inline detail::frame_header* basic_log::push_input_frame(
         return push_input_frame_slow_path(pframe, error, size);
 }
 
+// Push an input frame without looking at the error flag.
+// Does this need special treatment in push_input_frame_slow_path? Can
+// the error flag interfere with expected operation there?
 inline detail::frame_header* basic_log::push_input_frame_blind(
         std::size_t size)
 {
