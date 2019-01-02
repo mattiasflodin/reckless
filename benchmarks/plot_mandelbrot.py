@@ -28,7 +28,7 @@ fig, ax = plt.subplots()
 
 ONLY_OVERHEAD = 1
 #LOG_LINES = 1048576
-MAX_CORES = 4
+MAX_CORES = 8
 LIBS = ['nop', 'reckless', 'spdlog', 'stdio', 'fstream', 'pantheios']
 #LIBS = ['nop', 'reckless', 'stdio', 'fstream']
 if ONLY_OVERHEAD:
