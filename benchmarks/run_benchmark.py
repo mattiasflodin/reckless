@@ -9,15 +9,15 @@ ALL_TESTS = ['periodic_calls', 'call_burst', 'write_files', 'mandelbrot']
 
 SINGLE_SAMPLE_TESTS = {'mandelbrot'}
 THREADED_TESTS = {'call_burst', 'mandelbrot'}
-TESTS_WITH_DRY_RUN = {'call_burst'}
+TESTS_WITH_DRY_RUN = {'call_burst', 'periodic_calls'}
 MAX_THREADS = 8
 
 # /run_benchmark.py -t mandelbrot  1448.92s user 64.87s system 208% cpu 12:04.87 total
 # with SINGLE_SAMPLE_TEST_ITERATIONS=2 means we should have
 # about 80 for 8 hours runtime
 #
-# time ./run_benchmark.py -t mandelbrot  
-# mandelbrot: fstream/1234 nop/1234 pantheios/1234 reckless/1234 spdlog/1234 stdio/1234        
+# time ./run_benchmark.py -t mandelbrot
+# mandelbrot: fstream/1234 nop/1234 pantheios/1234 reckless/1234 spdlog/1234 stdio/1234
 # ./run_benchmark.py -t mandelbrot  58192.78s user 2484.45s system 208% cpu 8:04:15.16 total
 #
 # Then 100 = 10 hours runtime
@@ -85,12 +85,12 @@ def reset():
     for name in os.listdir('data'):
         os.unlink(os.path.join('data', name))
     subprocess.call('sync')
-    
+
 def run_test(lib, test, threads = None):
     binary_name = test + '-' + lib
     if threads is not None:
         binary_name += '-' + str(threads)
-        
+
     def run(out_file):
         try:
             p = subprocess.Popen([binary_name], executable='./' + binary_name, stdout=out)
@@ -106,7 +106,7 @@ def run_test(lib, test, threads = None):
             run(out)
     else:
         busy_wait(0.5)
-            
+
     txt_name = binary_name + '.txt'
     with open('results/' + txt_name, 'w') as out:
         total_iterations = 1
@@ -121,6 +121,6 @@ def busy_wait(period):
     end = time.time() + period
     while time.time() < end:
         pass
-        
+
 if __name__ == "__main__":
     sys.exit(main())
