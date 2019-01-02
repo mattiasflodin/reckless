@@ -30,7 +30,7 @@ ONLY_OVERHEAD = 1
 #LOG_LINES = 1048576
 MAX_CORES = 8
 LIBS = ['nop', 'reckless', 'spdlog', 'stdio', 'fstream', 'pantheios']
-#LIBS = ['nop', 'reckless', 'stdio', 'fstream']
+LIBS = ['nop', 'reckless',  'spdlog', 'stdio']
 if ONLY_OVERHEAD:
     del COLORS[0]
     del LIBS[0]
