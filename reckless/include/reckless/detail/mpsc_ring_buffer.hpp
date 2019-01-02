@@ -136,9 +136,18 @@ private:
 
     std::uint64_t next_write_position_;
     std::uint64_t next_read_position_cached_;
-    std::uint64_t next_read_position_;
     char* pbuffer_start_;
     std::size_t capacity_;
+
+    // next_read_position needs to be in its own cache line to prevent false
+    // sharing that triggers unnecessary cache-line ping pong. I don't
+    // think memory allocation via new is guaranteed to be aligned on
+    // a cache line, so we can't use padding directives for the compiler.
+    // Instead we have to insert enough padding on both sides of the variable.
+    // to guarantee it.
+    char padding1_[RECKLESS_CACHE_LINE_SIZE];
+    std::uint64_t next_read_position_;
+    char padding2_[RECKLESS_CACHE_LINE_SIZE - 8];
 };
 
 }   // namespace detail
