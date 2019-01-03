@@ -19,7 +19,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-#include "performance_log.hpp"
+#include "performance_log/performance_log.hpp"
 
 #include <system_error>
 #include <cassert>

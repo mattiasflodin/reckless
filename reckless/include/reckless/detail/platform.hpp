@@ -151,6 +151,16 @@ void atomic_store_release(T* ptarget, T value,
         static_cast<UT>(value));
 }
 
+template <typename T>
+T atomic_add_relaxed(T* ptarget, T value)
+{
+#if defined(__GNUC__)
+    return __atomic_add_fetch(ptarget, value, __ATOMIC_RELEASE);
+#else
+    static_assert(false, "atomic_add_relaxed is not implemented for this compiler");
+#endif
+}
+
 #if defined(__GNUC__)
 template<typename T>
 bool atomic_compare_exchange_weak_relaxed(T* ptarget, T* pexpected, T desired)

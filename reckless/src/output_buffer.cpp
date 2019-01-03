@@ -22,7 +22,7 @@
 #include <reckless/output_buffer.hpp>
 #include <reckless/writer.hpp>
 #include <reckless/detail/platform.hpp> // atomic_store_release
-#include <reckless/detail/trace_log.hpp>
+#include <performance_log/trace_log.hpp>
 
 #include <cstdlib>      // malloc, free
 #include <cassert>

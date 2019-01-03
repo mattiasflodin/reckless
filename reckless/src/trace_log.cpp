@@ -1,4 +1,4 @@
-#include <reckless/detail/trace_log.hpp>
+#include <performance_log/trace_log.hpp>
 
 #ifdef RECKLESS_ENABLE_TRACE_LOG
 namespace reckless {

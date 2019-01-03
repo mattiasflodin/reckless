@@ -19,9 +19,12 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
+#ifdef RECKLESS_ENABLE_TRACE_LOG
+#include <performance_log/trace_log.hpp>
+#endif
+
 #include <reckless/basic_log.hpp>
 #include <reckless/detail/platform.hpp>
-#include <reckless/detail/trace_log.hpp>
 
 #include <vector>
 #include <algorithm>    // max, min
