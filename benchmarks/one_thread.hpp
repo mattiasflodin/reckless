@@ -7,7 +7,6 @@ float pi = 3.1415;
 int main()
 {
     unlink("log.txt");
-    performance_log::rdtscp_cpuid_clock::bind_cpu(0);
     performance_log::logger<16384, performance_log::rdtscp_cpuid_clock, std::uint32_t> performance_log;
 
     {
@@ -21,7 +20,6 @@ int main()
 
         BENCHMARK_CLEANUP();
     }
-    performance_log::rdtscp_cpuid_clock::unbind_cpu();
 
     for(auto sample : performance_log) {
         std::cout << sample << std::endl;
