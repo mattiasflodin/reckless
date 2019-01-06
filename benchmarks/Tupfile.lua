@@ -16,12 +16,13 @@ function build_suite(lib, extra_objs)
     link(name .. '-' .. lib, objs)
   end
 
-  single_threaded('periodic_calls')
-  single_threaded('write_files')
-
   if tup.getconfig('TRACE_LOG') != '' and lib == 'reckless' then
     table.insert(OPTIONS.define, 'RECKLESS_ENABLE_TRACE_LOG')
   end
+
+  single_threaded('periodic_calls')
+  single_threaded('write_files')
+
   mandelbrot_obj = compile('mandelbrot.cpp', 'mandelbrot' .. '-' .. lib .. OBJSUFFIX)
   for threads=1,8 do
     push_options()
