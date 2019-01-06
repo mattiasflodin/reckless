@@ -20,7 +20,7 @@ int main()
     {
         LOG_INIT();
 
-        for(int i=0; i!=100000; ++i) {
+        for(int i=0; i!=10000; ++i) {
             auto start = performance_log.start();
             LOG(c, i, pi);
             performance_log.stop(start);
