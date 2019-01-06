@@ -1,3 +1,8 @@
+#ifdef RECKLESS_ENABLE_TRACE_LOG
+#include <performance_log/trace_log.hpp>
+#include <fstream>
+#endif
+
 #include <performance_log/performance_log.hpp>
 #include <iostream>
 #include <unistd.h>
@@ -33,6 +38,10 @@ int main()
     }
 
     //std::cout << "Avg: " << static_cast<double>(sum)/performance_log.size() << std::endl;
+#ifdef RECKLESS_ENABLE_TRACE_LOG
+    std::ofstream trace_log("trace_log.txt", std::ios::trunc);
+    reckless::detail::g_trace_log.save(trace_log);
+#endif
     
     return 0;
     
