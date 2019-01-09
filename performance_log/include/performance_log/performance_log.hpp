@@ -19,6 +19,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
+#include <stdexcept>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -60,12 +61,15 @@ public:
     static void unbind_cpu();
 };
 
-template <std::size_t LogSize, class ClockSource, class Sample = typename ClockSource::duration>
+template <std::size_t LogSize, class ClockSource>
 class logger : private ClockSource {
 public:
     typedef typename ClockSource::timestamp timestamp;
     typedef typename ClockSource::duration duration;
-    typedef Sample sample;
+    struct sample {
+        timestamp start;
+        timestamp stop;
+    };
 
     logger();
     ~logger();
@@ -76,14 +80,20 @@ public:
     }
     void stop(timestamp start_timestamp)
     {
-        sample d = static_cast<sample>(ClockSource::stop() - start_timestamp);
-        auto i = _next_sample_position;
-        _samples[i] = d;
-        _next_sample_position = (i + 1) % LogSize;
+        auto stop = ClockSource::stop();
+        sample d = {
+            start_timestamp,
+            stop
+        };
+        _samples[_next_sample_position++] = d;
     }
 
     sample const* begin() const
     {
+        if(_next_sample_position > LogSize) {
+            throw std::logic_error("Performance measurements have been written "
+                "past the end of the buffer");
+        }
         return _samples;
     }
 
@@ -103,16 +113,16 @@ private:
 };
 }
 
-template <std::size_t LogSize, class ClockSource, class Sample>
-performance_log::logger<LogSize, ClockSource, Sample>::logger() :
+template <std::size_t LogSize, class ClockSource>
+performance_log::logger<LogSize, ClockSource>::logger() :
     _next_sample_position(0)
 {
     //detail::lock_memory(_samples, sizeof(_samples));
     std::memset(_samples, 0, sizeof(_samples));
 }
 
-template <std::size_t LogSize, class ClockSource, class Sample>
-performance_log::logger<LogSize, ClockSource, Sample>::~logger()
+template <std::size_t LogSize, class ClockSource>
+performance_log::logger<LogSize, ClockSource>::~logger()
 {
     //detail::unlock_memory(_samples, sizeof(_samples));
 }
