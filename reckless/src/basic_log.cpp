@@ -169,7 +169,7 @@ void basic_log::open(writer* pwriter,
     if(input_buffer_capacity == 0)
         input_buffer_capacity = 64*1024;
     if(output_buffer_capacity == 0)
-        output_buffer_capacity =  assumed_disk_sector_size;
+        output_buffer_capacity =  assumed_disk_sector_size*10;
 
     input_buffer_.reserve(input_buffer_capacity);
     output_buffer::reset(pwriter, output_buffer_capacity);
