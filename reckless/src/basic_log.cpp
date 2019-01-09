@@ -151,12 +151,6 @@ void basic_log::open(writer* pwriter,
 {
     assert(!is_open());
 
-    // The typical disk block size these days is 4 KiB (see
-    // https://en.wikipedia.org/wiki/Advanced_Format). We'll make it twice
-    // that just in case it grows larger, and to hide some of the effects of
-    // misalignment.
-    unsigned const assumed_disk_sector_size = 8192;
-
     // We used to use the page size for input buffer capacity.
     // However, after introducing the new ring buffer for Windows
     // support, it is impossible to have a size less than 64 KiB on
@@ -173,8 +167,29 @@ void basic_log::open(writer* pwriter,
     // up.
     if(input_buffer_capacity == 0)
         input_buffer_capacity = 64*1024;
-    if(output_buffer_capacity == 0)
-        output_buffer_capacity =  assumed_disk_sector_size;
+
+    // We always write the contents of the output buffer whenever we
+    // have depleted the input queue, but if it fills up before that
+    // happens then we have to flush all finished frames to disk.
+    // Ideally this should not happen, as benchmarks have shown that
+    // it reduces performance (perhaps due to the memmove() call
+    // taking some time or maybe just because of additional
+    // transitions to the kernel). On the other hand, if the caller
+    // manages to maintain a balance between input rate and the rate
+    // at which log lines are formatted, so that the input queue never
+    // depletes and always has more content, then the output buffer
+    // needs to have a maximum size or it will eventually eat all
+    // available memory.
+    //
+    // The buffer currently has a fixed size and we set it based on an
+    // assumption on how much space will be used if the entire input
+    // queue is full of log entries. We assume an input frame will use
+    // up one cache line and that a log line will be 80 bytes in size.
+    if(output_buffer_capacity == 0) {
+        auto assumed_count = (input_buffer_capacity+RECKLESS_CACHE_LINE_SIZE-1)/
+            RECKLESS_CACHE_LINE_SIZE;
+        output_buffer_capacity = assumed_count * 80;
+    }
 
     input_buffer_.reserve(input_buffer_capacity);
     output_buffer::reset(pwriter, output_buffer_capacity);
