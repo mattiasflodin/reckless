@@ -190,8 +190,13 @@ def plot(libs, tests, threads_list, window, top, iterations, plot_filename, widt
     
     def single_plot(filename, test, name, window, color=None):
         with open(filename, 'r') as f:
-            data = f.readlines()
-        data = [int(x) for x in data]
+            lines = f.readlines()
+        data = []
+        for line in lines:
+            assert line.endswith('\n')
+            start, end = line[:-1].split(' ')
+            start, end = int(start), int(end)
+            data.append(end - start)
         if window is None:
             window = 1 #get_default_window(test)
         if window != 1:
