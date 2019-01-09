@@ -22,7 +22,7 @@ int main()
     std::memset(data, 0xcd, sizeof(data));
 
     performance_log::rdtscp_cpuid_clock::bind_cpu(0);
-    performance_log::logger<512, performance_log::rdtscp_cpuid_clock, std::uint32_t> performance_log;
+    performance_log::logger<512, performance_log::rdtscp_cpuid_clock> performance_log;
 
     {
         LOG_INIT();
@@ -49,7 +49,7 @@ int main()
     performance_log::rdtscp_cpuid_clock::unbind_cpu();
 
     for(auto sample : performance_log) {
-        std::cout << sample << std::endl;
+        std::cout << sample.start << ' ' << sample.stop << std::endl;
     }
     
     return 0;
