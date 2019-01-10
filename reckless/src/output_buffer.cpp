@@ -31,6 +31,25 @@
 namespace reckless {
 
 namespace {
+struct flush_output_buffer_start_event :
+    public detail::timestamped_trace_event
+{
+    std::string format() const
+    {
+        return timestamped_trace_event::format() + " flush_output_buffer start";
+    }
+};
+
+struct flush_output_buffer_finish_event :
+    public detail::timestamped_trace_event
+{
+    std::string format() const
+    {
+        return timestamped_trace_event::format() + " flush_output_buffer finish";
+    }
+};
+
+
 struct output_buffer_full_event
 {
     std::string format() const
@@ -121,6 +140,7 @@ void output_buffer::write(void const* buf, std::size_t count)
 void output_buffer::flush()
 {
     using namespace reckless::detail;
+    RECKLESS_TRACE(flush_output_buffer_start_event);
 
     // TODO keep track of a high watermark, i.e. max value of pcommit_end_.
     // Clear every second or some such. Use madvise to release unused memory.
@@ -135,8 +155,10 @@ void output_buffer::flush()
     while(true) {
         std::error_code error;
         std::size_t written;
-        if(remaining == 0)
+        if(remaining == 0) {
+            RECKLESS_TRACE(flush_output_buffer_finish_event);
             return;
+        }
         try {
             // FIXME the crash mentioned below happens if you have g_log as a
             // global object and have a writer with local scope (e.g. in
@@ -181,6 +203,7 @@ void output_buffer::flush()
             error_code_.clear();
             atomic_store_release(&error_flag_, false);
             if(likely(!lost_input_frames_)) {
+                RECKLESS_TRACE(flush_output_buffer_finish_event);
                 return;
             } else {
                 // Frames were discarded because of earlier errors in
