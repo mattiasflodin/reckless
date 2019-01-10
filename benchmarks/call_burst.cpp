@@ -28,11 +28,13 @@ float pi = 3.1415f;
 int main()
 {
     remove_file("log.txt");
-    performance_log::rdtscp_cpuid_clock::bind_cpu(0);
     performance_log::logger<100000, performance_log::rdtscp_cpuid_clock> performance_log;
 
     {
         LOG_INIT();
+        // It's important to set our CPU affinity *after* the log is
+        // initialized, otherwise all threads will run on the same CPU.
+        performance_log::rdtscp_cpuid_clock::bind_cpu(0);
 
         for(int i=0; i!=100000; ++i) {
             auto start = performance_log.start();
@@ -40,9 +42,9 @@ int main()
             performance_log.stop(start);
         }
 
+        performance_log::rdtscp_cpuid_clock::unbind_cpu();
         LOG_CLEANUP();
     }
-    performance_log::rdtscp_cpuid_clock::unbind_cpu();
 
     for(auto sample : performance_log) {
         std::cout << sample.start << ' ' << sample.stop << std::endl;
