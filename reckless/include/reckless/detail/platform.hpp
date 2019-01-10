@@ -151,11 +151,21 @@ void atomic_store_release(T* ptarget, T value,
         static_cast<UT>(value));
 }
 
-template <typename T>
-T atomic_add_relaxed(T* ptarget, T value)
+template <typename T, typename U>
+T atomic_fetch_add_relaxed(T* ptarget, U value)
 {
 #if defined(__GNUC__)
-    return __atomic_add_fetch(ptarget, value, __ATOMIC_RELEASE);
+    return __atomic_fetch_add(ptarget, value, __ATOMIC_RELAXED);
+#else
+    static_assert(false, "atomic_add_relaxed is not implemented for this compiler");
+#endif
+}
+
+template <typename T, typename U>
+T atomic_fetch_add_release(T* ptarget, U value)
+{
+#if defined(__GNUC__)
+    return __atomic_fetch_add(ptarget, value, __ATOMIC_RELEASE);
 #else
     static_assert(false, "atomic_add_relaxed is not implemented for this compiler");
 #endif
