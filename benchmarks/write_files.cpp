@@ -21,11 +21,11 @@ int main()
     char data[1024*1024];
     std::memset(data, 0xcd, sizeof(data));
 
-    performance_log::rdtscp_cpuid_clock::bind_cpu(0);
     performance_log::logger<512, performance_log::rdtscp_cpuid_clock> performance_log;
 
     {
         LOG_INIT();
+        performance_log::rdtscp_cpuid_clock::bind_cpu(0);
 
         for(unsigned number=0; number!=256u; ++number) {
             std::ostringstream ostr;
@@ -44,9 +44,9 @@ int main()
             close(fd);
         }
 
+        performance_log::rdtscp_cpuid_clock::unbind_cpu();
         LOG_CLEANUP();
     }
-    performance_log::rdtscp_cpuid_clock::unbind_cpu();
 
     for(auto sample : performance_log) {
         std::cout << sample.start << ' ' << sample.stop << std::endl;
