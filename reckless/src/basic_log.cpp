@@ -27,6 +27,7 @@
 #include <vector>
 #include <algorithm>    // max, min
 #include <thread>       // sleep_for
+#include <sstream>      // ostringstream
 #include <chrono>       // hours
 
 using reckless::detail::likely;
@@ -41,85 +42,92 @@ namespace {
 unsigned max_input_buffer_poll_period_ms = 1000u;
 unsigned input_buffer_poll_period_inverse_growth_factor = 4;
 
-struct output_worker_start_event
+#ifdef RECKLESS_ENABLE_TRACE_LOG
+struct output_worker_start_event :
+    public detail::timestamped_trace_event
 {
     std::string format() const
     {
-        return "output_worker_start";
+        return timestamped_trace_event::format() + " output_worker_start";
     }
 };
 
-struct wait_for_input_event
+struct wait_for_input_start_event :
+    public detail::timestamped_trace_event
 {
     std::string format() const
     {
-        return "wait_for_input";
+        return timestamped_trace_event::format() + " wait_for_input start";
     }
 };
 
-struct acquire_frame_event
+struct wait_for_input_finish_event :
+    public detail::timestamped_trace_event
 {
     std::string format() const
     {
-        return "acquire_frame";
+        return timestamped_trace_event::format() + " wait_for_input finish";
     }
 };
 
-struct process_frame_event
-{
+struct input_buffer_full_wait_start_event : public detail::timestamped_trace_event {
     std::string format() const
     {
-        return "process_frame";
+        return timestamped_trace_event::format() +
+            " input_buffer_full_wait start";
     }
 };
 
-struct skip_frame_event
-{
+struct input_buffer_full_wait_finish_event : public detail::timestamped_trace_event {
     std::string format() const
     {
-        return "skip_frame";
+        return timestamped_trace_event::format()
+            + " input_buffer_full_wait finish";
     }
 };
 
-struct clear_frame_event
-{
+struct process_batch_start_event : public detail::timestamped_trace_event {
+    std::size_t batch_size;
+
+    process_batch_start_event(std::size_t size) :
+        batch_size(size)
+    {
+    }
+
     std::string format() const
     {
-        return "clear_frame";
+        std::ostringstream ostr;
+        ostr << timestamped_trace_event::format() << " process_batch start " <<
+            batch_size;
+        return ostr.str();
     }
 };
 
-struct flush_output_buffer_start_event
-{
+struct process_batch_finish_event : public detail::timestamped_trace_event {
     std::string format() const
     {
-        return "flush_output_buffer_start";
+        return timestamped_trace_event::format()
+            + " process_batch finish";
     }
 };
 
-struct flush_output_buffer_finish_event
-{
+struct format_frame_start_event : public detail::timestamped_trace_event {
     std::string format() const
     {
-        return "flush_output_buffer_finish";
+        return timestamped_trace_event::format() +
+            " format_frame start";
     }
 };
 
-struct wait_input_buffer_full_event
-{
+struct format_frame_finish_event : public detail::timestamped_trace_event {
     std::string format() const
     {
-        return "wait_input_buffer_full";
+        return timestamped_trace_event::format()
+            + " format_frame finish";
     }
 };
 
-struct wait_input_buffer_full_done_event
-{
-    std::string format() const
-    {
-        return "wait_input_buffer_full_done";
-    }
-};
+#endif  // RECKLESS_ENABLE_TRACE_LOG
 
 }   // anonymous namespace
 
@@ -313,6 +321,7 @@ detail::frame_header* basic_log::push_input_frame_slow_path(
 {
     using namespace detail;
     while(pframe == nullptr && !error) {
+        RECKLESS_TRACE(input_buffer_full_wait_start_event);
         input_buffer_full_event_.signal();
         // TODO: This wait releases *one* thread. If another thread is also
         // waiting to push data to the input buffer and it is selected for
@@ -330,6 +339,7 @@ detail::frame_header* basic_log::push_input_frame_slow_path(
         // performance (but maybe queue entries could be made so they end up in
         // different cache lines?)
         input_buffer_empty_event_.wait();
+        RECKLESS_TRACE(input_buffer_full_wait_finish_event);
         pframe = static_cast<frame_header*>(input_buffer_.push(size));
         error = atomic_load_acquire(&error_flag_);
     }
@@ -365,6 +375,7 @@ void basic_log::output_worker()
     frame_status status = frame_status::uninitialized;
     while(likely(status < frame_status::shutdown_marker)) {
         auto batch_size = wait_for_input();
+        RECKLESS_TRACE(process_batch_start_event, batch_size);
         auto pbatch_start = static_cast<char*>(input_buffer_.front());
         auto pbatch_end = pbatch_start + batch_size;
         auto pframe = pbatch_start;
@@ -418,6 +429,7 @@ void basic_log::output_worker()
                 pbatch_end = pbatch_start + batch_size;
             }
         } while(unlikely(panic_flush));
+        RECKLESS_TRACE(process_batch_finish_event);
     }
 
     if(output_buffer::has_complete_frame()) {
@@ -433,7 +445,6 @@ void basic_log::output_worker()
 
 std::size_t basic_log::wait_for_input()
 {
-    RECKLESS_TRACE(wait_for_input_event);
     auto size = input_buffer_.size();
     if(likely(size != 0)) {
         // It's not exactly *likely* that there is input in the buffer, but we
@@ -442,39 +453,42 @@ std::size_t basic_log::wait_for_input()
         return size;
     }
 
+    RECKLESS_TRACE(wait_for_input_start_event);
     // Poll the input buffer until something comes in.
     unsigned wait_time_ms = 0;
     while(true) {
-        // The output buffer is flushed at least once before checking for more
+        input_buffer_empty_event_.signal();
+
+        // The output buffer is flushed at least once before waiting for more
         // input. This makes sure that data gets sent to the writer immediately
         // whenever there's a pause in incoming log messages. If this flush
         // fails due to a temporary error then there may still be data
         // lingering, so we need to keep trying to flush with each iteration as
         // long as data remains in the output buffer.
         if(output_buffer::has_complete_frame()) {
-            input_buffer_empty_event_.signal();
             flush_output_buffer();
+            // The flush acts as a wait, so check the input buffer
+            // again before waiting on the event.
             size = input_buffer_.size();
             if(size != 0)
-                return size;
+                break;
         }
 
-        input_buffer_empty_event_.signal();
-        RECKLESS_TRACE(wait_input_buffer_full_event);
         input_buffer_full_event_.wait(wait_time_ms);
         size = input_buffer_.size();
         if(size != 0)
-            return size;
+            break;
 
         wait_time_ms += std::max(1u,
             wait_time_ms/input_buffer_poll_period_inverse_growth_factor);
         wait_time_ms = std::min(wait_time_ms, max_input_buffer_poll_period_ms);
     }
+    RECKLESS_TRACE(wait_for_input_finish_event);
+    return size;
 }
 
 detail::frame_status basic_log::acquire_frame(void* pframe)
 {
-    RECKLESS_TRACE(acquire_frame_event);
     using namespace detail;
     auto pheader = static_cast<frame_header*>(pframe);
     auto status = atomic_load_acquire(&pheader->status);
@@ -501,7 +515,6 @@ detail::frame_status basic_log::acquire_frame(void* pframe)
 
 std::size_t basic_log::process_frame(void* pframe)
 {
-    RECKLESS_TRACE(process_frame_event);
     using namespace detail;
     auto pheader = static_cast<frame_header*>(pframe);
     auto pdispatch = pheader->pdispatch_function;
@@ -536,7 +549,6 @@ std::size_t basic_log::process_frame(void* pframe)
 
 std::size_t basic_log::skip_frame(void* pframe)
 {
-    RECKLESS_TRACE(skip_frame_event);
     using namespace detail;
     auto pdispatch = static_cast<frame_header*>(pframe)->pdispatch_function;
     std::type_info const* pti;
@@ -545,7 +557,6 @@ std::size_t basic_log::skip_frame(void* pframe)
 
 void basic_log::clear_frame(void* pframe, std::size_t frame_size)
 {
-    RECKLESS_TRACE(clear_frame_event);
     using namespace detail;
     auto pcframe = static_cast<char*>(pframe);
     for(std::size_t offset=0; offset!=frame_size;
@@ -558,7 +569,6 @@ void basic_log::clear_frame(void* pframe, std::size_t frame_size)
 
 void basic_log::flush_output_buffer()
 {
-    RECKLESS_TRACE(flush_output_buffer_start_event);
     try {
         output_buffer::flush();
     } catch(flush_error const&) {
@@ -569,7 +579,6 @@ void basic_log::flush_output_buffer()
         // when it happens during formatting of an input frame,
         // because then we need to account for a lost frame.
     }
-    RECKLESS_TRACE(flush_output_buffer_finish_event);
 }
 
 void basic_log::on_panic_flush_done()
