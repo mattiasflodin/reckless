@@ -29,7 +29,9 @@ reckless/src/policy_log.cpp
 reckless/src/file_writer.cpp
 reckless/src/fd_writer.cpp
 reckless/src/mpsc_ring_buffer.cpp
-reckless/src/platform.cpp)
+reckless/src/platform.cpp
+reckless/src/lockless_cv.cpp
+)
 
 if(WIN32)
    set (SRC_LIST ${SRC_LIST} reckless/src/spsc_event_win32.cpp)

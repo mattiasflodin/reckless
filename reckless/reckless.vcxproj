@@ -137,6 +137,7 @@
     <ClCompile Include="src\crash_handler_win32.cpp" />
     <ClCompile Include="src\fd_writer.cpp" />
     <ClCompile Include="src\file_writer.cpp" />
+    <ClCompile Include="src\lockless_cv.cpp" />
     <ClCompile Include="src\mpsc_ring_buffer.cpp" />
     <ClCompile Include="src\ntoa.cpp" />
     <ClCompile Include="src\output_buffer.cpp" />

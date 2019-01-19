@@ -23,6 +23,7 @@
 #define RECKLESS_BASIC_LOG_HPP
 
 #include <reckless/detail/spsc_event.hpp>
+#include <reckless/detail/lockless_cv.hpp>
 #include <reckless/detail/platform.hpp> // likely, RECKLESS_CACHE_LINE_SIZE
 #include <reckless/detail/utility.hpp>  // index_sequence
 #include <reckless/detail/mpsc_ring_buffer.hpp>
@@ -235,7 +236,7 @@ private:
 
     detail::mpsc_ring_buffer input_buffer_;
     detail::spsc_event input_buffer_full_event_;
-    detail::spsc_event input_buffer_empty_event_;
+    detail::lockless_cv input_buffer_empty_event_;
 
     std::mutex callback_mutex_;
     format_error_callback_t format_error_callback_; // access synchronized by callback_mutex_

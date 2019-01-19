@@ -101,5 +101,8 @@
     <ClCompile Include="src\trace_log.cpp">
       <Filter>src</Filter>
     </ClCompile>
+    <ClCompile Include="src\lockless_cv.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

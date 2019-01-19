@@ -320,28 +320,17 @@ detail::frame_header* basic_log::push_input_frame_slow_path(
     detail::frame_header* pframe, bool error, std::size_t size)
 {
     using namespace detail;
-    while(pframe == nullptr && !error) {
-        RECKLESS_TRACE(input_buffer_full_wait_start_event);
-        input_buffer_full_event_.signal();
-        // TODO: This wait releases *one* thread. If another thread is also
-        // waiting to push data to the input buffer and it is selected for
-        // release, then this thread will miss the signal and stay here
-        // waiting. However, we are guaranteed to eventually be released
-        // (modulo starvation issues) because if another thread gets the ticket
-        // then it will push an entry to the queue. When the queue gets cleared
-        // then this thread will get another shot at receiving the event.
-        //
-        // Eventually this might be changed into an alternative event object
-        // that releases all threads, but it's not clear if that will actually
-        // improve performance, since it causes "thundering herd"-like issues
-        // instead. All threads will then try to push events on the shared queue
-        // simultaneously which could lead to cache-line ping pong and hurt
-        // performance (but maybe queue entries could be made so they end up in
-        // different cache lines?)
-        input_buffer_empty_event_.wait();
-        RECKLESS_TRACE(input_buffer_full_wait_finish_event);
+    while(true) {
+        auto notify_count = input_buffer_empty_event_.notify_count();
         pframe = static_cast<frame_header*>(input_buffer_.push(size));
         error = atomic_load_acquire(&error_flag_);
+        if (pframe != nullptr || error)
+            break;
+
+        input_buffer_full_event_.signal();
+        RECKLESS_TRACE(input_buffer_full_wait_start_event);
+        input_buffer_empty_event_.wait(notify_count);
+        RECKLESS_TRACE(input_buffer_full_wait_finish_event);
     }
     if(!error) {
         return pframe;
@@ -457,7 +446,7 @@ std::size_t basic_log::wait_for_input()
     // Poll the input buffer until something comes in.
     unsigned wait_time_ms = 0;
     while(true) {
-        input_buffer_empty_event_.signal();
+        input_buffer_empty_event_.notify_all();
 
         // The output buffer is flushed at least once before waiting for more
         // input. This makes sure that data gets sent to the writer immediately
