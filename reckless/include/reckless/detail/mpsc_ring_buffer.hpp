@@ -134,20 +134,27 @@ private:
         next_read_position_ = 0;
     }
 
-    std::uint64_t next_write_position_;
-    std::uint64_t next_read_position_cached_;
+    // To avoid false sharing that triggers unnecessary cache-line
+    // ping pong we segment these variables by how they are accessed.
+    // First, the variables that are only read by both consumer and producer.
+    char padding1_[RECKLESS_CACHE_LINE_SIZE];
     char* pbuffer_start_;
     std::size_t capacity_;
+    char padding2_[RECKLESS_CACHE_LINE_SIZE
+        - sizeof(char*) - sizeof(std::size_t)];
 
-    // next_read_position needs to be in its own cache line to prevent false
-    // sharing that triggers unnecessary cache-line ping pong. I don't
-    // think memory allocation via new is guaranteed to be aligned on
-    // a cache line, so we can't use padding directives for the compiler.
-    // Instead we have to insert enough padding on both sides of the variable.
-    // to guarantee it.
-    char padding1_[RECKLESS_CACHE_LINE_SIZE];
+    // Next, variables that are updated by the producer and read by
+    // the consumer. Strictly the consumer does not access
+    // next_read_position_cached_ at all, but when it is updated it
+    // always happens together with next_write_position_ anyway.
+    std::uint64_t next_read_position_cached_;
+    std::uint64_t next_write_position_;
+    char padding3_[RECKLESS_CACHE_LINE_SIZE - 2*8];
+
+    // Finally, next_read_position_ is updated by the consumer and
+    // somtimes read by the producer.
     std::uint64_t next_read_position_;
-    char padding2_[RECKLESS_CACHE_LINE_SIZE - 8];
+    char padding4_[RECKLESS_CACHE_LINE_SIZE - 8];
 };
 
 }   // namespace detail
