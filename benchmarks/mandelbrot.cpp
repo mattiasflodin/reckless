@@ -1,6 +1,7 @@
 #include <cstdlib>
 #include <cstdint>
 #include <thread>
+#include <vector>
 #include <mutex>
 #include <ciso646>
 #include <complex>
