@@ -194,7 +194,7 @@ void basic_log::output_worker()
 
     while(true) {
         commit_extent ce;
-        if(unlikely(not shared_input_queue_->pop(ce))) {
+        if(unlikely(not shared_input_queue_->front())) {
             // The shared input queue is empty, no new log messages to process.
             // It's not exactly unlikely that this will happen, but we want
             // this to be a "cold path" so that we perform best when there is a
@@ -224,7 +224,7 @@ void basic_log::output_worker()
             // to not use too many CPU cycles and allow other threads to run,
             // but we don't wait for more than one second.
             unsigned wait_time_ms = 0;
-            while(not shared_input_queue_->pop(ce)) {
+            while(not shared_input_queue_->front()) {
                 shared_input_consumed_event_.signal();
                 shared_input_queue_full_event_.wait(wait_time_ms);
                 wait_time_ms += std::max(1u, wait_time_ms/4u);
@@ -236,6 +236,8 @@ void basic_log::output_worker()
                 if(output_buffer::has_complete_frame())
                     flush_output_buffer();
             }
+            ce = *shared_input_queue_->front();
+            shared_input_queue_->pop();
         }
 
         if(not ce.pinput_buffer) {
@@ -318,7 +320,7 @@ void basic_log::send_log_entries(detail::commit_extent const& ce)
 
 void basic_log::send_log_entries_blind(detail::commit_extent const& ce)
 {
-    if(likely(shared_input_queue_->push(ce)))
+    if(likely(shared_input_queue_->try_push(ce)))
         return;
 
     do {
@@ -339,7 +341,7 @@ void basic_log::send_log_entries_blind(detail::commit_extent const& ce)
         // performance (but maybe queue entries could be made so they end up in
         // different cache lines?)
         shared_input_consumed_event_.wait();
-    } while(not shared_input_queue_->push(ce));
+    } while(not shared_input_queue_->try_push(ce));
 }
 
 void basic_log::flush_output_buffer()

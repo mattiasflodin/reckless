@@ -33,6 +33,26 @@ reckless/src/fd_writer.cpp
 
 
 ################################################################################
+# Install Libraries
+################################################################################
+install(TARGETS reckless
+EXPORT reckless
+ARCHIVE DESTINATION lib
+)
+
+install(DIRECTORY reckless/include/
+DESTINATION include
+)
+
+install(EXPORT reckless
+FILE reckless-config.cmake
+NAMESPACE reckless::
+DESTINATION share/reckless
+)
+
+
+
+################################################################################
 # Build Examples
 ################################################################################
 message (STATUS "Making example applications")

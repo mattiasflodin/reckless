@@ -24,6 +24,7 @@
 
 #include <cstring>  // memset
 #include <vector>
+#include <algorithm>
 #include <system_error>
 #include <cassert>
 #include <errno.h>
@@ -72,8 +73,8 @@ void install_crash_handler(std::initializer_list<basic_log*> log)
     // systems. So we'll remove duplicate entries here before we loop through
     // all the signal numbers.
     std::vector<int> unique_signals(signals);
-    sort(begin(unique_signals), end(unique_signals));
-    unique_signals.erase(unique(begin(unique_signals), end(unique_signals)),
+    std::sort(begin(unique_signals), end(unique_signals));
+    unique_signals.erase(std::unique(begin(unique_signals), end(unique_signals)),
             end(unique_signals));
     try {
         g_old_sigactions.reserve(unique_signals.size());

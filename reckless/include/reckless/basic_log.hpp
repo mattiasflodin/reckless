@@ -24,11 +24,10 @@
 
 #include <reckless/detail/thread_input_buffer.hpp>
 #include <reckless/detail/spsc_event.hpp>
+#include <reckless/detail/spsc_queue.hpp>
 #include <reckless/detail/branch_hints.hpp> // likely
 #include <reckless/detail/optional.hpp>
 #include <reckless/output_buffer.hpp>
-
-#include <boost_1_56_0/lockfree/queue.hpp>
 
 #include <thread>
 #include <functional>
@@ -173,7 +172,7 @@ private:
         return output_thread_.joinable();
     }
 
-    typedef boost_1_56_0::lockfree::queue<detail::commit_extent, boost_1_56_0::lockfree::fixed_sized<true>> shared_input_queue_t;
+    typedef rigtorp::SPSCQueue<detail::commit_extent> shared_input_queue_t;
 
     //typedef detail::thread_object<detail::thread_input_buffer, std::size_t, std::size_t> thread_input_buffer_t;
     //thread_input_buffer_t pthread_input_buffer_;
