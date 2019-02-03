@@ -5,7 +5,7 @@
 # here to build performance tests and other cruft. You need to use tup for all
 # of that.
 
-CXXFLAGS = -std=c++11 -Wall -Wextra -O3 -g -isystem boost -Ireckless/include
+CXXFLAGS = -std=c++11 -Wall -Wextra -O3 -g -Ireckless/include
 
 target = reckless/lib/libreckless.a
 srcpath = reckless/src
