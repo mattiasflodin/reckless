@@ -19,6 +19,9 @@ function build_suite(lib, extra_objs)
   single_threaded('periodic_calls')
   single_threaded('write_files')
 
+  if tup.getconfig('TRACE_LOG') != '' and lib == 'reckless' then
+    table.insert(OPTIONS.define, 'RECKLESS_ENABLE_TRACE_LOG')
+  end
   mandelbrot_obj = compile('mandelbrot.cpp', 'mandelbrot' .. '-' .. lib .. OBJSUFFIX)
   for threads=1,4 do
     push_options()
@@ -33,7 +36,7 @@ function build_suite(lib, extra_objs)
     }
     objs = table.merge(objs, extra_objs)
     link('call_burst' .. exesuffix, objs)
-    
+
     -- mandelbrot
     objs = {
       compile('benchmark_mandelbrot.cpp', 'benchmark_mandelbrot' .. objsuffix),
@@ -88,7 +91,7 @@ if PANTHEIOS ~= '' then
   table.insert(OPTIONS.libdirs, joinpath(PANTHEIOS, 'lib'))
   table.insert(OPTIONS.includes, joinpath(PANTHEIOS, 'include'))
   table.insert(OPTIONS.includes, joinpath(STLSOFT, 'include'))
-  
+
   if string.find(CXX, 'g++') then
     -- This warning comes up a *lot* on pantheios for my version of g++,
     -- ofuscating everything else. It's not supported by clang though, so

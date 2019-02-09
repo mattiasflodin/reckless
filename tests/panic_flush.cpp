@@ -25,6 +25,9 @@
 #include <cstdio>
 #include <thread>
 
+#ifdef RECKLESS_ENABLE_TRACE_LOG
+#include <performance_log/trace_log.hpp>
+#endif
 #include <iostream> // cout
 
 #if defined(__unix__)

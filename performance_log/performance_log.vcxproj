@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|Win32">
@@ -19,8 +19,9 @@
     </ProjectConfiguration>
   </ItemGroup>
   <PropertyGroup Label="Globals">
-    <ProjectGuid>{2E9EC99E-FB59-42F0-B949-6D10A41916E4}</ProjectGuid>
-    <RootNamespace>reckless</RootNamespace>
+    <VCProjectVersion>15.0</VCProjectVersion>
+    <ProjectGuid>{04471B5D-720A-4502-B17A-7B086E0C746F}</ProjectGuid>
+    <RootNamespace>performancelog</RootNamespace>
     <WindowsTargetPlatformVersion>10.0.17763.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
@@ -64,7 +65,6 @@
     <Import Project="..\common.props" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
-  <PropertyGroup />
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
@@ -110,42 +110,11 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClInclude Include="include\reckless\basic_log.hpp" />
-    <ClInclude Include="include\reckless\crash_handler.hpp" />
-    <ClInclude Include="include\reckless\detail\mpsc_ring_buffer.hpp" />
-    <ClInclude Include="include\reckless\detail\platform.hpp" />
-    <ClInclude Include="include\reckless\detail\spsc_event.hpp" />
-    <ClInclude Include="include\reckless\detail\trace_log.hpp" />
-    <ClInclude Include="include\reckless\detail\utility.hpp" />
-    <ClInclude Include="include\reckless\file_writer.hpp" />
-    <ClInclude Include="include\reckless\ntoa.hpp" />
-    <ClInclude Include="include\reckless\output_buffer.hpp" />
-    <ClInclude Include="include\reckless\policy_log.hpp" />
-    <ClInclude Include="include\reckless\severity_log.hpp" />
-    <ClInclude Include="include\reckless\template_formatter.hpp" />
-    <ClInclude Include="include\reckless\writer.hpp" />
-    <ClInclude Include="src\unit_test.hpp" />
+    <ClCompile Include="src\performance_log.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="src\basic_log.cpp" />
-    <ClCompile Include="src\crash_handler_unix.cpp">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-    </ClCompile>
-    <ClCompile Include="src\crash_handler_win32.cpp" />
-    <ClCompile Include="src\fd_writer.cpp" />
-    <ClCompile Include="src\file_writer.cpp" />
-    <ClCompile Include="src\mpsc_ring_buffer.cpp" />
-    <ClCompile Include="src\ntoa.cpp" />
-    <ClCompile Include="src\output_buffer.cpp" />
-    <ClCompile Include="src\platform.cpp" />
-    <ClCompile Include="src\policy_log.cpp" />
-    <ClCompile Include="src\spsc_event_win32.cpp" />
-    <ClCompile Include="src\template_formatter.cpp" />
-    <ClCompile Include="src\trace_log.cpp" />
-    <ClCompile Include="src\writer.cpp" />
+    <ClInclude Include="include\performance_log\performance_log.hpp" />
+    <ClInclude Include="include\performance_log\trace_log.hpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
