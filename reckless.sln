@@ -81,6 +81,12 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "mandelbrot", "benchmarks\ma
 		{2E9EC99E-FB59-42F0-B949-6D10A41916E4} = {2E9EC99E-FB59-42F0-B949-6D10A41916E4}
 	EndProjectSection
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "call_burst", "benchmarks\call_burst.vcxproj", "{C6F8B8E5-708B-4245-B376-5AFDF2610904}"
+	ProjectSection(ProjectDependencies) = postProject
+		{04471B5D-720A-4502-B17A-7B086E0C746F} = {04471B5D-720A-4502-B17A-7B086E0C746F}
+		{2E9EC99E-FB59-42F0-B949-6D10A41916E4} = {2E9EC99E-FB59-42F0-B949-6D10A41916E4}
+	EndProjectSection
+EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "performance_log", "performance_log\performance_log.vcxproj", "{04471B5D-720A-4502-B17A-7B086E0C746F}"
 EndProject
 Global

@@ -1,14 +1,28 @@
 #include <performance_log/performance_log.hpp>
 #include <iostream>
-#include <unistd.h>
 
 #include LOG_INCLUDE
 
+#if defined(__unix__)
+#include <unistd.h>
+void remove_file(char const* path)
+{
+    unlink(path);
+}
+#elif defined(_WIN32)
+#include <Windows.h>
+void remove_file(char const* path)
+{
+    DeleteFile(path);
+}
+#endif
+
+
 char c = 'A';
-float pi = 3.1415;
+float pi = 3.1415f;
 int main()
 {
-    unlink("log.txt");
+    remove_file("log.txt");
     performance_log::rdtscp_cpuid_clock::bind_cpu(0);
     performance_log::logger<16384, performance_log::rdtscp_cpuid_clock, std::uint32_t> performance_log;
 
@@ -28,7 +42,7 @@ int main()
     for(auto sample : performance_log) {
         std::cout << sample << std::endl;
     }
-    
+
     return 0;
-    
+
 }
