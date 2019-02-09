@@ -16,6 +16,7 @@ endif()
 ################################################################################
 include_directories("boost")
 include_directories("reckless/include")
+include_directories("performance_log/include")
 
 
 set (SRC_LIST

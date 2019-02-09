@@ -19,11 +19,12 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-#include "performance_log.hpp"
+#include "performance_log/performance_log.hpp"
 
 #include <system_error>
 #include <cassert>
 
+#if defined(__linux__)
 #include <sys/mman.h>
 #include <unistd.h>
 #include <pthread.h>
@@ -77,3 +78,43 @@ void performance_log::rdtscp_cpuid_clock::unbind_cpu()
         throw;
     }
 }
+
+#elif defined(_WIN32)
+
+#include <Windows.h>
+
+void performance_log::detail::lock_memory(void const* addr, std::size_t len)
+{
+    if (!VirtualLock(const_cast<void*>(addr), len)) {
+        auto err = GetLastError();
+        throw std::system_error(err, std::system_category());
+    }
+}
+
+void performance_log::detail::unlock_memory(void const* addr, std::size_t len)
+{
+    VirtualUnlock(const_cast<void*>(addr), len);
+}
+
+void performance_log::rdtscp_cpuid_clock::bind_cpu(int cpu)
+{
+    DWORD_PTR mask = 1;
+    mask <<= cpu;
+    if (!SetThreadAffinityMask(GetCurrentThread(), mask)) {
+        auto err = GetLastError();
+        throw std::system_error(err, std::system_category());
+    }
+}
+
+void performance_log::rdtscp_cpuid_clock::unbind_cpu()
+{
+    DWORD_PTR mask = 0;
+    mask -= 1;
+    if (!SetThreadAffinityMask(GetCurrentThread(), mask)) {
+        auto err = GetLastError();
+        throw std::system_error(err, std::system_category());
+    }
+}
+
+#endif
+

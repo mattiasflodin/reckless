@@ -54,6 +54,9 @@
     <ClInclude Include="include\reckless\detail\utility.hpp">
       <Filter>include/reckless\detail</Filter>
     </ClInclude>
+    <ClInclude Include="include\reckless\detail\trace_log.hpp">
+      <Filter>include/reckless\detail</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\basic_log.cpp">
@@ -93,6 +96,9 @@
       <Filter>src</Filter>
     </ClCompile>
     <ClCompile Include="src\fd_writer.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\trace_log.cpp">
       <Filter>src</Filter>
     </ClCompile>
   </ItemGroup>

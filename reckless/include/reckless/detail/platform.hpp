@@ -44,15 +44,20 @@ static_assert(false, "RECKLESS_TLS is not implemented for this compiler")
 #if defined(_MSC_VER)
 #    if defined(_M_IX86) || defined(_M_X64)
          extern "C" {
-             __int64 _InterlockedCompareExchange64(__int64 volatile* Destination, __int64 Exchange, __int64 Comparand);
-             void _mm_prefetch(char const* p, int i);
-             void _mm_pause(void);
-             unsigned __int64 __rdtsc();
-         }
+            __int64 _InterlockedCompareExchange64(__int64 volatile* Destination, __int64 Exchange, __int64 Comparand);
+            long _InterlockedExchangeAdd(long volatile * Addend, long Value);
+            void _mm_prefetch(char const* p, int i);
+            void _mm_pause(void);
+            void __cpuid(int[4], int);
+            unsigned __int64 __rdtsc();
+            unsigned __int64 __rdtscp(unsigned int *);
+		 }
 #        pragma intrinsic(_InterlockedCompareExchange64)
+#        pragma intrinsic(_InterlockedExchangeAdd)
 #        pragma intrinsic(_mm_prefetch)
 #        pragma intrinsic(_mm_pause)
 #        pragma intrinsic(__rdtsc)
+#        pragma intrinsic(__rdtscp)
 #    else
          static_assert(false, "Only x86/x64 support is implemented for this compiler");
 #    endif
@@ -152,10 +157,66 @@ void atomic_store_release(T* ptarget, T value,
 }
 
 #if defined(__GNUC__)
+
+template <typename T, typename U>
+T atomic_fetch_add_relaxed(T* ptarget, U value)
+{
+    return __atomic_fetch_add(ptarget, value, __ATOMIC_RELAXED);
+}
+
+template <typename T, typename U>
+T atomic_fetch_add_release(T* ptarget, U value)
+{
+    return __atomic_fetch_add(ptarget, value, __ATOMIC_RELEASE);
+}
+
+#elif defined(_MSC_VER)
+
+inline long atomic_fetch_add_relaxed(long* ptarget, long value)
+{
+    return _InterlockedExchangeAdd(ptarget, value);
+}
+inline long atomic_fetch_add_release(long* ptarget, long value)
+{
+    // TODO this can use _InterlockedExchangeAdd_rel on ARM.
+    return _InterlockedExchangeAdd(ptarget, value);
+}
+
+inline int atomic_fetch_add_relaxed(int* ptarget, int value)
+{
+    return atomic_fetch_add_relaxed(reinterpret_cast<long*>(ptarget), static_cast<long>(value));
+}
+
+inline int atomic_fetch_add_release(int* ptarget, int value)
+{
+    return atomic_fetch_add_release(reinterpret_cast<long*>(ptarget), static_cast<long>(value));
+}
+
+inline unsigned atomic_fetch_add_relaxed(unsigned* ptarget, unsigned value)
+{
+    return atomic_fetch_add_relaxed(reinterpret_cast<int*>(ptarget), static_cast<int>(value));
+}
+
+inline unsigned atomic_fetch_add_release(unsigned* ptarget, unsigned value)
+{
+    return atomic_fetch_add_release(reinterpret_cast<int*>(ptarget), static_cast<int>(value));
+}
+
+#else
+static_assert(false, "atomic_add_relaxed is not implemented for this compiler");
+#endif
+
+#if defined(__GNUC__)
 template<typename T>
 bool atomic_compare_exchange_weak_relaxed(T* ptarget, T* pexpected, T desired)
 {
     return __atomic_compare_exchange_n(ptarget, pexpected, desired, true,
+        __ATOMIC_RELAXED, __ATOMIC_RELAXED);
+}
+template<typename T>
+bool atomic_compare_exchange_weak_relaxed(T* ptarget, T expected, T desired)
+{
+    return __atomic_compare_exchange_n(ptarget, &expected, desired, true,
         __ATOMIC_RELAXED, __ATOMIC_RELAXED);
 }
 #elif defined(_MSC_VER)
@@ -167,35 +228,27 @@ inline bool atomic_compare_exchange_weak_relaxed(std::uint64_t* ptarget,
         reinterpret_cast<std::int64_t*>(ptarget),
         reinterpret_cast<std::int64_t const&>(desired),
         reinterpret_cast<std::int64_t const&>(expected));
-    if(actual == expected)
+    if (actual == expected) {
         return true;
-    else {
+    } else {
         *pexpected = actual;
         return false;
     }
 }
+
+inline bool atomic_compare_exchange_weak_relaxed(std::uint64_t* ptarget,
+    std::uint64_t expected, std::uint64_t desired)
+{
+    std::uint64_t actual = _InterlockedCompareExchange64(
+        reinterpret_cast<std::int64_t*>(ptarget),
+        reinterpret_cast<std::int64_t const&>(desired),
+        reinterpret_cast<std::int64_t const&>(expected));
+    return actual == expected;
+}
+
 #else
     static_assert(false, "atomic_compare_exchange_weak_relaxed is not implemented for this platform")
 #endif
-
-template <unsigned Bytes>
-struct uint_bytes_t;
-
-template <>
-struct uint_bytes_t<8U> {
-    using exact = std::uint64_t;
-};
-
-template<typename T>
-bool atomic_compare_exchange_weak_relaxed(T* ptarget, T expected, T desired)
-{
-    using uint_t = typename uint_bytes_t<sizeof(T)>::exact;
-    return atomic_compare_exchange_weak_relaxed(
-        static_cast<uint_t*>(static_cast<void*>(ptarget)),
-        static_cast<uint_t*>(static_cast<void*>(&expected)),
-        *static_cast<uint_t*>(static_cast<void*>(&desired))
-    );
-}
 
 inline bool likely(bool expr) {
 #ifdef __GNUC__
@@ -234,6 +287,46 @@ inline std::uint64_t rdtsc()
     return __rdtsc();
 #else
     static_assert(false, "rdtsc() is not implemented for this compiler");
+#endif
+}
+
+inline std::uint64_t serializing_performance_timestamp_begin()
+{
+#if defined(__GNUC__)
+    std::uint64_t t_high;
+    std::uint64_t t_low;
+    std::uint64_t b, c;
+    asm volatile(
+        "cpuid\n\t"
+        "rdtsc\n\t"
+        : "=a"(t_low), "=b"(b), "=c"(c), "=d"(t_high));
+    return (t_high << 32) | static_cast<std::uint32_t>(t_low);
+#elif defined(_MSC_VER)
+	int cpuinfo[4];
+	__cpuid(cpuinfo, 0);
+	__rdtsc();
+#else
+    static_assert(false, "serializing_performance_timestamp_begin() is not implemented for this compiler");
+#endif
+}
+
+inline std::uint64_t serializing_performance_timestamp_end()
+{
+#if defined(__GNUC__)
+    std::uint64_t t_high;
+    std::uint64_t t_low;
+    std::uint64_t aux;
+    asm volatile("rdtscp\n\t" : "=a"(t_low), "=c"(aux), "=d"(t_high));
+    std::uint64_t a, b, c, d;
+    asm volatile("cpuid\n\t" : "=a"(a), "=b"(b), "=c"(c), "=d"(d));
+    return (t_high << 32) | static_cast<std::uint32_t>(t_low);
+#elif defined(_MSC_VER)
+    unsigned int aux;
+    __rdtscp(&aux);
+    int cpuinfo[4];
+    __cpuid(cpuinfo, 0);
+#else
+    static_assert(false, "serializing_performance_timestamp_end() is not implemented for this compiler");
 #endif
 }
 

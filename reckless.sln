@@ -12,11 +12,13 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "severity_log", "examples\se
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ucs2_log", "examples\ucs2_log.vcxproj", "{323CC550-DE87-4ABB-ABBF-9567B424012D}"
 	ProjectSection(ProjectDependencies) = postProject
+		{04471B5D-720A-4502-B17A-7B086E0C746F} = {04471B5D-720A-4502-B17A-7B086E0C746F}
 		{2E9EC99E-FB59-42F0-B949-6D10A41916E4} = {2E9EC99E-FB59-42F0-B949-6D10A41916E4}
 	EndProjectSection
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "custom_formatter", "examples\custom_formatter.vcxproj", "{739D0E22-B02F-476A-8667-432F08AFF809}"
 	ProjectSection(ProjectDependencies) = postProject
+		{04471B5D-720A-4502-B17A-7B086E0C746F} = {04471B5D-720A-4502-B17A-7B086E0C746F}
 		{2E9EC99E-FB59-42F0-B949-6D10A41916E4} = {2E9EC99E-FB59-42F0-B949-6D10A41916E4}
 	EndProjectSection
 EndProject
@@ -31,11 +33,13 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{8EE386EA
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "crash_handler", "tests\crash_handler.vcxproj", "{654EABD2-1CD0-41D5-85B3-2C727770D0FA}"
 	ProjectSection(ProjectDependencies) = postProject
+		{04471B5D-720A-4502-B17A-7B086E0C746F} = {04471B5D-720A-4502-B17A-7B086E0C746F}
 		{2E9EC99E-FB59-42F0-B949-6D10A41916E4} = {2E9EC99E-FB59-42F0-B949-6D10A41916E4}
 	EndProjectSection
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "error_code", "tests\error_code.vcxproj", "{B270E86E-A503-4159-9620-CF95B0E2C7F4}"
 	ProjectSection(ProjectDependencies) = postProject
+		{04471B5D-720A-4502-B17A-7B086E0C746F} = {04471B5D-720A-4502-B17A-7B086E0C746F}
 		{2E9EC99E-FB59-42F0-B949-6D10A41916E4} = {2E9EC99E-FB59-42F0-B949-6D10A41916E4}
 	EndProjectSection
 EndProject
@@ -73,8 +77,11 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "benchmarks", "benchmarks", 
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "mandelbrot", "benchmarks\mandelbrot.vcxproj", "{60BA1990-CECE-4F52-A3D0-7BBC727B0BE4}"
 	ProjectSection(ProjectDependencies) = postProject
+		{04471B5D-720A-4502-B17A-7B086E0C746F} = {04471B5D-720A-4502-B17A-7B086E0C746F}
 		{2E9EC99E-FB59-42F0-B949-6D10A41916E4} = {2E9EC99E-FB59-42F0-B949-6D10A41916E4}
 	EndProjectSection
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "performance_log", "performance_log\performance_log.vcxproj", "{04471B5D-720A-4502-B17A-7B086E0C746F}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -660,6 +667,46 @@ Global
 		{C6F8B8E5-708B-4245-B376-5AFDF2610904}.Release|x64.Build.0 = reckless 3 Release|x64
 		{C6F8B8E5-708B-4245-B376-5AFDF2610904}.Release|x86.ActiveCfg = reckless 3 Release|Win32
 		{C6F8B8E5-708B-4245-B376-5AFDF2610904}.Release|x86.Build.0 = reckless 3 Release|Win32
+		{04471B5D-720A-4502-B17A-7B086E0C746F}.Debug|x64.ActiveCfg = Debug|x64
+		{04471B5D-720A-4502-B17A-7B086E0C746F}.Debug|x64.Build.0 = Debug|x64
+		{04471B5D-720A-4502-B17A-7B086E0C746F}.Debug|x86.ActiveCfg = Debug|Win32
+		{04471B5D-720A-4502-B17A-7B086E0C746F}.Debug|x86.Build.0 = Debug|Win32
+		{04471B5D-720A-4502-B17A-7B086E0C746F}.reckless 1 Debug|x64.ActiveCfg = Debug|x64
+		{04471B5D-720A-4502-B17A-7B086E0C746F}.reckless 1 Debug|x64.Build.0 = Debug|x64
+		{04471B5D-720A-4502-B17A-7B086E0C746F}.reckless 1 Debug|x86.ActiveCfg = Debug|Win32
+		{04471B5D-720A-4502-B17A-7B086E0C746F}.reckless 1 Debug|x86.Build.0 = Debug|Win32
+		{04471B5D-720A-4502-B17A-7B086E0C746F}.reckless 1 Release|x64.ActiveCfg = Release|x64
+		{04471B5D-720A-4502-B17A-7B086E0C746F}.reckless 1 Release|x64.Build.0 = Release|x64
+		{04471B5D-720A-4502-B17A-7B086E0C746F}.reckless 1 Release|x86.ActiveCfg = Release|Win32
+		{04471B5D-720A-4502-B17A-7B086E0C746F}.reckless 1 Release|x86.Build.0 = Release|Win32
+		{04471B5D-720A-4502-B17A-7B086E0C746F}.reckless 2 Debug|x64.ActiveCfg = Debug|x64
+		{04471B5D-720A-4502-B17A-7B086E0C746F}.reckless 2 Debug|x64.Build.0 = Debug|x64
+		{04471B5D-720A-4502-B17A-7B086E0C746F}.reckless 2 Debug|x86.ActiveCfg = Debug|Win32
+		{04471B5D-720A-4502-B17A-7B086E0C746F}.reckless 2 Debug|x86.Build.0 = Debug|Win32
+		{04471B5D-720A-4502-B17A-7B086E0C746F}.reckless 2 Release|x64.ActiveCfg = Release|x64
+		{04471B5D-720A-4502-B17A-7B086E0C746F}.reckless 2 Release|x64.Build.0 = Release|x64
+		{04471B5D-720A-4502-B17A-7B086E0C746F}.reckless 2 Release|x86.ActiveCfg = Release|Win32
+		{04471B5D-720A-4502-B17A-7B086E0C746F}.reckless 2 Release|x86.Build.0 = Release|Win32
+		{04471B5D-720A-4502-B17A-7B086E0C746F}.reckless 3 Debug|x64.ActiveCfg = Debug|x64
+		{04471B5D-720A-4502-B17A-7B086E0C746F}.reckless 3 Debug|x64.Build.0 = Debug|x64
+		{04471B5D-720A-4502-B17A-7B086E0C746F}.reckless 3 Debug|x86.ActiveCfg = Debug|Win32
+		{04471B5D-720A-4502-B17A-7B086E0C746F}.reckless 3 Debug|x86.Build.0 = Debug|Win32
+		{04471B5D-720A-4502-B17A-7B086E0C746F}.reckless 3 Release|x64.ActiveCfg = Release|x64
+		{04471B5D-720A-4502-B17A-7B086E0C746F}.reckless 3 Release|x64.Build.0 = Release|x64
+		{04471B5D-720A-4502-B17A-7B086E0C746F}.reckless 3 Release|x86.ActiveCfg = Release|Win32
+		{04471B5D-720A-4502-B17A-7B086E0C746F}.reckless 3 Release|x86.Build.0 = Release|Win32
+		{04471B5D-720A-4502-B17A-7B086E0C746F}.reckless 4 Debug|x64.ActiveCfg = Debug|x64
+		{04471B5D-720A-4502-B17A-7B086E0C746F}.reckless 4 Debug|x64.Build.0 = Debug|x64
+		{04471B5D-720A-4502-B17A-7B086E0C746F}.reckless 4 Debug|x86.ActiveCfg = Debug|Win32
+		{04471B5D-720A-4502-B17A-7B086E0C746F}.reckless 4 Debug|x86.Build.0 = Debug|Win32
+		{04471B5D-720A-4502-B17A-7B086E0C746F}.reckless 4 Release|x64.ActiveCfg = Release|x64
+		{04471B5D-720A-4502-B17A-7B086E0C746F}.reckless 4 Release|x64.Build.0 = Release|x64
+		{04471B5D-720A-4502-B17A-7B086E0C746F}.reckless 4 Release|x86.ActiveCfg = Release|Win32
+		{04471B5D-720A-4502-B17A-7B086E0C746F}.reckless 4 Release|x86.Build.0 = Release|Win32
+		{04471B5D-720A-4502-B17A-7B086E0C746F}.Release|x64.ActiveCfg = Release|x64
+		{04471B5D-720A-4502-B17A-7B086E0C746F}.Release|x64.Build.0 = Release|x64
+		{04471B5D-720A-4502-B17A-7B086E0C746F}.Release|x86.ActiveCfg = Release|Win32
+		{04471B5D-720A-4502-B17A-7B086E0C746F}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
