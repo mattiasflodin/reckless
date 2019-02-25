@@ -71,16 +71,11 @@ public:
         auto capacity = capacity_;
         for(;;pause()) {
             auto wp = atomic_load_relaxed(&next_write_position_);
-            auto rp = atomic_load_relaxed(&next_read_position_cached_);
+            auto rp = atomic_load_relaxed(&next_read_position_);
             auto nwp = wp + size;
             if(likely(nwp - rp <= capacity)) {
             } else {
-                auto rp_live = atomic_load_relaxed(&next_read_position_);
-                atomic_compare_exchange_weak_relaxed(&next_read_position_cached_, rp, rp_live);
-                if(likely(nwp - rp_live <= capacity)) {
-                } else {
-                    return nullptr;
-                }
+                return nullptr;
             }
 
             if(atomic_compare_exchange_weak_relaxed(&next_write_position_, wp, nwp))
@@ -130,7 +125,6 @@ private:
     void rewind()
     {
         next_write_position_ = 0;
-        next_read_position_cached_ = 0;
         next_read_position_ = 0;
     }
 
@@ -147,9 +141,8 @@ private:
     // the consumer. Strictly the consumer does not access
     // next_read_position_cached_ at all, but when it is updated it
     // always happens together with next_write_position_ anyway.
-    std::uint64_t next_read_position_cached_;
     std::uint64_t next_write_position_;
-    char padding3_[RECKLESS_CACHE_LINE_SIZE - 2*8];
+    char padding3_[RECKLESS_CACHE_LINE_SIZE - 1*8];
 
     // Finally, next_read_position_ is updated by the consumer and
     // somtimes read by the producer.
