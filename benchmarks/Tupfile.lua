@@ -67,40 +67,20 @@ if SPDLOG ~= '' then
   pop_options()
 end
 
-PANTHEIOS = tup.getconfig('PANTHEIOS')
-if PANTHEIOS ~= '' then
-  STLSOFT = tup.getconfig('STLSOFT')
-  if STLSOFT == '' then
-    error('CONFIG_PANTHEIOS requires CONFIG_STLSOFT')
-  end
-  PANTHEIOS_COMPILER = tup.getconfig('PANTHEIOS_COMPILER')
-  if PANTHEIOS_COMPILER == '' then
-      error('CONFIG_PANTHEIOS requires CONFIG_PANTHEIOS_COMPILER')
-  end
-
+BOOST_LOG_INCLUDE = tup.getconfig('BOOST_LOG_INCLUDE')
+BOOST_LOG_LIB = tup.getconfig('BOOST_LOG_LIB')
+if BOOST_LOG_INCLUDE ~= '' and BOOST_LOG_LIB ~= '' then
   push_options()
-  local pcc = PANTHEIOS_COMPILER
   libs = {
-    'pantheios.1.core.' .. pcc .. '.mt',
-    'pantheios.1.util.' .. pcc .. '.mt',
-    'pantheios.1.fe.simple.' .. pcc .. '.mt',
-    'pantheios.1.be.file.' .. pcc .. '.mt',
-    'pantheios.1.bec.file.' .. pcc .. '.mt',
-    'pantheios.1.util.' .. pcc .. '.mt'
+    'boost_log',
+    'boost_log_setup',
+    'boost_system',
+    'boost_thread'
   }
-  OPTIONS.libs = table.merge(OPTIONS.libs, libs)
-  table.insert(OPTIONS.libdirs, joinpath(PANTHEIOS, 'lib'))
-  table.insert(OPTIONS.includes, joinpath(PANTHEIOS, 'include'))
-  table.insert(OPTIONS.includes, joinpath(STLSOFT, 'include'))
 
-  if string.find(CXX, 'g++') then
-    -- This warning comes up a *lot* on pantheios for my version of g++,
-    -- ofuscating everything else. It's not supported by clang though, so
-    -- we need to be judicious about its use to avoid failed builds. I
-    -- suppose it would be best if we could test for its availability, or
-    -- better yet if pantheios would fix its code.
-    table.insert(OPTIONS.cflags, '-Wno-unused-local-typedefs')
-  end
-  build_suite('pantheios', {})
-  pop_options()
+  table.insert(OPTIONS.define, 'BOOST_ALL_DYN_LINK')
+  table.insert(OPTIONS.includes, BOOST_LOG_INCLUDE)
+  table.insert(OPTIONS.libdirs, BOOST_LOG_LIB)
+  OPTIONS.libs = table.merge(OPTIONS.libs, libs)
+  build_suite('boost_log', {})
 end

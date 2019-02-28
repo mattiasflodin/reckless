@@ -29,7 +29,7 @@ fig, ax = plt.subplots()
 ONLY_OVERHEAD = 1
 #LOG_LINES = 1048576
 MAX_CORES = 8
-LIBS = ['nop', 'reckless', 'spdlog', 'stdio', 'fstream', 'pantheios']
+LIBS = ['nop', 'reckless', 'spdlog', 'stdio', 'fstream', 'boost_log']
 #LIBS = ['nop', 'reckless', 'stdio', 'fstream']
 if ONLY_OVERHEAD:
     del COLORS[0]
@@ -45,7 +45,7 @@ def read_timing(lib, cores, offset=0.0):
     data = sorted([float(x)/1000.0+offset for x in data])
     # Use interquartile range as measure of scale.
     low, high = np.percentile(data, [25, 75])
-    
+
     # Samples generally center around a minimum point that represents the ideal
     # running time. There are no outliers below the ideal time; execution does
     # not accidentally take some kind of short cut. At least, not for this
@@ -77,9 +77,9 @@ rects = []
 for index, lib in enumerate(LIBS):
     means = []
     error = [[], []]
-    
+
     for cores in range(1, MAX_CORES+1):
-        low, mean, high = read_timing(lib, cores, offsets[cores-1]) 
+        low, mean, high = read_timing(lib, cores, offsets[cores-1])
         print(lib, cores, mean, low, high)
         means.append(mean)
         error[0].append(mean - low)
@@ -101,7 +101,7 @@ ax.set_xlabel('Number of worker threads')
 ax.set_xticks(ind + GROUP_OFFSET + GROUP_WIDTH/2)
 ax.set_xticklabels([str(x) for x in range(1, MAX_CORES+1)])
 #ax.set_title('1024x1024 mandelbrot set render, one log line per pixel (i.e. 1.05 million log lines)')
-    
+
 if filename is None:
     plt.show()
 else:
