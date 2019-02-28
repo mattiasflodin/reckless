@@ -3,28 +3,28 @@
 
 /call_burst-fstream-?
 /call_burst-nop-?
-/call_burst-pantheios-?
+/call_burst-boost_log-?
 /call_burst-reckless-?
 /call_burst-spdlog-?
 /call_burst-stdio-?
 
 /mandelbrot-fstream-?
 /mandelbrot-nop-?
-/mandelbrot-pantheios-?
+/mandelbrot-boost_log-?
 /mandelbrot-reckless-?
 /mandelbrot-spdlog-?
 /mandelbrot-stdio-?
 
 /write_files-fstream
 /write_files-nop
-/write_files-pantheios
+/write_files-boost_log
 /write_files-reckless
 /write_files-spdlog
 /write_files-stdio
 
 /periodic_calls-fstream
 /periodic_calls-nop
-/periodic_calls-pantheios
+/periodic_calls-boost_log
 /periodic_calls-reckless
 /periodic_calls-spdlog
 /periodic_calls-stdio

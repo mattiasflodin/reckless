@@ -5,7 +5,7 @@ from getopt import gnu_getopt
 import os.path
 from math import pi, sqrt, exp
 
-ALL_LIBS = ['nop', 'reckless', 'stdio', 'fstream', 'pantheios', 'spdlog']
+ALL_LIBS = ['nop', 'reckless', 'stdio', 'fstream', 'boost_log', 'spdlog']
 ALL_TESTS = ['periodic_calls', 'call_burst', 'write_files'] #, 'mandelbrot']
 
 THREADED_TESTS = {'call_burst', 'mandelbrot'}
@@ -41,7 +41,7 @@ def pretty_name(name):
             'write_files': 'heavy disk I/O',
             'mandelbrot': 'mandelbrot render'
     }
-            
+
     return name_table.get(name, name)
 
 def lib_color(name):
@@ -51,11 +51,11 @@ def lib_color(name):
             'spdlog': COLORS[2],
             'stdio': COLORS[1],
             'fstream': COLORS[4],
-            'pantheios': COLORS[5],
+            'boost_log': COLORS[5],
             }
     return color_table[name]
 
-    
+
 def average(average_window, data):
     window = []
     newdata = []
@@ -119,7 +119,7 @@ def parse_ranges(s):
         start, end = min(start, end), max(start, end)
         result.extend(list(range(start, end+1)))
     return result
-        
+
 def main():
     opts, args = gnu_getopt(argv[1:], 'l:t:c:w:h', ['libs=', 'tests=',
         'threads=', 'window=', 'file=', 'top=', 'iterations=', 'title=', 'help'])
@@ -171,7 +171,7 @@ def main():
             'Available tests: {}\n'.format(
                 ','.join(ALL_LIBS), ','.join(ALL_TESTS)))
         return 1
-    
+
     if libs is None:
         libs = sorted(ALL_LIBS)
     if tests is None:
@@ -187,7 +187,7 @@ def plot(libs, tests, threads_list, window, top, iterations, plot_filename, widt
     matplotlib.rc('font', size=10)
     import matplotlib.pyplot as plt
     fig, ax = plt.subplots()
-    
+
     def single_plot(filename, test, name, window, color=None):
         with open(filename, 'r') as f:
             lines = f.readlines()
@@ -204,7 +204,7 @@ def plot(libs, tests, threads_list, window, top, iterations, plot_filename, widt
         if iterations is not None and iterations<len(data):
             data = data[:iterations]
         ax.plot(data, '-', label=name, color=color, linewidth=1)
-        
+
     for test in tests:
         for lib in libs:
             color = lib_color(lib)
@@ -226,12 +226,12 @@ def plot(libs, tests, threads_list, window, top, iterations, plot_filename, widt
 
     if top is not None:
         ax.set_ylim(ymax=top)
-    
+
     legend = ax.legend()
     # set the linewidth of each legend object
     for legobj in legend.legendHandles:
         legobj.set_linewidth(4)
-        
+
     plt.xlabel('Iteration')
     plt.ylabel('Latency (CPU ticks)')
     if title is not None:
