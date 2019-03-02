@@ -111,6 +111,24 @@ struct process_batch_finish_event : public detail::timestamped_trace_event {
     }
 };
 
+struct process_frame_start_event : public detail::timestamped_trace_event {
+    std::string format() const
+    {
+        std::ostringstream ostr;
+        ostr << timestamped_trace_event::format() << " process_frame start ";
+        return ostr.str();
+    }
+};
+
+struct process_frame_finish_event : public detail::timestamped_trace_event {
+    std::string format() const
+    {
+        return timestamped_trace_event::format()
+            + " process_frame finish";
+    }
+};
+
+
 struct format_frame_start_event : public detail::timestamped_trace_event {
     std::string format() const
     {
@@ -504,26 +522,27 @@ detail::frame_status basic_log::acquire_frame(void* pframe)
 
 std::size_t basic_log::process_frame(void* pframe)
 {
+    //RECKLESS_TRACE(process_frame_start_event);
     using namespace detail;
     auto pheader = static_cast<frame_header*>(pframe);
     auto pdispatch = pheader->pdispatch_function;
 
+    std::size_t frame_size;
     try {
-        auto frame_size = (*pdispatch)(invoke_formatter,
+        frame_size = (*pdispatch)(invoke_formatter,
                 static_cast<output_buffer*>(this), pframe);
         output_buffer::frame_end();
-        return frame_size;
     } catch(flush_error const&) {
         // A flush error occurs here if there was not enough space in
         // the output buffer and it had to be flushed to make room, but
         // the flush failed. This means that we lose the frame.
         output_buffer::lost_frame();
         std::type_info const* pti;
-        return (*pdispatch)(get_typeid, &pti, nullptr);
+        frame_size = (*pdispatch)(get_typeid, &pti, nullptr);
     } catch(...) {
         output_buffer::revert_frame();
         std::type_info const* pti;
-        auto frame_size = (*pdispatch)(get_typeid, &pti, nullptr);
+        frame_size = (*pdispatch)(get_typeid, &pti, nullptr);
         std::lock_guard<std::mutex> lk(callback_mutex_);
         if(format_error_callback_) {
             try {
@@ -532,8 +551,10 @@ std::size_t basic_log::process_frame(void* pframe)
             } catch(...) {
             }
         }
-        return frame_size;
     }
+
+    //RECKLESS_TRACE(process_frame_finish_event);
+    return frame_size;
 }
 
 std::size_t basic_log::skip_frame(void* pframe)
