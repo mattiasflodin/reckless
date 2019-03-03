@@ -25,9 +25,11 @@
 #include <reckless/basic_log.hpp>
 #include <reckless/template_formatter.hpp>
 #include <reckless/detail/platform.hpp> // RECKLESS_TLS
+#include <reckless/ntoa.hpp>    // detail::decimal_digits
 #include <utility>  // forward
 #include <cstring>  // memset
 #include <cstdlib>  // size_t
+#include <time.h>   // clock_gettime
 
 namespace reckless {
 
@@ -46,31 +48,32 @@ public:
 #if defined(__unix__)
     timestamp_field()
     {
-        // TODO "POSIX.1-2008 marks gettimeofday() as obsolete,
-        // recommending the use of clock_gettime(2) instead." But
-        // maybe this is faster on linux? (see vsyscalls)
-        gettimeofday(&tv_, nullptr);
+#if defined(__linux__)
+        clock_gettime(CLOCK_REALTIME_COARSE, &ts_);
+#else
+        clock_gettime(CLOCK_REALTIME, , &ts_);
+#endif
     }
 
     bool format(output_buffer* pbuffer)
     {
         struct tm tm;
-        localtime_r(&tv_.tv_sec, &tm);
+        localtime_r(&ts_.tv_sec, &tm);
 
-        template_formatter::format(pbuffer,
-            "%.4d-%.2d-%.2d %.2d:%.2d:%.2d.%.3d",
+        format_timestamp(pbuffer,
             tm.tm_year + 1900,
             tm.tm_mon + 1,
             tm.tm_mday,
             tm.tm_hour,
             tm.tm_min,
             tm.tm_sec,
-            static_cast<unsigned>(tv_.tv_usec)/1000u);
+            static_cast<unsigned short>(ts_.tv_nsec/1000000u));
+
         return true;
     }
 
 private:
-    timeval tv_;
+    struct timespec ts_;
 
 #elif defined(_WIN32)
 
@@ -97,8 +100,7 @@ private:
         reckless::detail::FileTimeToLocalFileTime(&ft_, &ft_local);
         SYSTEMTIME st;
         reckless::detail::FileTimeToSystemTime(&ft_local, &st);
-        template_formatter::format(pbuffer,
-            "%.4d-%.2d-%.2d %.2d:%.2d:%.2d.%.3d",
+        format_timestamp(pbuffer,
             st.wYear,
             st.wMonth,
             st.wDay,
@@ -120,6 +122,47 @@ private:
 #else
     static_assert(false, "timestamp_field is not implemented for this OS")
 #endif
+
+
+    static void write_digit_pair(char* ptarget, std::size_t i,
+        unsigned short digits)
+    {
+        ptarget[i] = reckless::detail::decimal_digits[2*digits];
+        ptarget[i+1] = reckless::detail::decimal_digits[2*digits+1];
+    }
+
+    static void format_timestamp(output_buffer* pbuffer,
+        unsigned short year, unsigned short month, unsigned short day,
+        unsigned short hour, unsigned short minute, unsigned short second,
+        unsigned short milliseconds)
+    {
+        // YYYY-MM-DD HH:MM:SS.FFF
+        char* p = pbuffer->reserve(4+1+2+1+2 + 1 + 2+1+2+1+2 + 1 + 3);
+
+        unsigned short century = year / 100;
+        year -= 100*century;
+
+        write_digit_pair(p, 0, century);
+        write_digit_pair(p, 2, year);
+        p[4] = '-';
+        write_digit_pair(p, 5, month);
+        p[7] = '-';
+        write_digit_pair(p, 8, day);
+        p[10] = ' ';
+
+        write_digit_pair(p, 11, hour);
+        p[13] = ':';
+        write_digit_pair(p, 14, minute);
+        p[16] = ':';
+        write_digit_pair(p, 17, second);
+        p[19] = '.';
+
+        unsigned short centiseconds = milliseconds/10;
+        milliseconds -= 10*centiseconds;
+        write_digit_pair(p, 20, centiseconds);
+        p[22] = reckless::detail::decimal_digits[2*milliseconds+1];
+        pbuffer->commit(23);
+    }
 };
 
 class scoped_indent

@@ -68,6 +68,12 @@ void itoa_base16(output_buffer* pbuffer, unsigned long long value, conversion_sp
 void ftoa_base10_f(output_buffer* pbuffer, double value, conversion_specification const& cs);
 void ftoa_base10_g(output_buffer* pbuffer, double value, conversion_specification const& cs);
 
+namespace detail
+{
+    extern char const decimal_digits[201];
+    extern std::uint64_t const power_lut[19];
+}
+
 }   // namespace reckless
 
 #endif  // RECKLESS_DETAIL_ITOA_HPP
