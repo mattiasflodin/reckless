@@ -51,7 +51,7 @@ unsigned get_page_size()
 void set_thread_name(char const* name)
 {
 #if defined(__unix__)
-    pthread_setname_np(pthread_self(), "reckless output worker");
+    pthread_setname_np(pthread_self(), name);
 
 #elif defined(_WIN32)
     // How to: Set a Thread Name in Native Code
