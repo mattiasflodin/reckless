@@ -31,7 +31,7 @@ int main()
     performance_log::logger<100000, performance_log::rdtscp_cpuid_clock> performance_log;
 
     {
-        LOG_INIT();
+        LOG_INIT(64);
         // It's important to set our CPU affinity *after* the log is
         // initialized, otherwise all threads will run on the same CPU.
         performance_log::rdtscp_cpuid_clock::bind_cpu(0);

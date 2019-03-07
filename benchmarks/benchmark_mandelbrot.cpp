@@ -26,7 +26,7 @@ int main()
     std::vector<unsigned> sample_buffer(SAMPLES_WIDTH*SAMPLES_HEIGHT);
     auto start = std::chrono::steady_clock::now();
     {
-        LOG_INIT();
+        LOG_INIT(8192);
         mandelbrot(&sample_buffer[0], SAMPLES_WIDTH, SAMPLES_HEIGHT,
             BOX_LEFT, BOX_TOP, BOX_LEFT+BOX_WIDTH, BOX_TOP-BOX_HEIGHT,
             MAX_ITERATIONS, THREADS);

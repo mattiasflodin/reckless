@@ -17,7 +17,7 @@ int main()
     performance_log::logger<4096, performance_log::rdtscp_cpuid_clock> performance_log;
 
     {
-        LOG_INIT();
+        LOG_INIT(64);
         performance_log::rdtscp_cpuid_clock::bind_cpu(0);
 
         for(int i=0; i!=2500; ++i) {
@@ -26,7 +26,7 @@ int main()
             LOG(c, i, pi);
             performance_log.stop(start);
         }
-        
+
         performance_log::rdtscp_cpuid_clock::unbind_cpu();
         LOG_CLEANUP();
     }
@@ -39,7 +39,7 @@ int main()
     std::ofstream trace_log("trace_log.txt", std::ios::trunc);
     reckless::detail::g_trace_log.save(trace_log);
 #endif
-    
+
     return 0;
-    
+
 }

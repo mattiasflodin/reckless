@@ -45,7 +45,7 @@ inline logging::formatting_ostream& operator<<
     return strm;
 }
 
-#define LOG_INIT() \
+#define LOG_INIT(queue_size) \
     logging::add_file_log( \
         keywords::file_name = "log.txt", \
         keywords::format = ( \

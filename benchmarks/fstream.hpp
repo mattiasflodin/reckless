@@ -9,7 +9,7 @@ extern std::ofstream g_log;
        std::ofstream g_log;
 #endif
 
-#define LOG_INIT() \
+#define LOG_INIT(queue_size) \
     g_log.open("log.txt")
 
 #define LOG_CLEANUP() \

@@ -24,7 +24,7 @@ int main()
     performance_log::logger<512, performance_log::rdtscp_cpuid_clock> performance_log;
 
     {
-        LOG_INIT();
+        LOG_INIT(128);
         performance_log::rdtscp_cpuid_clock::bind_cpu(0);
 
         for(unsigned number=0; number!=256u; ++number) {
@@ -51,7 +51,7 @@ int main()
     for(auto sample : performance_log) {
         std::cout << sample.start << ' ' << sample.stop << std::endl;
     }
-    
+
     return 0;
-    
+
 }

@@ -10,7 +10,7 @@ extern FILE* g_log;
        FILE* g_log;
 #endif
 
-#define LOG_INIT() \
+#define LOG_INIT(queue_size) \
     g_log = std::fopen("log.txt", "w")
 
 #define LOG_CLEANUP() \

@@ -1,4 +1,4 @@
-#define LOG_INIT()
+#define LOG_INIT(queue_size)
 
 #define LOG_CLEANUP()
 

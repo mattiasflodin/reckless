@@ -1,4 +1,7 @@
 #include <spdlog/spdlog.h>
+#include <spdlog/async.h>
+#include <spdlog/sinks/basic_file_sink.h>
+#include <spdlog/sinks/stdout_color_sinks.h>
 
 #ifdef LOG_ONLY_DECLARE
 extern std::shared_ptr<spdlog::logger> g_logger;
@@ -16,9 +19,10 @@ extern std::shared_ptr<spdlog::logger> g_logger;
 // to a cache line. This means our 64 kb input buffer fits 512 log
 // messages. So in an attempt to make the benchmark fair we set the
 // same number of log entries for spdlog's buffer.
-#define LOG_INIT() \
-    spdlog::set_async_mode(512); \
-    g_logger = spdlog::create<spdlog::sinks::simple_file_sink_st>("log", "log.txt", true)
+#define LOG_INIT(queue_size) \
+    spdlog::init_thread_pool(queue_size, 1); \
+    spdlog::set_pattern("%L %Y-%m-%d %H:%M:%S.%e %v"); \
+    g_logger = spdlog::basic_logger_mt<spdlog::async_factory>("log", "log.txt", true)
 
 #define LOG_CLEANUP() \
     g_logger.reset()
