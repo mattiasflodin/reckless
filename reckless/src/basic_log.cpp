@@ -345,6 +345,7 @@ detail::frame_header* basic_log::push_input_frame_slow_path(
         if (pframe != nullptr || error)
             break;
 
+        atomic_increment_fetch_relaxed(&input_buffer_full_count_);
         input_buffer_full_event_.signal();
         RECKLESS_TRACE(input_buffer_full_wait_start_event);
         input_buffer_empty_event_.wait(notify_count);
@@ -382,7 +383,11 @@ void basic_log::output_worker()
     frame_status status = frame_status::uninitialized;
     while(likely(status < frame_status::shutdown_marker)) {
         auto batch_size = wait_for_input();
+
+        atomic_store_relaxed(&input_buffer_high_watermark_,
+            std::max(input_buffer_high_watermark_, batch_size));
         RECKLESS_TRACE(process_batch_start_event, batch_size);
+
         auto pbatch_start = static_cast<char*>(input_buffer_.front());
         auto pbatch_end = pbatch_start + batch_size;
         auto pframe = pbatch_start;

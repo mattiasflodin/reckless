@@ -163,6 +163,19 @@ public:
         return output_thread_;
     }
 
+    unsigned input_buffer_full_count() const
+    {
+        return detail::atomic_load_relaxed(&input_buffer_full_count_);
+    }
+
+    std::size_t input_buffer_high_watermark() const
+    {
+        return detail::atomic_load_relaxed(&input_buffer_high_watermark_);
+    }
+
+    using output_buffer::output_buffer_full_count;
+    using output_buffer::output_buffer_high_watermark;
+
 protected:
     template <class Formatter, typename... Args>
     void write(Args&&... args)
@@ -242,6 +255,9 @@ private:
     format_error_callback_t format_error_callback_; // access synchronized by callback_mutex_
     std::thread output_thread_;
     detail::spsc_event panic_flush_done_event_;
+
+    unsigned input_buffer_full_count_ = 0;
+    std::size_t input_buffer_high_watermark_ = 0;
 
 #if defined(_POSIX_VERSION)
     pthread_t output_worker_native_handle_;

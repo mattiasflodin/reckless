@@ -130,6 +130,8 @@ void output_buffer::write(void const* buf, std::size_t count)
         available_buffer = buffer_size;
         pcommit_end_ = pbuffer_end_;
         RECKLESS_TRACE(output_buffer_full_event);
+
+        increment_output_buffer_full_count();
         flush();
     }
 
@@ -151,6 +153,8 @@ void output_buffer::flush()
     // file. So, we only write data up until the end of the last complete input
     // frame.
     std::size_t remaining = pframe_end_ - pbuffer_;
+    atomic_store_relaxed(&output_buffer_high_watermark_,
+        std::max(output_buffer_high_watermark_, remaining));
     unsigned block_time_ms = 0;
     while(true) {
         std::error_code error;
@@ -304,6 +308,8 @@ char* output_buffer::reserve_slow_path(std::size_t size)
     } else {
         throw excessive_output_by_frame();
     }
+
+    increment_output_buffer_full_count();
     flush();
     return pcommit_end_;
 }

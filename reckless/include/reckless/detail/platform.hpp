@@ -44,6 +44,7 @@ static_assert(false, "RECKLESS_TLS is not implemented for this compiler")
 #if defined(_MSC_VER)
 #    if defined(_M_IX86) || defined(_M_X64)
          extern "C" {
+            long _InterlockedIncrement(long volatile* Addend);
             __int64 _InterlockedCompareExchange64(__int64 volatile* Destination, __int64 Exchange, __int64 Comparand);
             long _InterlockedExchangeAdd(long volatile * Addend, long Value);
             void _mm_prefetch(char const* p, int i);
@@ -52,6 +53,7 @@ static_assert(false, "RECKLESS_TLS is not implemented for this compiler")
             unsigned __int64 __rdtsc();
             unsigned __int64 __rdtscp(unsigned int *);
 		 }
+#        pragma intrinsic(_InterlockedIncrement)
 #        pragma intrinsic(_InterlockedCompareExchange64)
 #        pragma intrinsic(_InterlockedExchangeAdd)
 #        pragma intrinsic(_mm_prefetch)
@@ -204,6 +206,32 @@ inline unsigned atomic_fetch_add_release(unsigned* ptarget, unsigned value)
 
 #else
 static_assert(false, "atomic_add_relaxed is not implemented for this compiler");
+#endif
+
+#if defined(__GNUC__)
+template <typename T>
+T atomic_increment_fetch_relaxed(T* ptarget)
+{
+    return __atomic_add_fetch(ptarget, 1, __ATOMIC_RELAXED);
+}
+
+#elif defined(_MSC_VER)
+inline long atomic_increment_fetch_relaxed(int* ptarget)
+{
+    return _InterlockedIncrement(static_cast<long*>(static_cast<void*>(ptarget)));
+}
+inline long atomic_increment_fetch_relaxed(long* ptarget)
+{
+    return _InterlockedIncrement(ptarget);
+}
+
+inline unsigned atomic_increment_fetch_relaxed(unsigned* ptarget)
+{
+    return atomic_increment_fetch_relaxed(static_cast<int*>(static_cast<void*>(ptarget)));
+}
+
+#else
+static_assert(false, "atomic_increment_fetch_relaxed is not implemented for this compiler");
 #endif
 
 #if defined(__GNUC__)

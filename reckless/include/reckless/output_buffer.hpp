@@ -120,6 +120,16 @@ public:
         commit(1);
     }
 
+    unsigned output_buffer_full_count() const
+    {
+        return detail::atomic_load_relaxed(&output_buffer_full_count_);
+    }
+
+    std::size_t output_buffer_high_watermark() const
+    {
+        return detail::atomic_load_relaxed(&output_buffer_high_watermark_);
+    }
+
 protected:
     void reset() noexcept;
     // throw bad_alloc if unable to malloc() the buffer.
@@ -201,6 +211,10 @@ private:
     output_buffer& operator=(output_buffer const&) = delete;
 
     char* reserve_slow_path(std::size_t size);
+    void increment_output_buffer_full_count()
+    {
+        detail::atomic_increment_fetch_relaxed(&output_buffer_full_count_);
+    }
 
     writer* pwriter_ = nullptr;
     char* pbuffer_ = nullptr;
@@ -211,6 +225,9 @@ private:
     std::error_code initial_error_;         // Keeps track of the first error that caused lost_input_frames_ to become non-zero.
     std::mutex writer_error_callback_mutex_;
     writer_error_callback_t writer_error_callback_;
+
+    unsigned output_buffer_full_count_ = 0;
+    std::size_t output_buffer_high_watermark_ = 0;
 };
 
 }
