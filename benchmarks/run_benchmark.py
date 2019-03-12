@@ -4,7 +4,7 @@ import sys, os, time, subprocess, errno
 from sys import stdout, stderr, argv
 from getopt import gnu_getopt
 
-ALL_LIBS = ['nop', 'reckless', 'stdio', 'fstream', 'boost_log', 'spdlog']
+ALL_LIBS = ['nop', 'reckless', 'stdio', 'fstream', 'boost_log', 'spdlog', 'g3log']
 ALL_TESTS = ['periodic_calls', 'call_burst', 'write_files', 'mandelbrot']
 
 SINGLE_SAMPLE_TESTS = {'mandelbrot'}

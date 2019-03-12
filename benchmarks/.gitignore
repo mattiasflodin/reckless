@@ -6,6 +6,7 @@
 /call_burst-boost_log-?
 /call_burst-reckless-?
 /call_burst-spdlog-?
+/call_burst-g3log-?
 /call_burst-stdio-?
 
 /mandelbrot-fstream-?
@@ -13,6 +14,7 @@
 /mandelbrot-boost_log-?
 /mandelbrot-reckless-?
 /mandelbrot-spdlog-?
+/mandelbrot-g3log-?
 /mandelbrot-stdio-?
 
 /write_files-fstream
@@ -20,6 +22,7 @@
 /write_files-boost_log
 /write_files-reckless
 /write_files-spdlog
+/write_files-g3log
 /write_files-stdio
 
 /periodic_calls-fstream
@@ -27,4 +30,5 @@
 /periodic_calls-boost_log
 /periodic_calls-reckless
 /periodic_calls-spdlog
+/periodic_calls-g3log
 /periodic_calls-stdio

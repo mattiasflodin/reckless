@@ -72,6 +72,17 @@ if SPDLOG ~= '' then
   pop_options()
 end
 
+G3LOG_INCLUDE = tup.getconfig('G3LOG_INCLUDE')
+G3LOG_LIB = tup.getconfig('G3LOG_LIB')
+if G3LOG_INCLUDE ~= '' and G3LOG_LIB ~= '' then
+  push_options()
+  table.insert(OPTIONS.includes, G3LOG_INCLUDE)
+  table.insert(OPTIONS.libdirs, G3LOG_LIB)
+  table.insert(OPTIONS.libs, 'g3logger')
+  build_suite('g3log', {})
+  pop_options()
+end
+
 BOOST_LOG_INCLUDE = tup.getconfig('BOOST_LOG_INCLUDE')
 BOOST_LOG_LIB = tup.getconfig('BOOST_LOG_LIB')
 if BOOST_LOG_INCLUDE ~= '' and BOOST_LOG_LIB ~= '' then

@@ -5,7 +5,7 @@ from getopt import gnu_getopt
 import os.path
 from math import pi, sqrt, exp
 
-ALL_LIBS = ['nop', 'reckless', 'stdio', 'fstream', 'boost_log', 'spdlog']
+ALL_LIBS = ['nop', 'reckless', 'stdio', 'fstream', 'boost_log', 'spdlog', 'g3log']
 ALL_TESTS = ['periodic_calls', 'call_burst', 'write_files'] #, 'mandelbrot']
 
 THREADED_TESTS = {'call_burst', 'mandelbrot'}
@@ -18,6 +18,7 @@ COLORS = [
     '#e7298a',
     '#66a61e',
     '#e6ab02',
+    '#a6761d',
 ]
 
 def get_rdtsc_frequency():
@@ -59,6 +60,7 @@ def lib_color(name):
             'stdio': COLORS[1],
             'fstream': COLORS[4],
             'boost_log': COLORS[5],
+            'g3log': COLORS[6]
             }
     return color_table[name]
 
