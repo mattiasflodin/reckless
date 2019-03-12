@@ -20,6 +20,13 @@ COLORS = [
     '#e6ab02',
 ]
 
+def get_rdtsc_frequency():
+    with open('/sys/devices/system/cpu/cpu0/cpufreq/scaling_max_freq', 'r') as f:
+        return int(f.read())*1000
+
+RDTSC_FREQUENCY = get_rdtsc_frequency()
+TIME_SCALE = 1000000000.0/RDTSC_FREQUENCY
+
 def get_default_window(test):
     table = {
         'periodic_calls': 8,
@@ -196,7 +203,7 @@ def plot(libs, tests, threads_list, window, top, iterations, plot_filename, widt
             assert line.endswith('\n')
             start, end = line[:-1].split(' ')
             start, end = int(start), int(end)
-            data.append(end - start)
+            data.append((end - start)*TIME_SCALE)
         if window is None:
             window = 1 #get_default_window(test)
         if window != 1:
@@ -233,7 +240,7 @@ def plot(libs, tests, threads_list, window, top, iterations, plot_filename, widt
         legobj.set_linewidth(4)
 
     plt.xlabel('Iteration')
-    plt.ylabel('Latency (CPU ticks)')
+    plt.ylabel('Latency (nanoseconds)')
     if title is not None:
         fig.canvas.set_window_title(title)
     if plot_filename is None:
