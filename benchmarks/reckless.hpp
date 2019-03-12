@@ -9,7 +9,7 @@ extern reckless::severity_log<reckless::no_indent, ' ', reckless::severity_field
 
 #define LOG_INIT(queue_size) \
     reckless::file_writer writer("log.txt"); \
-    g_log.open(&writer, 128*queue_size, 128*queue_size);
+    g_log.open(&writer, 64*queue_size, 64*queue_size);
 
 #define LOG_CLEANUP() g_log.close()
 

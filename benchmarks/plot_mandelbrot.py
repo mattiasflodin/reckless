@@ -10,13 +10,24 @@ matplotlib.rc('font', size=10)
 
 # color palette from colorbrewer2.org
 COLORS = [
-    '#8dd3c7',
-    '#fb8072',
-    '#80b1d3',
-    '#ffffb3',
-    '#bebada',
-    '#fdb462',
-]
+    '#a6cee3',
+    '#1f78b4',
+    '#b2df8a',
+    '#33a02c',
+    '#fb9a99',
+    '#e31a1c',
+    '#fdbf6f'
+    ]
+#COLORS = [
+#    '#8dd3c7',
+#    '#fb8072',
+#    '#80b1d3',
+#    #'#ffffb3', # this is too bright for white background
+#    '#bebada',
+#    '#fdb462',
+#    '#b3de69',
+#    '#fccde5'
+#]
 
 filename = None
 if len(argv) > 1:
@@ -27,12 +38,13 @@ if len(argv) > 1:
 fig, ax = plt.subplots()
 
 ONLY_OVERHEAD = 1
+SCALE = 1000000.0/(1024*1024)
 #LOG_LINES = 1048576
 MAX_CORES = 8
-LIBS = ['nop', 'reckless', 'spdlog', 'stdio', 'fstream', 'boost_log']
+LIBS = ['nop', 'reckless', 'spdlog', 'g3log', 'stdio', 'fstream', 'boost_log']
 #LIBS = ['nop', 'reckless', 'stdio', 'fstream']
 if ONLY_OVERHEAD:
-    del COLORS[0]
+    del COLORS[-1]
     del LIBS[0]
 ind = np.arange(MAX_CORES)
 WIDTH=1.0/(len(LIBS)+2)
@@ -80,6 +92,7 @@ for index, lib in enumerate(LIBS):
 
     for cores in range(1, MAX_CORES+1):
         low, mean, high = read_timing(lib, cores, offsets[cores-1])
+        low, mean, high = low*SCALE, mean*SCALE, high*SCALE
         print(lib, cores, mean, low, high)
         means.append(mean)
         error[0].append(mean - low)
@@ -94,7 +107,7 @@ for index, lib in enumerate(LIBS):
 ax.legend( rects, LIBS )
 
 if ONLY_OVERHEAD:
-    ax.set_ylabel('Seconds overhead')
+    ax.set_ylabel('Average call latency (microseconds)')
 else:
     ax.set_ylabel('Total seconds')
 ax.set_xlabel('Number of worker threads')

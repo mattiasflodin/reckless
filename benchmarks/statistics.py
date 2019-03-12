@@ -5,7 +5,7 @@ from sys import argv, stderr, stdout
 from getopt import gnu_getopt
 import numpy as np
 
-ALL_LIBS = ['nop', 'reckless', 'stdio', 'fstream', 'boost_log', 'spdlog']
+ALL_LIBS = ['nop', 'reckless', 'stdio', 'fstream', 'boost_log', 'spdlog', 'g3log']
 ALL_TESTS = ['periodic_calls', 'call_burst', 'write_files', 'mandelbrot']
 THREADED_TESTS = {'call_burst', 'mandelbrot'}
 
@@ -80,11 +80,20 @@ def parse_ranges(s):
 def make_stats(libs, tests, threads_list, normalizer=None, offset=None, precision=None):
     def single_file_stats(filename, columns):
         with open(filename, 'r') as f:
-            data = f.readlines()
-        data = np.array([float(x) for x in data])
-        mean = np.mean(data)
+            lines = f.readlines()
+        data = []
+        for line in lines:
+            assert line.endswith('\n')
+            numbers = line[:-1].split(' ')
+            numbers = [int(n) for n in numbers]
+            if len(numbers) == 1:
+                data.append(numbers[0])
+            else:
+                data.append(numbers[1] - numbers[0])
         if offset is not None:
-            mean -= offset
+            data = [x - offset for x in data]
+        data = np.array(data)
+        mean = np.mean(data)
         if normalizer is not None:
             mean = mean/normalizer
             data = [x/normalizer for x in data]
@@ -110,10 +119,10 @@ def make_stats(libs, tests, threads_list, normalizer=None, offset=None, precisio
             if test in THREADED_TESTS:
                 for threads in threads_list:
                     name = base_name[:]
-                    filename = "results/%s_%s_%d.txt" % (lib, test, threads)
+                    filename = "results/%s-%s-%d.txt" % (test, lib, threads)
                     mean = single_file_stats(filename, columns)
             else:
-                filename = "results/%s_%s.txt" % (lib, test)
+                filename = "results/%s-%s.txt" % (test, lib)
                 mean = single_file_stats(filename, columns)
             rows.append((mean, columns))
 
