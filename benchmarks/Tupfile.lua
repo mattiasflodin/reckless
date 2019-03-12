@@ -57,6 +57,11 @@ build_suite('fstream', {})
 push_options()
 table.insert(OPTIONS.includes, tup.getcwd() .. '/../reckless/include')
 build_suite('reckless', {libreckless}, {}, {}, {})
+
+link('nanolog_benchmark', {
+  compile('nanolog_benchmark.cpp', 'nanolog_benchmark' .. OBJSUFFIX),
+  libreckless
+})
 pop_options()
 
 SPDLOG = tup.getconfig('SPDLOG')
