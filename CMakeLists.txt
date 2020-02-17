@@ -80,6 +80,12 @@ install(EXPORT recklessTargets
     DESTINATION lib/cmake/reckless
     )
 
+configure_file(recklessConfig.cmake.in recklessConfig.cmake @ONLY)
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/recklessConfig.cmake"
+        DESTINATION lib/cmake/reckless
+        )
+    
+
 # uninstall target 
 if(NOT TARGET uninstall) 
   configure_file( 
