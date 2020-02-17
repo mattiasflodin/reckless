@@ -28,7 +28,7 @@
 #include <reckless/detail/optional.hpp>
 #include <reckless/output_buffer.hpp>
 
-#include <boost_1_56_0/lockfree/queue.hpp>
+#include <boost/lockfree/queue.hpp>
 
 #include <thread>
 #include <functional>
@@ -173,7 +173,7 @@ private:
         return output_thread_.joinable();
     }
 
-    typedef boost_1_56_0::lockfree::queue<detail::commit_extent, boost_1_56_0::lockfree::fixed_sized<true>> shared_input_queue_t;
+    typedef boost::lockfree::queue<detail::commit_extent, boost::lockfree::fixed_sized<true>> shared_input_queue_t;
 
     //typedef detail::thread_object<detail::thread_input_buffer, std::size_t, std::size_t> thread_input_buffer_t;
     //thread_input_buffer_t pthread_input_buffer_;
