@@ -1,0 +1,6 @@
+get_filename_component(reckless_CMAKE_DIR "${CMAKE_CURRENT_LIST_FILE}" PATH)
+include(CMakeFindDependencyMacro)
+
+if(NOT TARGET reckless::reckless)
+    include("${reckless_CMAKE_DIR}/recklessTargets.cmake")
+endif()
