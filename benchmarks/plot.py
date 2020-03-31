@@ -131,7 +131,8 @@ def parse_ranges(s):
 
 def main():
     opts, args = gnu_getopt(argv[1:], 'l:t:c:w:h', ['libs=', 'tests=',
-        'threads=', 'window=', 'file=', 'top=', 'iterations=', 'title=', 'help'])
+        'threads=', 'window=', 'file=', 'top=', 'bottom=', 'iterations=',
+        'title=', 'help'])
     libs = None
     tests = None
     threads = None
@@ -141,6 +142,7 @@ def main():
     height = 858
     show_help = len(args) != 0
     top = None
+    bottom = None
     iterations = None
     title = None
 
@@ -157,6 +159,8 @@ def main():
             window = int(value)
         elif option == '--file':
             filename = value
+        elif option == '--bottom':
+            bottom = int(value)
         elif option == '--top':
             top = int(value)
         elif option == '--iterations':
@@ -173,6 +177,7 @@ def main():
             '-c,--threads  THREADS    thread-counts to include in a comma-separated list (e.g. 1-2,4)\n'
             '-w,--window   SIZE       Size of moving-average window\n'
             '--top         TOP        Top y coordinate for chart\n'
+            '--bottom      BOTTOM     Bottom y coordinate for chart\n'
             '--iterations  ITERATIONS Number of iterations to include\n'
             '--title    TITLE      Plot title\n'
             '-h,--help        show this help\n'
@@ -188,10 +193,10 @@ def main():
     if threads is None:
         threads = list(range(1, 5))
 
-    plot(libs, tests, threads, window, top, iterations, filename, width, height, title)
+    plot(libs, tests, threads, window, top, bottom, iterations, filename, width, height, title)
     return 0
 
-def plot(libs, tests, threads_list, window, top, iterations, plot_filename, width, height, title, dpi=96):
+def plot(libs, tests, threads_list, window, top, bottom, iterations, plot_filename, width, height, title, dpi=96):
     import matplotlib
     matplotlib.rc('font', size=10)
     import matplotlib.pyplot as plt
@@ -235,6 +240,8 @@ def plot(libs, tests, threads_list, window, top, iterations, plot_filename, widt
 
     if top is not None:
         ax.set_ylim(ymax=top)
+    if bottom is not None:
+        ax.set_ylim(ymin=bottom)
 
     legend = ax.legend()
     # set the linewidth of each legend object
