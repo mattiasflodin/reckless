@@ -1,14 +1,15 @@
-project(reckless)
+project(reckless LANGUAGES CXX)
 CMAKE_MINIMUM_REQUIRED(VERSION 3.5)
+
 
 ################################################################################
 # Add Flags
 ################################################################################
 set(CMAKE_CXX_STANDARD 11)
 if(MSVC)
-    add_compile_options("/W4")
+    add_compile_options(/W4 /O3)
 else()
-    add_compile_options("-Wall -Wextra -O3 -g")
+    add_compile_options(-Wall -Wextra -O3 -g)
 endif()
 
 ################################################################################
