@@ -1,3 +1,6 @@
+if(NOT MSVC)
+    set(CMAKE_CXX_COMPILER_NAMES g++ clang++ icpc c++ cxx)
+endif()
 project(reckless LANGUAGES CXX)
 CMAKE_MINIMUM_REQUIRED(VERSION 3.5)
 
