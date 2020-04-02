@@ -32,24 +32,24 @@ using writer_error_callback_t = std::function<
 
 class basic_log {
 public:
-
     basic_log();
-    basic_log(writer* pwriter, 
-            std::size_t output_buffer_max_capacity = 0,
-            std::size_t shared_input_queue_size = 0,
-            std::size_t thread_input_buffer_size = 0);
+    basic_log(writer* pwriter);
+    basic_log(writer* pwriter,
+        std::size_t input_buffer_capacity,
+        std::size_t output_buffer_capacity);
     virtual ~basic_log();
-    
+
     basic_log(basic_log const&) = delete;
     basic_log& operator=(basic_log const&) = delete;
 
-    virtual void open(writer* pwriter, 
-            std::size_t output_buffer_max_capacity = 0,
-            std::size_t shared_input_queue_size = 0,
-            std::size_t thread_input_buffer_size = 0);
+    void open(writer* pwriter);
+    void open(writer* pwriter,
+        std::size_t input_buffer_capacity,
+        std::size_t output_buffer_capacity);
+
     virtual void close(std::error_code& ec) noexcept;
     virtual void close();
-    
+
     virtual void flush(std::error_code& ec);
     virtual void flush();
 
@@ -62,10 +62,17 @@ public:
     void temporary_error_policy(error_policy ep);
     error_policy permanent_error_policy() const
     void permanent_error_policy(error_policy ep);
-        
-    void panic_flush();
+
+    void start_panic_flush();
+    void await_panic_flush();
+    bool await_panic_flush(unsigned int miliseconds);
 
     std::thread& worker_thread();
+
+    unsigned input_buffer_full_count() const
+    unsigned input_buffer_high_watermark() const
+    unsigned output_buffer_full_count() const;
+    std::size_t output_buffer_high_watermark() const;
 
 protected:
     template <class Formatter, typename... Args>
@@ -88,8 +95,8 @@ a writer, and starts up the writer thread.</td></tr>
 
 <tr><td><code>close</code></td>
 <td>Close the log. This flushes all queued log data in a controlled manner,
-then shuts down the background thread and disassociates the writer. Trying to
-close a log that is not open leads to undefined behavior.</td></tr>
+then shuts down the background thread and disassociates the writer. Writing to
+or closing a log that is not open leads to undefined behavior.</td></tr>
 
 <tr><td><code>flush</code></td>
 <td><p>Wake up the output worker thread and then block until it has formatted
@@ -135,10 +142,40 @@ affinity. Use good judgement when accessing this object, as any destructive
 action such as moving or detaching it can cause reckless to
 malfunction.</td></tr>
 
+
+<tr><td><code>input_buffer_full_count</code></td>
+<td>Return number of times that the input buffer has become full and caused the
+caller thread to block. If this number increases often then either log messages
+are being written at a rate higher than the capacity of the writer (unlikely) or
+the input-buffer size needs to be increased to properly cushion sudden spikes in
+the output rate.
+</td>
+</tr>
+
+<tr><td><code>input_buffer_high_watermark</code></td>
+<td>Return the highest number of bytes ever in use in the input buffer. While <code>input_buffer_full_count</code> can be used to determine if the buffer needs to grow, this can be used to determine how much the buffer can be shrunk.<td>
+</tr>
+
+<tr><td><code>output_buffer_full_count</code></td>
+<td>Return number of times that the output buffer became full before all
+available entries in the input buffer were processed. Ideally all available
+entries can be processed without filling up the output buffer. That way writes
+are performed only while the input buffer has the most available space, and much
+less time will be spent in I/O. There is a causal relation between a full output
+buffer and a full input buffer, as an output buffer that is too small may reduce
+throughput and increase the needed input-buffer space. As such it may be a good
+idea to balance the output-buffer size before adjusting the input buffer.</td>
+</tr>
+
+<tr><td><code>output_buffer_high_watermark</code></td>
+<td>Return the highest number of bytes ever in use in the output buffer.</td>
+</tr>
+
 <tr><td><code>write</code></td>
 <td>Store <code>args</code> on the asynchronous queue and invoke the static
 function <code>Formatter::format(output_buffer*, Args...)</code> from the
-background thread. This is meant to be called from derived classes.</td></tr>
+background thread. This is meant to be called from derived classes. Calling it
+when the log is in a closed state leads to undefined behavior.</td></tr>
 </table>
 
 Arguments
@@ -148,10 +185,21 @@ Arguments
 <td>Pointer to a writer to use for writing formatted log data to disk or other
 targets.</td></tr>
 
-<tr><td><code>output_buffer_max_capacity</code></td>
-<td>Maximum number of bytes that may be allocated for the final, formatted
-output buffer. If 0 is specified, the CPU page size is used (on Intel this is
-normally 4 KiB).</td></tr>
+<tr><td><code>input_buffer_capacity</code></td>
+<td>Capacity of the input buffer. This should be large enough to fit any burst
+of log messages that your application might produce over a short period of time.
+A log entry stores all arguments passed to <code>basic_log::write</code> packed
+as close as possible without violating alignment requirements of each type, and
+is padded so that the size is rounded up to the nearest multiple of the
+cache-line size (64 bytes on x86 architectures). On Windows, the buffer size is
+always rounded up to the nearest multiple of 64 KiB to meet the requirements for
+creating a magic ring buffer. On Linux the granularity is 4 KiB. If this
+argument is not provided or it has the value 0 then reckless uses the default of
+64 KiB, which is the minimum size possible on Windows.</td></tr>
+
+<tr><td><code>output_buffer_capacity</code></td>
+<td>Capacity of the final formatted output buffer. If not provided or set to 0,
+a heuristic based on the input buffer size is used.</td></tr>
 
 <tr><td><code>shared_input_queue_size</code></td>
 <td>Maximum number of log entries in the queue shared between application
@@ -230,7 +278,7 @@ state will be cleared and it will be possible to put new messages on the queue
 again.</td></tr>
 </table>
 
-<tr><td><code>Formatter</code></td><td>A type that provides the function
+<tr><td><code>Formatter</code></td><td>A type that provides the member function
 <code>static void format(output_buffer*, Args...)</code>. <code>Args</code>
 should be compatible with the arguments that you intend to pass to
 <code>write</code>. The task of the <code>Formatter</code> is to write
@@ -250,10 +298,10 @@ template <class IndentPolicy = no_indent, char FieldSeparator = ' ', class... He
 class policy_log : public basic_log {
 public:
     policy_log();
+    policy_log(writer* pwriter);
     policy_log(writer* pwriter,
-            std::size_t output_buffer_max_capacity = 0,
-            std::size_t shared_input_queue_size = 0,
-            std::size_t thread_input_buffer_size = 0);
+        std::size_t input_buffer_capacity,
+        std::size_t output_buffer_capacity);
 
     template <typename... Args>
     void write(char const* fmt, Args&&... args);
@@ -287,7 +335,8 @@ prefixing each log line. The only field currently available is
 <code>timestamp_field</code> which will output the time in ISO 8601 compliant
 time format. Other fields can be be implemented by the client; see <a href
 ="#custom-fields-in-policy_log">Custom fields in policy_log</a> for more
-information.</td></tr> <tr><td><code>fmt</code></td><td>Format string. The
+information.</td></tr>
+<tr><td><code>fmt</code></td><td>Format string. The
 conversion specifiers are parsed differently depending on the type of each
 converted argument, but are roughly equivalent to <code>printf</code> for native
 types. There is no need to end the string with a newline as <code>write</code>
@@ -331,13 +380,13 @@ public:
 
     template <typename... Args>
     void debug(char const* fmt, Args&&... args);
-    
+
     template <typename... Args>
     void info(char const* fmt, Args&&... args);
-    
+
     template <typename... Args>
     void warn(char const* fmt, Args&&... args);
-    
+
     template <typename... Args>
     void error(char const* fmt, Args&&... args);
 };
@@ -377,12 +426,12 @@ namespace reckless
             permanent_failure = 2
         };
         static std::error_category const& error_category();
-    
+
         virtual ~writer() = 0;
         virtual std::size_t write(void const* pbuffer, std::size_t count,
             std::error_code& ec) noexcept = 0;
     };
-    
+
     std::error_condition make_error_condition(writer::errc);
     std::error_code make_error_code(writer::errc);
 }   // namespace reckless
@@ -409,10 +458,10 @@ writer::permanent_failure` is true. If neither is true then reckless will assume
 that it is a permanent error. By permanent we mean that it is assumed that the
 writer will never recover from the error condition.
 
-Implementing an error category does not take a lot of code and is fairly simple,
-however at present time documentation on this subject is pretty scarce. You
-may wish to refer to the source code for `file_writer` for an example of how
-to correctly implement an error category for your error codes.
+Implementing an error category does not take a lot of code and is fairly simple.
+However, at the time of writing this, documentation on error categories is
+pretty scarce. You may wish to refer to the source code for `fd_writer` for
+an example of how to correctly implement an error category for your error codes.
 
 file_writer
 ===========
@@ -427,6 +476,10 @@ append to the existing file.
 class file_writer : public writer {
 public:
     file_writer(char const* path);
+#if defined(_WIN32)
+    file_writer(wchar_t const* path);
+#endif
+
     ~file_writer();
     std::size_t write(void const* pbuffer, std::size_t count,
         std::error_code& ec) noexcept override;
@@ -434,9 +487,26 @@ public:
 ```
 
 On Linux, the writer classifies following error codes as temporary errors:
-<code>ENOSPC</code> (disk full), <code>ENOBUFS</code> (out of memory),
-<code>EDQUOT</code> (user quota reached), <code>EIO</code>
-(low-level I/O error). All other errors are classified as permanent.
+`ENOSPC` (disk full), `ENOBUFS` (out of memory),
+`EDQUOT` (user quota reached), `EIO`
+(low-level I/O error). On
+Windows, the following errors are classified as temporary errors:
+- `ERROR_BUSY`
+- `ERROR_DISK_FULL`
+- `ERROR_HANDLE_DISK_FULL`
+- `ERROR_LOCK_VIOLATION`
+- `ERROR_NOT_ENOUGH_MEMORY`
+- `ERROR_NOT_ENOUGH_QUOTA`
+- `ERROR_NOT_READY`
+- `ERROR_OPERATION_ABORTED`
+- `ERROR_OUTOFMEMORY`
+- `ERROR_READ_FAULT`
+- `ERROR_RETRY`
+- `ERROR_SHARING_VIOLATION`
+- `ERROR_WRITE_FAULT`
+- `ERROR_WRITE_PROTECT`
+
+All other errors are classified as permanent.
 
 stdout_writer and stderr_writer
 ===============================
@@ -460,6 +530,8 @@ public:
 };
 ```
 
+The error categorization is identical to that of `file_writer`.
+
 Custom string formatting
 ================================================
 Both `policy_log` and `severity_log` make use of the `template_formatter`
@@ -472,12 +544,13 @@ char const* format(output_buffer*, char const* fmt, T&&)
 ```
 
 is called to write a formatted version of it to the output buffer. The `fmt`
-parameter points to the current position in the format string, after the `%`
-escape character. The function should consume one or more characters from fmt to
-use as a format specification, write formatted output to the `output_buffer`
-pointer, and return a pointer to the first character in the format string that
-is not considered part of the format specification. If the format specification
-is ill-formed then `nullptr` should be returned.
+parameter points to the corresponding format specification in the format
+string, after the `%` escape character. The function should consume one or
+more characters from fmt to use as a format specification, write formatted
+output to the `output_buffer` pointer, and return a pointer to the first
+character in the format string that is not considered part of the format
+specification. If the format specification is ill-formed then `nullptr` should
+be returned.
 
 For example, in the format string `"Hello %s, how are you"`, `fmt` would point
 to `s`. The function would return a pointer to the blank space after `s`.
@@ -546,7 +619,7 @@ terminator is not written).</td></tr>
 Custom fields in policy_log
 ===========================
 If you don't want to build your own logger, the `policy_log`'s `HeaderFields`
-parameter `policy_log` provides a simple way to put custom information on each
+parameter provides a simple way to put custom information on each
 log line. A field should provide this interface:
 
 ```c++
