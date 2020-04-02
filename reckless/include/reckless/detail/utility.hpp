@@ -53,7 +53,7 @@ T char_cast(char* p)
 template <class T>
 T char_cast(char const* p)
 {
-    return static_cast<T>(static_cast<void*>(p));
+    return static_cast<T>(static_cast<void const*>(p));
 }
 
 template <class T>
