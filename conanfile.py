@@ -6,10 +6,10 @@ from conans import ConanFile, tools, CMake
 
 class RecklessConan(ConanFile):
     name = 'reckless'
-    version = '3.0.0'
     license = 'Boost Software License - Version 1.0 - August 17th, 2003'
     url = 'https://github.com/mattiasflodin/reckless'
-    description = """performant logging library in C++"""
+    description = """Reckless is an extremely low-latency, high-throughput logging library."""
+    
     settings = 'arch', 'cppstd', 'compiler', 'build_type'
     
     _build_subfolder = 'build'
