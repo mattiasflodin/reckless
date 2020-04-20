@@ -6,10 +6,10 @@ from conans import ConanFile, tools, CMake
 
 class RecklessConan(ConanFile):
     name = 'reckless'
-    license = 'Boost Software License - Version 1.0 - August 17th, 2003'
+    license = 'Copyright 2015-2020 Mattias Flodin <git@codepentry.com>'
     url = 'https://github.com/mattiasflodin/reckless'
     description = """Reckless is an extremely low-latency, high-throughput logging library."""
-    
+
     settings = 'arch', 'cppstd', 'compiler', 'build_type'
     
     _build_subfolder = 'build'
@@ -44,6 +44,8 @@ class RecklessConan(ConanFile):
         if self.settings.build_type == 'Debug':
             self.copy('*.cpp', src='src/reckless/src', dst='src', keep_path=True)
             self.copy('*.pdb', src='build', dst='lib', keep_path=False)        
+
+        self.copy('LICENSE.txt', src='src')
 
     def package_info(self):
         self.cpp_info.libs = ["reckless"]
