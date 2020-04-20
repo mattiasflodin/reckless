@@ -9,7 +9,7 @@ class RecklessConan(ConanFile):
     license = 'Copyright 2015-2020 Mattias Flodin <git@codepentry.com>'
     url = 'https://github.com/mattiasflodin/reckless'
     description = """Reckless is an extremely low-latency, high-throughput logging library."""
-
+    generators = 'cmake'
     settings = 'arch', 'cppstd', 'compiler', 'build_type'
     
     _build_subfolder = 'build'
