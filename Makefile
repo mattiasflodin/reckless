@@ -5,11 +5,12 @@
 # here to build performance tests and other cruft. You need to use tup for all
 # of that.
 
-CXXFLAGS = -std=c++11 -Wall -Wextra -O3 -g -Ireckless/include
+CXXFLAGS = -std=c++11 -Wall -Wextra -O3 -g -Ireckless/include -Iperformance_log/include
 
 target = reckless/lib/libreckless.a
 srcpath = reckless/src
-objects := $(patsubst %.cpp,%.o,$(wildcard $(srcpath)/*.cpp))
+sources := $(filter-out %_win32.cpp,$(wildcard $(srcpath)/*.cpp))
+objects := $(patsubst %.cpp,%.o,$(sources))
 
 .PHONY: clean
 
@@ -18,5 +19,4 @@ $(target): $(objects)
 	ar rs $(target) $(objects)
 
 clean:
-	-$(RM) $(target)
-	$(RM) $(srcpath)/*.o
+	$(RM) $(target) $(objects)
