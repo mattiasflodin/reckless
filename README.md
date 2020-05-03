@@ -125,7 +125,7 @@ Building
 Alternative 1: Using Visual Studio
 ----------------------------------
 On Windows it is recommended to use Visual Studio for building the library.
-Simply open reckless.sln, choose "batch build" and select all configurations.
+Simply open reckless.sln, choose "batch build" and "select all". Then press Build.
 The library files will be placed in the `build` subdirectory.
 
 To build a program against the library you need to set your library path to
