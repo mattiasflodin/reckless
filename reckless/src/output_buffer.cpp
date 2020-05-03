@@ -22,7 +22,12 @@
 #include <reckless/output_buffer.hpp>
 #include <reckless/writer.hpp>
 #include <reckless/detail/platform.hpp> // atomic_store_release
-#include <performance_log/trace_log.hpp>
+
+#ifdef RECKLESS_ENABLE_TRACE_LOG
+#include <reckless/detail/trace_log.hpp>
+#else
+#define RECKLESS_TRACE(Event, ...) do {} while(false)
+#endif  // RECKLESS_ENABLE_TRACE_LOG
 
 #include <cstdlib>      // malloc, free
 #include <cassert>
@@ -30,6 +35,7 @@
 
 namespace reckless {
 
+#ifdef RECKLESS_ENABLE_TRACE_LOG
 namespace {
 struct flush_output_buffer_start_event :
     public detail::timestamped_trace_event
@@ -58,6 +64,7 @@ struct output_buffer_full_event
     }
 };
 }
+#endif  // RECKLESS_ENABLE_TRACE_LOG
 
 char const* excessive_output_by_frame::what() const noexcept
 {

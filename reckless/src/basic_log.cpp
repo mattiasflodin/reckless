@@ -19,7 +19,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-#include <performance_log/trace_log.hpp>
+#include <reckless/detail/trace_log.hpp>
 
 #include <reckless/basic_log.hpp>
 #include <reckless/detail/platform.hpp>

@@ -19,9 +19,9 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-#include <performance_log/trace_log.hpp>
 
 #ifdef RECKLESS_ENABLE_TRACE_LOG
+#include <performance_log/trace_log.hpp>
 namespace reckless {
 namespace detail {
 trace_log g_trace_log(128*1024*1024);

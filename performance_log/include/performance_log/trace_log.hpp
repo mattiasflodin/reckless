@@ -19,8 +19,8 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-#ifndef RECKLESS_DETAIL_TRACE_LOG_HPP
-#define RECKLESS_DETAIL_TRACE_LOG_HPP
+#ifndef PERFORMANCE_LOG_TRACE_LOG_HPP
+#define PERFORMANCE_LOG_TRACE_LOG_HPP
 #include <cstddef>      // size_t, max_align_t
 #include <string>
 #include <type_traits>  // is_empty
@@ -136,14 +136,10 @@ struct timestamped_trace_event {
     }
 };
 
-#ifdef RECKLESS_ENABLE_TRACE_LOG
 extern trace_log g_trace_log;
 #define RECKLESS_TRACE(Event, ...) reckless::detail::g_trace_log.log_event<Event>(__VA_ARGS__)
-#else
-#define RECKLESS_TRACE(Event, ...) do {} while(false)
-#endif
 
 }   // namespace detail
 }   // namespace reckless
 
-#endif // RECKLESS_DETAIL_TRACE_LOG_HPP
+#endif // PERFORMANCE_LOG_TRACE_LOG_HPP
