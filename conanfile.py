@@ -6,7 +6,7 @@ from conans import ConanFile, tools, CMake
 
 class RecklessConan(ConanFile):
     name = 'reckless'
-    license = 'Copyright 2015-2020 Mattias Flodin <git@codepentry.com>'
+    license = 'MIT'
     url = 'https://github.com/mattiasflodin/reckless'
     description = """Reckless is an extremely low-latency, high-throughput logging library."""
     generators = 'cmake'
