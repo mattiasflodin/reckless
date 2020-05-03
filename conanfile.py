@@ -2,51 +2,63 @@
 # -*- coding: utf-8 -*-
 
 import os, shutil
-from conans import ConanFile, tools, CMake
+from conans import ConanFile, tools, AutoToolsBuildEnvironment, MSBuild
+from conans.errors import ConanException
+
+MSDEV_PLATFORM_SHORT_NAMES = {
+    'x86': 'x86',
+    'x86_64': 'x64'
+}
 
 class RecklessConan(ConanFile):
     name = 'reckless'
     license = 'MIT'
+    version = '3.0.1'
     url = 'https://github.com/mattiasflodin/reckless'
     description = """Reckless is an extremely low-latency, high-throughput logging library."""
-    generators = 'cmake'
-    settings = 'arch', 'cppstd', 'compiler', 'build_type'
-    
-    _build_subfolder = 'build'
-    _source_subfolder = 'src'
+    settings = 'arch', 'compiler', 'build_type'
+    exports_sources = (
+        "reckless/src/*",
+        "reckless/include/*",
+        "Makefile.conan",
+        "reckless.sln",
+        "common.props",
+        "*.vcxproj"
+    )
 
     def configure(self):
-        pass
-    
-    def source(self):
-        tools.get('%s/archive/v%s.tar.gz' % (self.url, self.version))
-        shutil.move('reckless-%s' % self.version, self._source_subfolder)
-
-    def _configure_cmake(self):
-
-        cmake = CMake(self)
-        cmake.configure(build_folder=self._build_subfolder, source_folder=self._source_subfolder)
-        return cmake
+        if self._gcc_compatible() and self.settings.compiler.libcxx == "libstdc++":
+            raise ConanException("This package is only compatible with libstdc++11. "
+                "Please run with -s compiler.libcxx=libstdc++11.")
 
     def build(self):
-        os.makedirs(self._build_subfolder)
-        with tools.chdir(self._build_subfolder):
-            cmake = self._configure_cmake()
-            cmake.build()
+        if self.settings.compiler == "Visual Studio":
+            env = MSBuild(self)
+            env.build('reckless.sln', use_env=False, targets=['reckless:Rebuild'])
+        else:
+            env = AutoToolsBuildEnvironment(self)
+            env.make(args=['-f', 'Makefile.conan'], target="clean")
+            # Why doesn't Conan set CXX?
+            vars = env.vars
+            vars['CXX'] = str(self.settings.compiler)
+            env.make(args=['-f', 'Makefile.conan'], vars=vars)
 
-    
     def package(self):
-        
-        self.copy('*.a', src='build', dst='lib', keep_path=False)
-        self.copy('*.lib', src='build', dst='lib', keep_path=False)
-        self.copy('*.hpp', src='src/reckless/include', dst='include', keep_path=True)
+        if self._gcc_compatible():
+            self.copy('*.a', src='reckless/lib', dst='lib', keep_path=False)
+        else:
+            platform_short_name = MSDEV_PLATFORM_SHORT_NAMES[str(self.settings.arch)]
+            configuration_name = str(self.settings.build_type).lower()
+            build_directory = os.path.join('build', '%s-%s' % (platform_short_name, configuration_name))
+            self.copy('*.lib', src=build_directory, dst='lib', keep_path=False)
+            self.copy('*.pdb', src=build_directory, dst='lib', keep_path=False)
 
-        if self.settings.build_type == 'Debug':
-            self.copy('*.cpp', src='src/reckless/src', dst='src', keep_path=True)
-            self.copy('*.pdb', src='build', dst='lib', keep_path=False)        
-
+        self.copy('*.hpp', src='reckless/include', dst='include', keep_path=True)
+        self.copy('*.cpp', src='reckless/src', dst='src', keep_path=True)
         self.copy('LICENSE.txt', src='src')
 
     def package_info(self):
         self.cpp_info.libs = ["reckless"]
-        pass
+
+    def _gcc_compatible(self):
+        return str(self.settings.compiler) in ['gcc', 'clang', 'apple-clang']

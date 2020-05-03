@@ -1,0 +1,16 @@
+CXXFLAGS += -Ireckless/include -g
+
+target = reckless/lib/libreckless.a
+srcpath = reckless/src
+sources := $(filter-out %_win32.cpp,$(wildcard $(srcpath)/*.cpp))
+objects := $(patsubst %.cpp,%.o,$(sources))
+
+.PHONY: clean
+
+$(target): $(objects)
+	-$(RM) $(target)
+	mkdir -p reckless/lib
+	ar rs $(target) $(objects)
+
+clean:
+	$(RM) $(target) $(objects)
