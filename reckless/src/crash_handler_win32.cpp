@@ -35,17 +35,20 @@ namespace {
 std::vector<basic_log*> g_logs;
 LPTOP_LEVEL_EXCEPTION_FILTER g_old_exception_filter = nullptr;
 
-
-}   // anonymous namespace
-
 LONG WINAPI exception_filter(_EXCEPTION_POINTERS *ExceptionInfo)
 {
     for(basic_log* plog : g_logs)
         plog->start_panic_flush();
     for(basic_log* plog : g_logs)
         plog->await_panic_flush();
-    return EXCEPTION_CONTINUE_SEARCH;
+    if (g_old_exception_filter == nullptr)
+        return EXCEPTION_CONTINUE_SEARCH;
+    else
+        return g_old_exception_filter(ExceptionInfo);
 }
+
+}   // anonymous namespace
+
 void install_crash_handler(std::initializer_list<basic_log*> logs)
 {
     assert(logs.size() != 0);
