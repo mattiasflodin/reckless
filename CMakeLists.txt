@@ -37,7 +37,14 @@ reckless/src/lockless_cv.cpp
 )
 
 if(WIN32)
-   set (SRC_LIST ${SRC_LIST} reckless/src/spsc_event_win32.cpp)
+   set (SRC_LIST ${SRC_LIST}
+   reckless/src/spsc_event_win32.cpp
+   reckless/src/crash_handler_win32.cpp
+   )
+else()
+   set (SRC_LIST ${SRC_LIST}
+   reckless/src/crash_handler_unix.cpp
+   )
 endif()
 
 add_library(reckless STATIC ${SRC_LIST})
