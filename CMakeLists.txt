@@ -4,6 +4,11 @@ endif()
 project(reckless LANGUAGES CXX)
 CMAKE_MINIMUM_REQUIRED(VERSION 3.5)
 
+################################################################################
+# Options
+################################################################################
+
+option(RECKLESS_BUILD_EXAMPLES "Build the examples" OFF)
 
 ################################################################################
 # Add Flags
@@ -52,5 +57,8 @@ add_library(reckless STATIC ${SRC_LIST})
 ################################################################################
 # Build Examples
 ################################################################################
-message (STATUS "Making example applications")
-add_subdirectory(examples)
+if (RECKLESS_BUILD_EXAMPLES)
+    message (STATUS "Making example applications")
+    add_subdirectory(examples)
+endif ()
+
