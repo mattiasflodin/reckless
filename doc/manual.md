@@ -338,8 +338,10 @@ time format. Other fields can be be implemented by the client; see <a href
 information.</td></tr>
 <tr><td><code>fmt</code></td><td>Format string. The
 conversion specifiers are parsed differently depending on the type of each
-converted argument, but are roughly equivalent to <code>printf</code> for native
-types. There is no need to end the string with a newline as <code>write</code>
+converted argument, but are similar to <code>printf</code> for native
+types. One exception is that <code>%d</code> is used for all integer types.
+Other integer format specifiers like <code>%lu</code> or <code>PRIu64</code> are not supported.
+There is no need to end the string with a newline as <code>write</code>
 always writes each string on a separate line. This behavior is mostly to avoid
 spending CPU cycles on splitting the output to insert the header fields at the
 beginning of each new line, but also to make logging simpler for the
