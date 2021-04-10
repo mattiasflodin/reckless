@@ -98,9 +98,14 @@ public:
         }
     }
 
-    void* front() noexcept
+    std::uint64_t read_position() noexcept
     {
-        return pbuffer_start_ + (next_read_position_ & (capacity_ - 1));
+        return next_read_position_;
+    }
+
+    void* address(std::uint64_t position) noexcept
+    {
+        return pbuffer_start_ + (position & (capacity_ - 1));
     }
 
     std::size_t size() noexcept

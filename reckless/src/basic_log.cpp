@@ -388,23 +388,24 @@ void basic_log::output_worker()
             std::max(input_buffer_high_watermark_, batch_size));
         RECKLESS_TRACE(process_batch_start_event, batch_size);
 
-        auto pbatch_start = static_cast<char*>(input_buffer_.front());
-        auto pbatch_end = pbatch_start + batch_size;
-        auto pframe = pbatch_start;
+        auto batch_start = input_buffer_.read_position();
+        auto batch_end = batch_start + batch_size;
+        auto read_position = batch_start;
 
         bool panic_flush = false;
         do
         {
-            while(pframe != pbatch_end &&
+            while(read_position != batch_end &&
                  likely(status < frame_status::shutdown_marker))
             {
+                void* pframe = input_buffer_.address(read_position);
                 status = acquire_frame(pframe);
 
                 std::size_t frame_size;
                 if(likely(status == frame_status::initialized))
                     frame_size = process_frame(pframe);
                 else if(status == frame_status::failed_error_check)
-                    frame_size = char_cast<frame_header*>(pframe)->frame_size;
+                    frame_size = static_cast<frame_header*>(pframe)->frame_size;
                 else if(status == frame_status::failed_initialization)
                     frame_size = skip_frame(pframe);
                 else if(status == frame_status::shutdown_marker)
@@ -417,9 +418,9 @@ void basic_log::output_worker()
                 }
 
                 clear_frame(pframe, frame_size);
-                pframe += frame_size;
+                read_position += frame_size;
             }
-            assert(pframe == pbatch_end);
+            assert(read_position == batch_end);
 
             // Return memory to the input buffer to be used by other threads,
             // but only if we are not in a panic-flush state.
@@ -430,7 +431,7 @@ void basic_log::output_worker()
             } else {
                 // As a consequence of not returning memory to the input buffer,
                 // on the next batch iteration input_buffer_.front() is going
-                // to return exactly the same frame address that we already
+                // to return exactly the same position that we already
                 // processed, meaning we will hang waiting for it to become
                 // initialized. So instead of continuing normally we just update
                 // the batch end to reflect the current size of the buffer
@@ -438,7 +439,7 @@ void basic_log::output_worker()
                 // buffer), let pframe remain at its current position, and loop
                 // around until we reach the panic_shutdown_marker frame.
                 batch_size = input_buffer_.size();
-                pbatch_end = pbatch_start + batch_size;
+                batch_end = batch_start + batch_size;
             }
         } while(unlikely(panic_flush));
         RECKLESS_TRACE(process_batch_finish_event);
