@@ -153,10 +153,10 @@ if PLATFORM == 'linux' then
   end
   if DEBUG then OPTIMIZATION = '-O0' else OPTIMIZATION = '-O3'
   end
-  
+
   LDFLAGS = '-g'
   ARFLAGS = 'crs'
-  
+
   COMPILER_COMPILE_ONLY_FLAG = '-c'
   COMPILER_OUTPUT_FLAG = '-o'
   COMPILER_DEFINE_FLAG = '-D'
@@ -164,14 +164,15 @@ if PLATFORM == 'linux' then
   LINKER_OUTPUT_FLAG = '-o'
   LINKER_LIBDIR_FLAG = '-L'
   LINKER_LIB_FLAG = '-l'
-  
+
   OBJSUFFIX = '.o'
   EXESUFFIX = ''
   LIBPREFIX = 'lib'
   LIBSUFFIX = '.a'
-  
-  OPTIONS.cflags = {'-ggdb3', '-std=c++11', '-Wall', '-Werror'}
-  
+
+  OPTIONS.cflags = {'-ggdb3', '-std=c++11', '-Wall', '-Werror',
+    '-Wno-unknown-pragmas'}
+
 elseif PLATFORM == 'win32' then
   if CXX == '' then
     CXX = 'cl'
@@ -206,7 +207,7 @@ elseif PLATFORM == 'win32' then
   LINKER_OUTPUT_FLAG = '/OUT:'
   LINKER_LIBDIR_FLAG = '/LIBPATH:'
   LINKER_LIB_FLAG = ''
-  
+
   EXESUFFIX = '.exe'
   LIBPREFIX = ''
   LIBSUFFIX = '.lib'
@@ -262,11 +263,11 @@ function compile(name, objname, options)
   if options == nil then
     options = OPTIONS
   end
-  
+
   -- Include directories
   include_args = array_to_option_string(options.includes, COMPILER_INCLUDE_FLAG)
   define_args = array_to_option_string(options.define, COMPILER_DEFINE_FLAG)
-  
+
   -- Object file name
   local base = tup.base(name)
   if objname == nil then
@@ -284,7 +285,7 @@ end
 function library(name, objects)
   name = LIBPREFIX .. name .. LIBSUFFIX
   local cmd = joinargs(AR, ARFLAGS, name, objects)
-  
+
   text = '^ AR ' .. name .. '^ '
   tup.definerule{inputs=objects, command=text .. cmd, outputs={name}}
 end
@@ -293,7 +294,7 @@ function link(name, objects, options)
   if options == nil then
     options = OPTIONS
   end
-  
+
   libdirs = array_to_option_string(options.libdirs, LINKER_LIBDIR_FLAG)
   libs = array_to_option_string(options.libs, LINKER_LIB_FLAG)
   name = name .. EXESUFFIX

@@ -133,6 +133,8 @@ private:
         next_read_position_ = 0;
     }
 
+    #pragma clang diagnostic push
+    #pragma clang diagnostic ignored "-Wunused-private-field"
     // To avoid false sharing that triggers unnecessary cache-line
     // ping pong we segment these variables by how they are accessed.
     // First, the variables that are only read by both consumer and producer.
@@ -153,6 +155,8 @@ private:
     // somtimes read by the producer.
     std::uint64_t next_read_position_;
     char padding4_[RECKLESS_CACHE_LINE_SIZE - 8];
+
+    #pragma clang diagnostic pop
 };
 
 }   // namespace detail
