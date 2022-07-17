@@ -108,6 +108,9 @@ void uninstall_crash_handler()
         auto const& p = g_old_sigactions.back();
         auto signal = p.first;
         auto const& oldact = p.second;
+        // We don't need to check for EINVAL here because if the signal number
+        // was invalid then it would not have been added to g_old_sigactions
+        // above.
         if(0 != sigaction(signal, &oldact, nullptr))
             throw std::system_error(errno, std::system_category());
         g_old_sigactions.pop_back();
