@@ -102,8 +102,8 @@ void mpsc_ring_buffer::init(std::size_t capacity)
             throw std::bad_alloc();
         munmap(pbase, 2*capacity);
         pbase = shmat(shm, pbase, 0);
-        if(pbase) {
-            if((void*)-1 == shmat(shm, static_cast<char*>(pbase) + capacity, 0))
+        if(pbase != (void*) -1) {
+            if((void*) -1 == shmat(shm, static_cast<char*>(pbase) + capacity, 0))
             {
                 shmdt(pbase);
                 pbase = nullptr;
